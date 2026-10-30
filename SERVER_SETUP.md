@@ -72,4 +72,6 @@ https://alllever-asset-auth.<내 하위도메인>.workers.dev/auth/callback
 - 기기에 저장되는 세션 값은 서버에 **해시로만** 저장돼요. DB가 유출돼도 세션 값을 알 수 없어요.
 - 로그인 후 돌아갈 수 있는 앱 주소는 `server/wrangler.toml`의 `ALLOWED_RETURN`에 적힌 주소로만 제한돼요.
 - 180일 동안 안 쓴 세션은 매일 자동으로 지워져요.
+- IP당 요청 수를 제한해요: 로그인 시작·콜백 분당 20회, 토큰 발급·해제 분당 60회.
+- 모든 응답에 `nosniff`, `no-referrer`, `X-Frame-Options: DENY` 헤더를 붙여요.
 - 연결 해제 시 서버의 세션 삭제와 구글 권한 취소를 함께 해요.

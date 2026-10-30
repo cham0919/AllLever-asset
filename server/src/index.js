@@ -133,11 +133,33 @@ async function logout(req, env){
   return json({ok: true});
 }
 
+// IP당 요청 수 제한 (Cloudflare Rate Limiting 바인딩). 바인딩이 없으면(로컬 등) 건너뜀
+async function limited(env, req, kind){
+  const lim = kind === 'auth' ? env.AUTH_LIMIT : env.TOKEN_LIMIT;
+  if (!lim) return false;
+  const ip = req.headers.get('CF-Connecting-IP') || 'local';
+  const {success} = await lim.limit({key: kind + ':' + ip});
+  return !success;
+}
+function harden(res){
+  const r = new Response(res.body, res);
+  r.headers.set('X-Content-Type-Options', 'nosniff');
+  r.headers.set('Referrer-Policy', 'no-referrer');
+  r.headers.set('X-Frame-Options', 'DENY');
+  return r;
+}
+
 export default {
-  async fetch(req, env){
+  async fetch(req, env){ return harden(await route(req, env)); },
+  async scheduled(ev, env){ return cleanup(env); },
+};
+
+async function route(req, env){
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') return cors(env, req, new Response(null, {status: 204}));
     try {
+      if (url.pathname.startsWith('/auth/') && await limited(env, req, 'auth')) return page('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429);
+      if ((url.pathname === '/token' || url.pathname === '/logout') && await limited(env, req, 'token')) return cors(env, req, json({error: 'rate_limited'}, 429));
       if (req.method === 'GET' && url.pathname === '/auth/start') return await authStart(req, env, url);
       if (req.method === 'GET' && url.pathname === '/auth/callback') return await authCallback(req, env, url);
       if (req.method === 'POST' && url.pathname === '/token') return cors(env, req, await token(req, env));
@@ -148,10 +170,10 @@ export default {
       console.error(e);
       return cors(env, req, json({error: 'server'}, 500));
     }
-  },
-  async scheduled(ev, env){   // 매일: 오래 안 쓴 세션과 남은 로그인 요청 정리
-    const now = Date.now();
-    await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(now - SESSION_IDLE).run();
-    await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
-  },
-};
+}
+
+async function cleanup(env){   // 매일: 오래 안 쓴 세션과 남은 로그인 요청 정리
+  const now = Date.now();
+  await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(now - SESSION_IDLE).run();
+  await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
+}

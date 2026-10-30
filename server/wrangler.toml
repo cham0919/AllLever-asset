@@ -14,5 +14,16 @@ database_name = "alllever-asset-auth"
 database_id = "__D1_ID__"   # 배포할 때 GitHub Actions가 채움
 migrations_dir = "migrations"
 
+# IP당 요청 수 제한: 로그인 시작/콜백 분당 20회, 토큰 발급 분당 60회
+[[ratelimits]]
+name = "AUTH_LIMIT"
+namespace_id = "1001"
+simple = { limit = 20, period = 60 }
+
+[[ratelimits]]
+name = "TOKEN_LIMIT"
+namespace_id = "1002"
+simple = { limit = 60, period = 60 }
+
 [triggers]
 crons = ["17 18 * * *"]   # 매일 03:17 (한국 시간) 오래된 세션 정리

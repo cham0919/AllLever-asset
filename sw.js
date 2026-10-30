@@ -1,16 +1,12 @@
 // 앱 화면만 캐시합니다. 구글 API 요청(가계부 데이터)은 캐시하지 않습니다.
-const SHELL = 'alv-shell-v5', CDN = 'alv-cdn-v1';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-512.png', './demo.xlsx', './demo2025.xlsx', './template.xlsx'];
+const SHELL = 'alv-shell-v6';
+const FILES = ['./', './index.html', './app.js', './vendor/xlsx.full.min.js', './vendor/chart.umd.min.js', './manifest.webmanifest', './icon-180.png', './icon-512.png', './demo.xlsx', './demo2025.xlsx', './template.xlsx'];
 self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(
-  caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('alv-') && k !== SHELL && k !== CDN).map(k => caches.delete(k)))).then(() => self.clients.claim())));
+  caches.keys().then(ks => Promise.all(ks.filter(k => k.startsWith('alv-') && k !== SHELL).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.hostname.endsWith('googleapis.com') || u.hostname.endsWith('google.com')) return;
-  if (u.hostname === 'cdnjs.cloudflare.com') {   // 라이브러리: 캐시 우선
-    e.respondWith(caches.open(CDN).then(c => c.match(e.request).then(hit => hit || fetch(e.request).then(r => { c.put(e.request, r.clone()); return r; }))));
-    return;
-  }
+  if (e.request.method !== 'GET' || u.origin !== location.origin) return;   // 구글·로그인 서버 요청은 캐시하지 않음
   if (u.origin === location.origin) {            // 앱 파일: 네트워크 우선, 오프라인이면 캐시
     e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(SHELL).then(c => c.put(e.request, cp)); return r; })
       .catch(() => caches.match(e.request, {ignoreSearch: true}).then(r => r || caches.match('./index.html'))));

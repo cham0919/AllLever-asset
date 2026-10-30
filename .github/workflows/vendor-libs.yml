@@ -1,0 +1,57 @@
+# 외부 라이브러리를 공식 배포처에서 받아 vendor/ 폴더에 넣고 커밋해요. (수동 실행)
+# 앱은 외부 CDN 대신 이 파일들만 불러와요.
+name: Vendor libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      xlsx:
+        description: SheetJS 버전 (cdn.sheetjs.com)
+        default: '0.20.3'
+      chartjs:
+        description: Chart.js 버전 (npm)
+        default: '4.5.1'
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Download
+        env:
+          XV: ${{ inputs.xlsx }}
+          CV: ${{ inputs.chartjs }}
+        run: |
+          set -euo pipefail
+          mkdir -p vendor tmp
+          curl -fsSL "https://cdn.sheetjs.com/xlsx-$XV/xlsx-$XV.tgz" -o tmp/xlsx.tgz
+          tar -xzf tmp/xlsx.tgz -C tmp
+          cp tmp/package/dist/xlsx.full.min.js vendor/xlsx.full.min.js
+          cp tmp/package/LICENSE vendor/xlsx.LICENSE
+          rm -rf tmp/package
+          (cd tmp && npm pack "chart.js@$CV" --silent >/dev/null && tar -xzf chart.js-*.tgz)
+          cp tmp/package/dist/chart.umd.min.js vendor/chart.umd.min.js 2>/dev/null || cp tmp/package/dist/chart.umd.js vendor/chart.umd.min.js
+          cp tmp/package/LICENSE.md vendor/chartjs.LICENSE.md
+          rm -rf tmp
+          {
+            echo "# vendor/"
+            echo ""
+            echo "앱이 쓰는 외부 라이브러리 사본이에요. Actions → Vendor libraries 워크플로가 공식 배포처에서 받아 넣었어요."
+            echo ""
+            echo "| 파일 | 버전 | 출처 | SHA-256 |"
+            echo "|---|---|---|---|"
+            echo "| xlsx.full.min.js | $XV | https://cdn.sheetjs.com/xlsx-$XV/xlsx-$XV.tgz | $(sha256sum vendor/xlsx.full.min.js | cut -d' ' -f1) |"
+            echo "| chart.umd.min.js | $CV | npm chart.js@$CV | $(sha256sum vendor/chart.umd.min.js | cut -d' ' -f1) |"
+          } > vendor/README.md
+          head -c 120 vendor/xlsx.full.min.js; echo; head -c 120 vendor/chart.umd.min.js; echo
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add vendor
+          git diff --cached --quiet && { echo "변경 없음"; exit 0; }
+          git commit -m "vendor: SheetJS ${{ inputs.xlsx }}, Chart.js ${{ inputs.chartjs }}"
+          git push

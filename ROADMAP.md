@@ -6,7 +6,7 @@
 - [x] **데이터 연결 방식**: 구글 로그인 + `drive.file`(사용자가 고른 시트와 앱이 만든 시트만 접근) — 웹 버전 구현, 설정은 GOOGLE_SETUP.md
 - [x] Google Cloud 값(클라이언트 ID·API 키·프로젝트 번호) 넣고 실제 계정으로 확인
 - [x] 로그인 유지 서버 코드 (server/, Cloudflare Workers + D1) — 로컬 통합 테스트 완료
-- [ ] 서버 배포: Cloudflare 가입, Secrets 등록, 리디렉션 URI 추가 (SERVER_SETUP.md)
+- [x] 서버 배포: https://alllever-asset-auth.alllever.workers.dev
 - [ ] 앱에 서버 주소 넣고 실제 계정으로 확인
 - [ ] 구글 동의 화면 프로덕션 전환 (테스트 상태는 7일마다 재로그인)
 - [ ] iOS 앱에서는 네이티브 구글 로그인으로 교체 (웹뷰 로그인 차단 대응)

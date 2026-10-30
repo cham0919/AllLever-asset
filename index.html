@@ -65,6 +65,10 @@ input,select{font:inherit;color:var(--ink)}
 .src .y{font-weight:700;min-width:62px}
 .src .u{flex:1;min-width:0;font-size:12px;color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .src button{color:var(--up);font-size:13px;font-weight:600;padding:4px 2px}
+.src a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
+[hidden]{display:none!important}
+details.adv{margin-top:14px}
+details.adv summary{font-size:13px;color:var(--sub);font-weight:600;padding:6px 2px;cursor:pointer}
 
 main{padding:4px 16px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
 .card{background:var(--card);border-radius:20px;padding:18px;margin-bottom:12px;box-shadow:var(--shadow)}
@@ -182,6 +186,7 @@ select.pick{appearance:none;-webkit-appearance:none;background:var(--chip);borde
 .empty b{display:block;color:var(--ink);font-size:17px;margin-bottom:6px}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:46px;padding:0 18px;border-radius:14px;font-weight:700;background:var(--accent);color:#fff;width:100%}
 .btn.ghost{background:var(--chip);color:var(--ink)}
+.btn:disabled{opacity:.45}
 .btn + .btn{margin-top:8px}
 
 /* tab bar */
@@ -266,7 +271,7 @@ nav.tabs button.on{color:var(--ink)}
     <div class="kv"><span>데이터</span><span id="sSource">-</span></div>
     <div class="kv"><span>마지막 동기화</span><span id="sSync">-</span></div>
     <div style="margin-top:12px">
-      <button class="btn" id="btnSync">게시 URL에서 불러오기</button>
+      <button class="btn" id="btnSync">지금 불러오기</button>
       <button class="btn ghost" id="btnFile">이 기기에서 엑셀 파일 열기</button>
       <button class="btn ghost" id="btnDemo">예시 데이터로 보기</button>
     </div>
@@ -283,24 +288,38 @@ nav.tabs button.on{color:var(--ink)}
     <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
   </div>
 
-  <h4>구글 스프레드시트 연결 · 연도별</h4>
-  <div class="card" style="padding:14px">
+  <h4>구글 계정 연결 · 연도별 시트</h4>
+  <div class="card" style="padding:14px" id="gCard">
+    <div class="kv"><span>계정</span><span id="gUser">연결 안 됨</span></div>
+    <div id="gList" style="margin:6px 0 12px"></div>
+    <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
+    <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
+    <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제</button>
+    <p class="note">앱은 <b>직접 고르거나 앱에서 만든 시트만</b> 볼 수 있어요. 드라이브의 다른 파일에는 접근하지 않아요. 연도는 시트 '설정'의 <b>기준 연도</b>로 자동 구분되고, 데이터는 이 기기에만 저장돼요.</p>
+    <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
+  </div>
+
+  <details class="adv"><summary>고급 · 웹에 게시 주소로 연결</summary>
+  <div class="card" style="padding:14px;margin-top:8px">
     <div id="srcList" style="margin-bottom:12px"></div>
     <label class="field"><span>웹에 게시 URL 추가</span><input id="inPub" placeholder="https://docs.google.com/spreadsheets/d/e/2PACX-…/pub?output=xlsx" autocapitalize="off" autocomplete="off" spellcheck="false" inputmode="url"></label>
     <button class="btn ghost" id="btnAdd">추가하고 불러오기</button>
     <p class="note">연도마다 스프레드시트를 하나씩 두고, 각각 <b>파일 → 공유 → 웹에 게시</b>한 주소를 추가하세요. 연도는 파일 '설정' 시트의 <b>기준 연도</b>로 자동 구분돼요.</p>
-    <p class="note">앱은 게시된 데이터를 <b>읽기만</b> 합니다. 스프레드시트 수정 후 게시본에 반영되기까지 몇 분 걸릴 수 있어요. 불러온 데이터는 이 아이폰에만 저장돼 오프라인에서도 볼 수 있어요.</p>
+    <p class="note">앱은 게시된 데이터를 <b>읽기만</b> 합니다. 스프레드시트 수정 후 게시본에 반영되기까지 몇 분 걸릴 수 있어요. 게시 주소를 아는 사람은 누구나 데이터를 볼 수 있으니, 가능하면 위의 구글 계정 연결을 쓰세요.</p>
   </div>
+  </details>
 </section>
 <div class="toast" id="toast"></div>
 
 <script>
 'use strict';
 /* ───────── 저장소 ───────── */
+// 개인용 앱(asset-app)과 같은 도메인(github.io)에서 열려도 저장소가 섞이지 않게 접두어를 따로 써요
+const LSP = 'alv.';
 const LS = {
-  get(k, d){ try{ const v = localStorage.getItem('ah.'+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem('ah.'+k, JSON.stringify(v)); }catch(e){} },
-  del(k){ try{ localStorage.removeItem('ah.'+k); }catch(e){} }
+  get(k, d){ try{ const v = localStorage.getItem(LSP+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(LSP+k, JSON.stringify(v)); }catch(e){} },
+  del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
 };
 const S = {
   tab: (t => t === 'report' ? 'budget' : t)(LS.get('tab','home')),
@@ -308,6 +327,8 @@ const S = {
   theme: LS.get('theme','system'),
   unit: LS.get('unit','short'),
   sources: LS.get('sources', null),      // 게시 URL 목록 (연도별 파일)
+  gfiles: LS.get('gfiles', []),          // 구글 연결 시트 [{id, name, year, mime}]
+  guser: LS.get('guser', null),          // 연결된 구글 계정 이메일 (토큰은 저장하지 않음)
   srcYear: LS.get('srcYear', {}),        // URL → 연도
   years: LS.get('years', null),          // 연도 → 데이터
   year: LS.get('year', null),
@@ -1211,8 +1232,8 @@ function syncSheet(){
   seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
   seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
   const ys = yearsList().slice().reverse().join(', ');
-  $('#sSource').textContent = !S.model ? '없음' : S.meta.source==='pub' ? `웹에 게시 · ${ys}년` : S.meta.source==='file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
-  renderSrc();
+  $('#sSource').textContent = !S.model ? '없음' : S.meta.source==='google' ? `구글 시트 · ${ys}년` : S.meta.source==='pub' ? `웹에 게시 · ${ys}년` : S.meta.source==='file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
+  renderSrc(); renderG();
   $('#sSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '-';
 }
 function openSheet(){ syncSheet(); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
@@ -1245,7 +1266,7 @@ function removeSource(i){
   syncSheet();
 }
 $('#setBtn').onclick = openSheet; $('#closeSheet').onclick = closeSheet; $('#scrim').onclick = closeSheet;
-$('#btnSync').onclick = () => { addSource(true); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); syncPub(true); };
+$('#btnSync').onclick = () => { addSource(true); $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); syncNow(true); };
 $('#btnAdd').onclick = () => { if (addSource(false)) syncPub(true); };
 $('#btnDemo').onclick = () => { closeSheet(); loadDemo(); };
 $('#btnFile').onclick = () => $('#fileInput').click();
@@ -1254,7 +1275,7 @@ $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) ret
     const ys = S.meta.source === 'file' ? {...S.years} : {}; ys[md.year] = md;   // 기기 파일끼리는 연도별로 합침
     setYears(ys, {source:'file', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요`); }
   catch(err){ toast('파일을 읽지 못했어요: ' + err.message); } e.target.value=''; };
-$('#syncBtn').onclick = () => S.sources.length ? syncPub(true) : openSheet();
+$('#syncBtn').onclick = () => (S.gfiles.length || S.sources.length) ? syncNow(true) : openSheet();
 
 /* ───────── 데이터 반영 ───────── */
 function setYears(years, meta, keepView){
@@ -1275,7 +1296,7 @@ async function loadDemo(){
 }
 const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 function updateStatus(){
-  $('#status').textContent = !S.model ? '' : S.meta.source==='pub' ? `업데이트 ${fmtTime(S.meta.syncedAt)}${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` :
+  $('#status').textContent = !S.model ? '' : (S.meta.source==='pub' || S.meta.source==='google') ? `업데이트 ${fmtTime(S.meta.syncedAt)}${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` :
     S.meta.source==='file' ? `기기 파일 · ${fmtTime(S.meta.syncedAt)}` : '예시 데이터로 보는 중';
 }
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2600); }
@@ -1298,6 +1319,7 @@ async function fetchPub(u){
 async function syncPub(interactive){
   if (syncing) return;
   if (!S.sources.length){ if (interactive){ toast('설정에서 게시 URL을 추가하세요'); openSheet(); } return; }
+  if (S.gfiles.length){ if (interactive) toast('구글 계정 연결을 쓰는 중이에요. 게시 주소를 쓰려면 구글 연결을 해제하세요'); return; }
   syncing = true; $('#syncBtn').classList.add('spin');
   try{
     const res = await Promise.all(S.sources.map(u => fetchPub(u).then(m => ({u, m}), e => ({u, e}))));
@@ -1316,6 +1338,161 @@ async function syncPub(interactive){
   } finally { syncing = false; $('#syncBtn').classList.remove('spin'); }
 }
 
+/* ───────── 구글 계정 연결 (drive.file: 사용자가 고르거나 앱이 만든 파일만) ───────── */
+// 공개해도 되는 값이에요(클라이언트 ID·브라우저 API 키는 앱에 들어가는 공개 값). 설정 방법: GOOGLE_SETUP.md
+const GOOGLE = {
+  clientId: '',        // OAuth 클라이언트 ID (웹 애플리케이션) … .apps.googleusercontent.com
+  apiKey:   '',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
+  appId:    '',        // Google Cloud 프로젝트 번호 (숫자)
+};
+const G_SCOPE = 'https://www.googleapis.com/auth/drive.file email';
+const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
+const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const gReady = () => !!(GOOGLE.clientId && GOOGLE.apiKey && GOOGLE.appId);
+let gTok = null, gClient = null;   // 토큰은 메모리에만 (약 1시간)
+const loadJs = src => new Promise((ok, bad) => {
+  if (document.querySelector(`script[src="${src}"]`)) return ok();
+  const el = document.createElement('script'); el.src = src; el.async = true; el.onload = ok; el.onerror = () => bad(new Error('구글 스크립트를 불러오지 못했어요')); document.head.append(el);
+});
+async function gInit(){
+  if (gClient) return;
+  await loadJs('https://accounts.google.com/gsi/client');
+  gClient = google.accounts.oauth2.initTokenClient({client_id: GOOGLE.clientId, scope: G_SCOPE, callback: () => {}});
+}
+// 토큰 받기. 사용자가 누른 버튼에서만 팝업이 뜰 수 있어서, 자동 동기화에서는 남은 토큰만 써요.
+async function gToken(interactive){
+  if (gTok && Date.now() < gTok.exp - 60e3) return gTok.v;
+  if (!interactive) return null;
+  await gInit();
+  return new Promise((ok, bad) => {
+    gClient.callback = r => {
+      if (r.error) return bad(new Error(r.error === 'access_denied' ? '구글 권한을 허용하지 않았어요' : r.error));
+      gTok = {v: r.access_token, exp: Date.now() + (r.expires_in || 3600) * 1000}; ok(gTok.v);
+    };
+    gClient.error_callback = e => bad(new Error(e?.type === 'popup_closed' ? '로그인 창을 닫았어요' : '로그인 창을 열지 못했어요'));
+    gClient.requestAccessToken({prompt: S.guser ? '' : 'consent', login_hint: S.guser || undefined});
+  });
+}
+async function gFetch(url, opt = {}, tok){
+  const r = await fetch(url, {...opt, headers: {...(opt.headers || {}), Authorization: 'Bearer ' + tok}});
+  if (r.status === 401){ gTok = null; throw Object.assign(new Error('구글 로그인이 만료됐어요'), {auth: true}); }
+  if (r.status === 404) throw Object.assign(new Error('파일이 삭제됐거나 접근 권한이 없어요'), {gone: true});
+  if (!r.ok) throw new Error('구글 응답 오류 ' + r.status);
+  return r;
+}
+async function gWhoAmI(tok){
+  try { const j = await (await gFetch('https://www.googleapis.com/oauth2/v3/userinfo', {}, tok)).json();
+    if (j.email){ S.guser = j.email; LS.set('guser', j.email); } } catch(e){}
+}
+async function gDownload(f, tok){
+  const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id);
+  const url = f.mime === MIME_SHEET || !f.mime ? `${base}/export?mimeType=${encodeURIComponent(MIME_XLSX)}` : `${base}?alt=media`;
+  const buf = await (await gFetch(url, {cache: 'no-store'}, tok)).arrayBuffer(), h = new Uint8Array(buf.slice(0, 2));
+  if (h[0] !== 0x50 || h[1] !== 0x4B) throw new Error('스프레드시트 파일이 아니에요');
+  return parseWorkbook(buf);
+}
+function gSave(){ LS.set('gfiles', S.gfiles); }
+function gAdd(list){
+  let n = 0;
+  for (const d of list) if (!S.gfiles.some(f => f.id === d.id)){ S.gfiles.push({id: d.id, name: d.name, mime: d.mime, year: null}); n++; }
+  gSave(); renderG(); return n;
+}
+async function gPick(){
+  if (!gReady()) return toast('개발자 설정이 필요해요');
+  try {
+    const tok = await gToken(true); await gWhoAmI(tok);
+    await loadJs('https://apis.google.com/js/api.js');
+    await new Promise(ok => gapi.load('picker', ok));
+    const P = google.picker;
+    const view = new P.DocsView(P.ViewId.SPREADSHEETS).setMode(P.DocsViewMode.LIST).setIncludeFolders(false);
+    const picker = new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE.apiKey).setAppId(GOOGLE.appId)
+      .addView(view).enableFeature(P.Feature.MULTISELECT_ENABLED).setLocale('ko').setTitle('연도별 자산관리 시트를 고르세요')
+      .setCallback(async d => {
+        if (d[P.Response.ACTION] !== P.Action.PICKED) return;
+        const docs = d[P.Response.DOCUMENTS].map(x => ({id: x[P.Document.ID], name: x[P.Document.NAME], mime: x[P.Document.MIME_TYPE]}));
+        const n = gAdd(docs); if (n) syncGoogle(true); else toast('이미 연결된 시트예요');
+      }).build();
+    picker.setVisible(true);
+  } catch(e){ toast(e.message); }
+}
+// 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
+async function gCreate(){
+  if (!gReady()) return toast('개발자 설정이 필요해요');
+  const used = new Set(S.gfiles.map(f => f.year).filter(Boolean)), cy = new Date().getFullYear();
+  let y = cy; while (used.has(y)) y++;
+  const ans = prompt('몇 년도 시트를 만들까요?', String(y)); if (ans == null) return;
+  y = parseInt(ans, 10); if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
+  if (used.has(y)) return toast(`${y}년 시트는 이미 연결돼 있어요`);
+  try {
+    const tok = await gToken(true); await gWhoAmI(tok);
+    const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
+    const meta = {name: `자산관리_${y}`, mimeType: MIME_SHEET};
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(meta)], {type: 'application/json'}));
+    form.append('file', new Blob([await tpl.arrayBuffer()], {type: MIME_XLSX}));
+    const f = await (await gFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType', {method: 'POST', body: form}, tok)).json();
+    // 기준 연도와, 전년도 데이터가 있으면 12월 말 부채를 넣어요 (1월 대출상환 저축 계산용)
+    const prev = S.years?.[y - 1] ? aMonth(12, y - 1) : null;
+    const vals = [[y], [prev && prev.has ? Math.round(prev.debt) : '']];
+    await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${f.id}/values/${encodeURIComponent('설정!B4:B5')}?valueInputOption=USER_ENTERED`,
+      {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({values: vals})}, tok);
+    gAdd([{id: f.id, name: f.name, mime: f.mimeType}]);
+    toast(`'${f.name}' 시트를 만들었어요`);
+    await syncGoogle(true);
+  } catch(e){ toast('시트를 만들지 못했어요: ' + e.message); }
+}
+function gRemove(i){
+  const f = S.gfiles[i]; if (!confirm(`${f.year ? f.year + '년 ' : ''}'${f.name}' 연결을 해제할까요? (구글 드라이브의 파일은 지워지지 않아요)`)) return;
+  S.gfiles.splice(i, 1); gSave();
+  if (S.meta.source === 'google' && f.year && !S.gfiles.some(g => g.year === f.year)){ delete S.years[f.year]; LS.set('years', S.years); setYear(S.year); render(); }
+  syncSheet();
+}
+function gSignOut(){
+  if (!confirm('구글 계정 연결을 해제할까요? 연결한 시트 목록도 지워져요. (구글 드라이브의 파일은 그대로예요)')) return;
+  try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}
+  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser');
+  if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
+  syncSheet();
+}
+function renderG(){
+  const ok = gReady();
+  $('#gCfg').hidden = ok; $('#gPick').disabled = $('#gCreate').disabled = !ok;
+  $('#gUser').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
+  $('#gOut').hidden = !(S.guser || S.gfiles.length);
+  const list = S.gfiles.slice().sort((a, b) => (a.year || 9999) - (b.year || 9999));
+  $('#gList').innerHTML = list.length ? list.map(f => `<div class="src"><span class="y">${f.year ? f.year + '년' : '확인 전'}</span>
+      <span class="u">${esc(f.name)}</span><a href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(f.id)}/edit" target="_blank" rel="noopener">열기</a><button data-i="${S.gfiles.indexOf(f)}">해제</button></div>`).join('')
+    : '<p class="note" style="margin:0">연결된 시트가 없어요</p>';
+  $('#gList').querySelectorAll('button').forEach(b => b.onclick = () => gRemove(+b.dataset.i));
+}
+let gSyncing = false;
+async function syncGoogle(interactive){
+  if (gSyncing || !S.gfiles.length) return;
+  gSyncing = true; $('#syncBtn').classList.add('spin');
+  try {
+    let tok;
+    try { tok = await gToken(interactive); } catch(e){ if (interactive) toast(e.message); return; }
+    if (!tok){ if (!S.model) toast('새로고침 버튼을 눌러 구글 로그인을 이어가 주세요'); return; }   // 자동 동기화: 로그인 만료
+    if (!S.guser) await gWhoAmI(tok);
+    const res = await Promise.all(S.gfiles.map(f => gDownload(f, tok).then(m => ({f, m}), e => ({f, e}))));
+    const old = S.meta.source === 'google' ? (S.years || {}) : {}, next = {}, dup = [], fail = [];
+    for (const r of res){
+      if (r.m){ if (next[r.m.year]) dup.push(r.m.year); next[r.m.year] = r.m; r.f.year = r.m.year; }
+      else fail.push(r);
+    }
+    for (const r of fail){ const y = r.f.year; if (y && old[y] && !next[y]) next[y] = old[y]; }   // 실패한 연도는 이전 데이터 유지
+    gSave(); renderG();
+    if (!res.some(r => r.m)){   // 하나도 못 받았으면 기존 데이터·동기화 시각을 그대로 둬요
+      toast(fail.some(r => r.e.auth) ? '구글 로그인이 만료됐어요. 새로고침 버튼을 눌러 다시 로그인해 주세요' : '불러오기 실패: ' + fail[0].e.message); return; }
+    setYears(next, {source: 'google'}, S.meta.source === 'google');
+    if (dup.length) toast(`${[...new Set(dup)].join(', ')}년 시트가 여러 개예요. 기준 연도를 확인해 주세요`);
+    else if (fail.length) toast(`${fail.length}개 시트를 불러오지 못했어요: ${fail[0].e.message}`);
+    else if (interactive) toast('최신 데이터로 업데이트했어요');
+  } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); }
+}
+function syncNow(interactive){ return S.gfiles.length ? syncGoogle(interactive) : syncPub(interactive); }
+$('#gPick').onclick = gPick; $('#gCreate').onclick = gCreate; $('#gOut').onclick = gSignOut;
+
 /* ───────── 시작 ───────── */
 applyTheme();
 ['token','authState','clientId','fileRef'].forEach(k => LS.del(k));   // 이전 로그인 방식 흔적 정리
@@ -1323,10 +1500,10 @@ if (!S.sources){ const p = pubXlsxUrl(LS.get('pubUrl','')); S.sources = p ? [p] 
 if (!S.years){ const m = LS.get('model', null); S.years = m ? {[m.year]: m} : {}; LS.set('years', S.years); LS.del('model'); }
 setYear(S.year);
 render();
-const stale = () => S.sources.length && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
-if (S.sources.length && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncPub(false);
+const stale = () => (S.gfiles.length || S.sources.length) && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
+if ((S.gfiles.length || S.sources.length) && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncNow(false);
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.meta.source === 'pub' && stale()) syncPub(false);
+  if (document.visibilityState === 'visible' && (S.meta.source === 'pub' || S.meta.source === 'google') && stale()) syncNow(false);
 });
 if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
 </script>

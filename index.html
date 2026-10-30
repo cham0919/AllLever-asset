@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>우리집 자산</title>
+<title>자산관리</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="우리집 자산">
+<meta name="apple-mobile-web-app-title" content="자산관리">
 <meta name="theme-color" content="#F5F6F8">
 <meta name="robots" content="noindex, nofollow">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://docs.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://accounts.google.com https://docs.google.com https://www.gstatic.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://www.googleapis.com https://sheets.googleapis.com https://accounts.google.com https://alllever-asset-auth.alllever.workers.dev; frame-src https://docs.google.com https://drive.google.com https://accounts.google.com https://content.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
@@ -61,6 +61,27 @@ input,select{font:inherit;color:var(--ink)}
 .src button{color:var(--up);font-size:13px;font-weight:600;padding:4px 2px}
 .src a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
 [hidden]{display:none!important}
+/* 처음 시작 */
+body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.onboarding #title,body.onboarding #status{visibility:hidden}body.onboarding nav.tabs,body.onboarding #stepper{display:none!important}
+.ob{max-width:440px;margin:0 auto;padding:8px 16px 40px}
+.ob h2{font-size:24px;font-weight:800;letter-spacing:-.02em;margin:6px 0 6px}
+.ob-sub{color:var(--sub);font-size:15px;margin:0 0 18px;line-height:1.55}
+.ob-hero{text-align:center;padding:18px 0 4px}
+.ob-logo{width:64px;height:64px;border-radius:18px;background:var(--accent);color:#fff;font-size:30px;font-weight:800;display:grid;place-items:center;margin:0 auto 12px}
+.ob-list{list-style:none;padding:0;margin:0 0 22px;background:var(--card);border-radius:20px;box-shadow:var(--shadow)}
+.ob-list li{padding:14px 16px;border-bottom:1px solid var(--line)}.ob-list li:last-child{border-bottom:0}
+.ob-list b{display:block;font-size:15px}.ob-list span{color:var(--sub);font-size:13.5px}
+.ob-note{color:var(--sub);font-size:12.5px;margin:6px 4px 14px;line-height:1.5}
+.ob-link{display:block;margin:6px auto 0;color:var(--accent);font-weight:700;font-size:15px;padding:10px}
+.ob-step{color:var(--accent);font-weight:700;font-size:13px}
+.ob-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.ob-chips button{height:40px;padding:0 16px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);font-weight:700}
+.ob-chips button.on{background:var(--accent-soft);color:var(--accent)}
+.ob-card{display:block;width:100%;text-align:left;background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:16px;margin-bottom:10px}
+.ob-card b{display:block;font-size:16px;margin-bottom:2px}.ob-card span{color:var(--sub);font-size:13.5px}
+.ob .btn + .btn{margin-top:8px}
+.slink{color:var(--accent);font-weight:700;font-size:12px;text-decoration:underline}
+
 /* 입력 */
 .ebtnrow{margin:0 16px 4px}
 .ebtnrow .btn{height:44px;border-radius:14px}
@@ -298,8 +319,11 @@ nav.tabs button.on{color:var(--ink)}
     <div class="kv"><span>마지막 동기화</span><span id="sSync">-</span></div>
     <div style="margin-top:12px">
       <button class="btn" id="btnSync">지금 불러오기</button>
+      <button class="btn ghost" id="btnAddYear" hidden>새 연도 추가</button>
+      <button class="btn ghost" id="btnExport" hidden>엑셀로 내보내기 (백업)</button>
       <button class="btn ghost" id="btnFile">이 기기에서 엑셀 파일 열기</button>
       <button class="btn ghost" id="btnDemo">예시 데이터로 보기</button>
+      <button class="btn ghost" id="btnRestart">처음 화면으로</button>
     </div>
     <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   </div>
@@ -312,6 +336,8 @@ nav.tabs button.on{color:var(--ink)}
     <label class="field"><span>계획 시작 연도</span><input id="gYear" type="number" inputmode="numeric"></label>
     <label class="field" style="margin:0"><span>계획 시작 순자산 (만원 · 전년도 말 기준, 비우면 첫 기록값)</span><input id="gBase" type="number" inputmode="numeric" placeholder="자동"></label>
     <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
+    <label class="field" style="margin-top:12px"><span>FIRE 연 배당률 (%)</span><input id="gDiv" type="number" inputmode="decimal" step="0.5"></label>
+    <label class="field" style="margin:0"><span>FIRE 세후 비율 (%) · 배당소득세 15.4% 원천징수면 84.6</span><input id="gNet" type="number" inputmode="decimal" step="0.1"></label>
   </div>
 
   <h4>구글 계정 연결 · 연도별 시트</h4>

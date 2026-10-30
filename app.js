@@ -19,7 +19,7 @@ const S = {
   meta: LS.get('meta', {}),
   month: { budget:null, asset:null },
   assetPick: LS.get('assetPick','__net'),
-  goal: Object.assign({target:3e9, planRate:0.25, planSave:3e7, planYear:2025, planBase:null}, LS.get('goal', {})),
+  goal: Object.assign({target:1e9, planRate:0.06, planSave:2.4e7, planYear:new Date().getFullYear(), planBase:null, divRate:0.04, divNet:0.846}, LS.get('goal', {})),
   sim: null,   // 시뮬레이터 값 (앱 안에서만, 저장 안 함)
   fireBase: LS.get('fireBase', 'fin'),   // FIRE 배당 원금: fin 금융자산 / net 순자산
 };
@@ -103,7 +103,7 @@ const MIDS = {
   invest: ['투자', '퇴직금', '코인'],   // 홈 '금융투자'
   cash:   ['저축', '청약'],             // 홈 '현금'
   estate: ['부동산'],                   // 홈 '부동산'
-  stock:  ['투자', '퇴직금'],           // 자산 탭 '주식 수익률' (중분류 '코인'은 제외)
+  stock:  ['투자', '퇴직금'],           // 자산 탭 '주식 계좌 증가율' (중분류 '코인'은 제외)
 };
 const inMids = (mids, a) => a.big !== '부채' && mids.includes(a.mid);
 const HOME_GROUPS = {
@@ -112,8 +112,8 @@ const HOME_GROUPS = {
   cash:   {label:'현금',     note:'중분류 ' + MIDS.cash.join(' · '),   match: a => inMids(MIDS.cash, a)},
 };
 const RETURN_GROUPS = [
-  {name:'주식',   label:'주식 수익률',   note:'중분류 ' + MIDS.stock.join(' + '),  match: a => inMids(MIDS.stock, a)},
-  {name:'부동산', label:'부동산 수익률', note:'중분류 ' + MIDS.estate.join(' + '), match: a => inMids(MIDS.estate, a)},
+  {name:'주식',   label:'주식 계좌 증가율', note:'중분류 ' + MIDS.stock.join(' + ') + ' · 추가 납입 포함',  match: a => inMids(MIDS.stock, a)},
+  {name:'부동산', label:'부동산 평가액 변화', note:'중분류 ' + MIDS.estate.join(' + '), match: a => inMids(MIDS.estate, a)},
 ];
 const inGroup = (g, a) => g.match(a);
 
@@ -213,7 +213,7 @@ function assetPoints(){
 }
 const grpSum = (g, x) => S.years[x.y].assets.filter(g.match).reduce((s, a) => s + x.val(a), 0);
 const monthsBetween = (a, b) => (b.y * 12 + b.m) - (a.y * 12 + a.m);
-// 연평균 수익률(CAGR): 값이 처음 0보다 컸던 달 → 현재
+// 연평균 증가율(CAGR): 값이 처음 0보다 컸던 달 → 현재. 저축·추가 납입이 포함된 잔액 기준이라 '수익률'이 아님
 function cagr(pts, fn){
   const cur = pts.at(-1), v1 = fn(cur), st = pts.find(x => fn(x) > 0);
   if (!st || st === cur || v1 <= 0) return null;
@@ -231,8 +231,8 @@ function viewHome(){
   const rTotal = cagr(pts, x => x.total), rNet = cagr(pts, x => x.net),
         rInv = cagr(pts, x => grpSum(G.invest, x)), rEst = cagr(pts, x => grpSum(G.estate, x));
   const span = rTotal || rNet;
-  const foot = (r) => r ? `<div class="f"><span>연평균</span><b class="num ${dir(r.rate)}">${pct(r.rate, 2)}</b></div>`
-                        : `<div class="f"><span>연평균</span><span>-</span></div>`;
+  const foot = (r) => r ? `<div class="f"><span>연평균 증가</span><b class="num ${dir(r.rate)}">${pct(r.rate, 2)}</b></div>`
+                        : `<div class="f"><span>연평균 증가</span><span>-</span></div>`;
   const tot = Math.max(cur.total, 1);
   const prevX = pts.length > 1 ? pts.at(-2) : null;
   $('#view').innerHTML = `
@@ -255,7 +255,7 @@ function viewHome(){
     <div class="hc"><div class="t"><i class="dot" style="background:var(--saving)"></i>현금비중</div><div class="v num">${cur.net > 0 ? pctPlain(cash / cur.net) : '-'}</div>
       <div class="f"><span>현재 현금</span><b class="num">${money(cash)}</b></div></div>
   </div>
-  <p class="note" style="margin:0 4px 12px">${span ? `연평균 수익률: ${span.from.y}년 ${span.from.m}월 → ${cur.y}년 ${cur.m}월 (${span.n}개월) 잔액 기준 연환산${span.n < 12 ? ' · <b>1년 미만 기간이라 실제보다 크게 보일 수 있어요</b>' : ''}. 저축·추가 납입도 포함돼요.` : '연평균 수익률은 두 달 이상 기록이 쌓이면 표시돼요.'}
+  <p class="note" style="margin:0 4px 12px">${span ? `연평균 증가율: ${span.from.y}년 ${span.from.m}월 → ${cur.y}년 ${cur.m}월 (${span.n}개월) 잔액 기준 연환산${span.n < 12 ? ' · <b>1년 미만 기간이라 실제보다 크게 보일 수 있어요</b>' : ''}. 저축·추가 납입도 포함돼요.` : '연평균 수익률은 두 달 이상 기록이 쌓이면 표시돼요.'}
   현금비중은 순자산 대비예요.</p>`;
 }
 
@@ -318,7 +318,8 @@ function viewAnalysis(){
   const aheadTxt = ahead == null ? '-' : ahead === 0 ? '계획과 같은 속도' : ahead > 0 ? `${durText(ahead)} 앞섬` : `${durText(-ahead)} 뒤처짐`;
 
   // 마일스톤
-  const MS = [5e8, 10e8, 20e8].filter(v => v < T).concat([T]);
+  const nice = v => { const u = v >= 1e9 ? 1e8 : v >= 1e8 ? 5e7 : 1e7; return Math.max(u, Math.round(v / u) * u); };
+  const MS = [...new Set([0.25, 0.5, 0.75].map(f => nice(T * f)))].filter(v => v < T).concat([T]);
   const msRow = v => {
     const got = pts.find(x => x.net >= v);
     const pk = got ? null : proj.vals.findIndex(x => x >= v);
@@ -326,14 +327,15 @@ function viewAnalysis(){
     const right = got ? `<b>${got.y}년 ${got.m}월 달성</b>`
       : pk >= 0 ? `<b>예상 ${ymText(curI + pk)}</b><small>${durText(pk)} 후${pi != null ? ` · 계획 ${ymText(pi)}` : ''}</small>`
       : '<b>-</b>';
-    return `<div class="ms ${got ? 'done' : ''}"><div class="ck">${got ? '✓' : ''}</div><div class="n">${v / 1e8}억</div><div class="r">${right}</div></div>`;
+    return `<div class="ms ${got ? 'done' : ''}"><div class="ck">${got ? '✓' : ''}</div><div class="n">${money(v)}</div><div class="r">${right}</div></div>`;
   };
 
-  // FIRE: 금융자산(홈의 금융투자 + 현금) 전부 8% 배당 → 세후 75%
+  // FIRE: 금융자산(홈의 금융투자 + 현금) 전부 배당 → 세후 (배당률·세후 비율은 설정에서)
   const G = HOME_GROUPS, inv = grpSum(G.invest, cur), cash = grpSum(G.cash, cur), fin = inv + cash;
   // 원금 선택: 금융자산(부동산 제외) 또는 순자산 전체(부동산 매각·부채 상환 후 남는 돈)
   const useNet = S.fireBase === 'net', principal = useNet ? Math.max(cur.net, 0) : fin;
-  const divYear = principal * 0.08 * 0.75, divMonth = divYear / 12, goalMonth = T * 0.08 * 0.75 / 12;
+  const DR = g.divRate ?? 0.04, DN = g.divNet ?? 0.846;
+  const divYear = principal * DR * DN, divMonth = divYear / 12, goalMonth = T * DR * DN / 12;
   const cover = inp.expense ? divMonth / inp.expense : null;
 
   $('#view').innerHTML = `
@@ -378,16 +380,16 @@ function viewAnalysis(){
     <div class="res" id="simRes"></div>
   </section>
 
-  <section class="card"><h3>FIRE · 배당 전환 시 <small>연 8% · 세후 75%</small></h3>
+  <section class="card"><h3>FIRE · 배당 전환 시 <small>연 ${+(DR * 100).toFixed(2)}% · 세후 ${+(DN * 100).toFixed(1)}%</small></h3>
     <div class="seg" id="segFire" style="margin-bottom:14px"><button data-v="fin">금융자산</button><button data-v="net">순자산 전체</button></div>
     <div class="t" style="font-size:13px;color:var(--sub);font-weight:600">지금 ${useNet ? '순자산을 모두' : '금융자산을 모두'} 배당에 넣으면 매달</div>
     <div class="big2 num" style="color:var(--saving);margin-top:4px">${money(divMonth)}</div>
     <div class="stats" style="margin-top:12px">
       <div class="stat"><div class="t">${useNet ? '순자산 원금' : '금융자산 원금'}</div><div class="v num">${money(principal)}</div>
         <div class="h">${useNet ? `총자산 ${money(cur.total)} − 부채 ${money(cur.debt)}` : `금융투자 ${money(inv)} + 현금 ${money(cash)}`}</div></div>
-      <div class="stat"><div class="t">연 실수령 배당</div><div class="v num">${money(divYear)}</div><div class="h">원금 × 8% × 75%</div></div>
+      <div class="stat"><div class="t">연 실수령 배당</div><div class="v num">${money(divYear)}</div><div class="h">원금 × ${+(DR * 100).toFixed(2)}% × ${+(DN * 100).toFixed(1)}%</div></div>
       <div class="stat"><div class="t">월 지출 대비</div><div class="v num">${cover != null ? pctPlain(cover, 0) : '-'}</div><div class="h">최근 평균 지출 ${money(inp.expense)}</div></div>
-      <div class="stat"><div class="t">${T / 1e8}억 달성 시 월 배당</div><div class="v num">${money(goalMonth)}</div><div class="h">목표액 전부 배당 가정</div></div>
+      <div class="stat"><div class="t">${money(T)} 달성 시 월 배당</div><div class="v num">${money(goalMonth)}</div><div class="h">목표액 전부 배당 가정</div></div>
     </div>
     <p class="note">${useNet ? '아파트를 팔고 대출을 모두 갚은 뒤 남는 돈 전부를 배당에 넣는 가정이에요. 매각 비용·양도세와 이후 주거비는 빠져 있어요.' : '부동산은 제외한 계산이에요.'} 퇴직금(퇴직연금)은 55세 전 인출에 제한이 있을 수 있어요.</p>
   </section>`;
@@ -612,7 +614,7 @@ function viewAsset(){
   <section class="card"><h3>${m}월 자산 분석 <small>전월 대비</small></h3>
     ${A.prevOk ? `<div class="stats">
       <div class="stat"><div class="t">순자산 증감</div><div class="v num ${dir(A.dNet)}">${signed(A.dNet)}</div></div>
-      <div class="stat"><div class="t">순자산 수익률</div><div class="v num ${dir(A.dNet)}">${A.rNet!=null?pct(A.rNet,2):'-'}</div><div class="h">순자산 증감 ÷ 전월 순자산</div></div>
+      <div class="stat"><div class="t">순자산 증가율</div><div class="v num ${dir(A.dNet)}">${A.rNet!=null?pct(A.rNet,2):'-'}</div><div class="h">순자산 증감 ÷ 전월 순자산</div></div>
       <div class="stat"><div class="t">총자산 증감</div><div class="v num ${dir(A.dTotal)}">${signed(A.dTotal)}</div></div>
       <div class="stat"><div class="t">총자산 증감률</div><div class="v num ${dir(A.dTotal)}">${A.rTotal!=null?pct(A.rTotal,2):'-'}</div></div>
       <div class="stat"><div class="t"><i class="dot" style="background:var(--saving)"></i> 일반 저축</div><div class="v num">${A.cash!=null?money(A.cash):'-'}</div><div class="h">가계부 수입 − 지출</div></div>
@@ -675,9 +677,10 @@ function viewAsset(){
 }
 
 function emptyMonth(m, what){
+  if (!S.model && !S.gfiles.length) return viewOnboard();
   $('#view').innerHTML = !S.model ? `
-    <div class="empty"><b>아직 불러온 데이터가 없어요</b>설정에서 구글 시트를 연결하거나<br>예시 데이터로 먼저 둘러보세요.
-      <div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="openSheet">설정 열기</button><button class="btn ghost" data-act="loadDemo">예시 데이터로 보기</button></div></div>`
+    <div class="empty"><b>시트를 불러오지 못했어요</b>새로고침 버튼을 누르거나 설정에서 연결을 확인해 주세요.
+      <div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="sync">다시 불러오기</button><button class="btn ghost" data-act="openSheet">설정 열기</button></div></div>`
     : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>${m && canEdit() ? '앱에서 바로 입력할 수 있어요.' : '시트의 ' + (what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트") + '에 입력하면 여기에 표시돼요.'}
       ${m && canEdit() ? `<div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="${what==='자산'?'editAsset':'editBudget'}">${m}월 ${what==='자산'?'잔액':'가계부'} 입력하기</button></div>` : ''}</div>`;
 }
@@ -686,6 +689,7 @@ function emptyMonth(m, what){
 const TITLES = {home:'홈', budget:'가계부', trend:'월별추이', asset:'자산', analysis:'분석'};
 function render(){
   killCharts();
+  document.body.classList.remove('onboarding');
   $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
   const key = S.tab==='asset' ? 'asset' : 'budget';
@@ -755,20 +759,23 @@ function goalFields(){
   const g = S.goal;
   $('#gTarget').value = g.target / 1e8; $('#gRate').value = +(g.planRate * 100).toFixed(2); $('#gSave').value = g.planSave / 1e4;
   $('#gYear').value = g.planYear; $('#gBase').value = g.planBase == null ? '' : g.planBase / 1e4;
+  $('#gDiv').value = +((g.divRate ?? 0.04) * 100).toFixed(2); $('#gNet').value = +((g.divNet ?? 0.846) * 100).toFixed(1);
   const save = () => {
     const n = id => { const v = $(id).value.trim(); return v === '' ? null : +v; };
-    S.goal = {target: (n('#gTarget') || 30) * 1e8, planRate: (n('#gRate') ?? 25) / 100, planSave: (n('#gSave') ?? 3000) * 1e4,
-              planYear: n('#gYear') || 2025, planBase: n('#gBase') == null ? null : n('#gBase') * 1e4};
+    S.goal = {target: (n('#gTarget') || 10) * 1e8, planRate: (n('#gRate') ?? 6) / 100, planSave: (n('#gSave') ?? 2400) * 1e4,
+              planYear: n('#gYear') || new Date().getFullYear(), planBase: n('#gBase') == null ? null : n('#gBase') * 1e4,
+              divRate: (n('#gDiv') ?? 4) / 100, divNet: (n('#gNet') ?? 84.6) / 100};
     LS.set('goal', S.goal); S.sim = null; if (S.tab === 'analysis') render();
   };
-  ['#gTarget','#gRate','#gSave','#gYear','#gBase'].forEach(id => $(id).onchange = save);
+  ['#gTarget','#gRate','#gSave','#gYear','#gBase','#gDiv','#gNet'].forEach(id => $(id).onchange = save);
 }
 function syncSheet(){
   goalFields();
   seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
   seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
   const ys = yearsList().slice().reverse().join(', ');
-  $('#sSource').textContent = !S.model ? '없음' : S.meta.source==='google' ? `구글 시트 · ${ys}년` : S.meta.source==='file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
+  $('#sSource').textContent = !S.model ? '없음' : S.meta.source==='google' ? `구글 시트 · ${ys}년` : S.meta.source==='local' ? `이 기기에 저장 · ${ys}년` : S.meta.source==='file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
+  $('#btnAddYear').hidden = S.meta.source !== 'local'; $('#btnExport').hidden = !S.model || S.meta.source === 'demo'; $('#btnSync').hidden = S.meta.source !== 'google';
   renderG();
   $('#sSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '-';
 }
@@ -778,12 +785,17 @@ function closeSheet(){
 }
 $('#setBtn').onclick = openSheet; $('#closeSheet').onclick = closeSheet; $('#scrim').onclick = closeSheet;
 $('#btnSync').onclick = () => { $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); syncNow(true); };
-$('#btnDemo').onclick = () => { closeSheet(); loadDemo(); };
+$('#btnDemo').onclick = () => { if (S.meta.source === 'local' && !confirm('예시 데이터로 바꾸면 이 기기에 저장된 데이터가 화면에서 사라져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return; closeSheet(); loadDemo(); };
+$('#btnExport').onclick = () => exportAll();
+$('#btnAddYear').onclick = () => addLocalYear();
+$('#btnRestart').onclick = () => restartOb();
 $('#btnFile').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; closeSheet();
   try { const md = parseWorkbook(await f.arrayBuffer());
-    const ys = S.meta.source === 'file' ? {...S.years} : {}; ys[md.year] = md;   // 기기 파일끼리는 연도별로 합침
-    setYears(ys, {source:'file', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요`); }
+    if (S.meta.source === 'google' && !confirm('구글 시트 연결 대신 이 파일을 이 기기에 저장해서 쓸까요? (구글 시트 연결은 유지돼요)')) { e.target.value=''; return; }
+    if (S.meta.source === 'local' && S.years[md.year] && !confirm(`이 기기에 저장된 ${md.year}년 데이터를 이 파일 내용으로 바꿀까요?`)) { e.target.value=''; return; }
+    const ys = S.meta.source === 'local' ? {...S.years} : {}; ys[md.year] = md;   // 이 기기 저장 데이터에 연도별로 합침
+    finishOb(); setYears(ys, {source:'local', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요. 이제 앱에서 입력할 수 있어요`); }
   catch(err){ toast('파일을 읽지 못했어요: ' + err.message); } e.target.value=''; };
 $('#syncBtn').onclick = () => S.gfiles.length ? syncNow(true) : openSheet();
 
@@ -809,8 +821,9 @@ const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getD
 function updateStatus(){
   const q = S.queue?.length || 0;
   if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '저장 대기 ' + q + '건 · 연결되면 시트에 저장해요'}</span>`; return; }
+  if (S.model && S.meta.source === 'demo'){ $('#status').innerHTML = '예시 데이터로 보는 중 · <button class="slink" data-act="obRestart">내 데이터로 시작하기</button>'; return; }
   $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` :
-    S.meta.source==='file' ? `기기 파일 · ${fmtTime(S.meta.syncedAt)}` : '예시 데이터로 보는 중';
+    S.meta.source==='local' ? `이 기기에 저장 중${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` : `기기 파일 · ${fmtTime(S.meta.syncedAt)}`;
 }
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2600); }
 
@@ -922,8 +935,11 @@ function gAdd(list){
 // 시트 고르기: 먼저 이 앱이 접근할 수 있는 시트(전에 고른 시트·앱이 만든 시트)를 드라이브에서 직접 목록으로 보여주고,
 // 목록에 없는 시트는 구글 선택 창(Picker)으로 추가해요. 홈 화면 앱에서는 Picker가 막힐 수 있어서 이 순서로 해요.
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+const leaveLocalOk = () => S.meta.source !== 'local' || !yearsList().length ||
+  confirm('구글 시트를 연결하면 이 기기에만 저장된 데이터 대신 시트 데이터를 보여줘요. 먼저 설정 → 엑셀로 내보내기로 백업하세요. 계속할까요?');
 async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
+  if (!leaveLocalOk()) return;
   try {
     const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
     if (!$('#sheet').classList.contains('on')) openSheet();
@@ -977,6 +993,7 @@ async function gPicker(){
 // 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
+  if (!leaveLocalOk()) return;
   const used = new Set(S.gfiles.map(f => f.year).filter(Boolean)), cy = new Date().getFullYear();
   let y = year;
   if (!y){
@@ -1049,7 +1066,7 @@ async function syncGoogle(interactive){
     gSave(); renderG();
     if (!res.some(r => r.m)){   // 하나도 못 받았으면 기존 데이터·동기화 시각을 그대로 둬요
       toast(fail.some(r => r.e.auth) ? '구글 로그인이 만료됐어요. 새로고침 버튼을 눌러 다시 로그인해 주세요' : '불러오기 실패: ' + fail[0].e.message); return; }
-    setYears(next, {source: 'google'}, S.meta.source === 'google');
+    finishOb(); setYears(next, {source: 'google'}, S.meta.source === 'google');
     if (dup.length) toast(`${[...new Set(dup)].join(', ')}년 시트가 여러 개예요. 기준 연도를 확인해 주세요`);
     else if (fail.length) toast(`${fail.length}개 시트를 불러오지 못했어요: ${fail[0].e.message}`);
     else if (interactive) toast('최신 데이터로 업데이트했어요');
@@ -1061,7 +1078,7 @@ $('#gPick').onclick = gPick; $('#gCreate').onclick = gCreate; $('#gOut').onclick
 // 화면 안 버튼 동작 (CSP 때문에 onclick 속성 대신 위임)
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
-  if (a === 'openSheet') openSheet(); else if (a === 'loadDemo') loadDemo();
+  if (a === 'openSheet') openSheet(); else if (a === 'loadDemo') loadDemo(); else if (a === 'obRestart') restartOb(); else if (a === 'sync') syncNow(true);
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k]; editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
@@ -1075,8 +1092,9 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
 S.queue = LS.get('queue', []);
 const saveQueue = () => LS.set('queue', S.queue);
 const gfileOf = y => S.gfiles.find(f => f.year === y);
-const canEdit = (y = S.year) => S.meta.source === 'google' && !!gfileOf(y) && (gfileOf(y).mime || MIME_SHEET) === MIME_SHEET;
-const editNote = y => S.meta.source !== 'google' ? '구글 시트를 연결하면 앱에서 입력할 수 있어요'
+const canEdit = (y = S.year) => S.meta.source === 'local' ? !!S.years?.[y]
+  : S.meta.source === 'google' && !!gfileOf(y) && (gfileOf(y).mime || MIME_SHEET) === MIME_SHEET;
+const editNote = y => S.meta.source === 'demo' ? '예시 데이터는 고칠 수 없어요' : S.meta.source !== 'google' ? '구글 시트를 연결하거나 "앱만 사용하기"로 시작하면 입력할 수 있어요'
   : !gfileOf(y) ? `${y}년 시트가 연결돼 있지 않아요` : '엑셀(.xlsx) 파일은 구글 시트로 변환해야 앱에서 입력할 수 있어요';
 const colL = i => { let s = ''; i++; while (i){ const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); } return s; };
 const qs = s => `'${String(s).replace(/'/g, "''")}'`;   // 시트 이름 따옴표
@@ -1106,6 +1124,10 @@ function reapplyQueue(years){ for (const op of S.queue) applyOp(years, op); }
 // 화면에 바로 반영하고 대기열에 넣은 뒤 저장 시도
 function commit(ops){
   if (!ops.length) return;
+  if (S.meta.source === 'local'){   // 이 기기에만 저장
+    for (const op of ops) applyOp(S.years, op);
+    LS.set('years', S.years); S.meta.savedAt = Date.now(); LS.set('meta', S.meta); render(); toast('저장했어요'); return;
+  }
   for (const op of ops){ op.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7); op.fileId = gfileOf(op.y)?.id; applyOp(S.years, op); S.queue.push(op); }
   saveQueue(); LS.set('years', S.years); render();
   flushQueue(true);
@@ -1410,10 +1432,133 @@ function addAssetItem(m, big){
   };
 }
 
+/* ───────── 처음 시작 (온보딩) ─────────
+   앱 소개 → 시작 방법(구글로 시작 / 앱만 사용 / 예시로 둘러보기) → 목표 금액 → (구글) 새 시트 만들기 또는 기존 시트 고르기 */
+S.ob = LS.get('ob', {step: 'intro', path: null});
+const saveOb = () => LS.set('ob', S.ob);
+function viewOnboard(){
+  document.body.classList.add('onboarding');
+  const st = S.ob.step, el = $('#view');
+  if (st === 'goal'){
+    const cur = S.goal.target, opts = [5e8, 1e9, 2e9, 3e9];
+    el.innerHTML = `<section class="ob">
+      <div class="ob-step">2 / ${S.ob.path === 'google' ? 3 : 2}</div>
+      <h2>목표 순자산을 정해 주세요</h2>
+      <p class="ob-sub">분석 탭에서 달성 예상 시점과 계획 대비 진행을 보여줘요. 나중에 설정에서 바꿀 수 있어요.</p>
+      <div class="ob-chips">${opts.map(v => `<button data-v="${v}"${v === cur ? ' class="on"' : ''}>${money(v)}</button>`).join('')}</div>
+      <label class="field"><span>직접 입력 (억원)</span><input id="obGoal" type="number" inputmode="decimal" step="0.5" value="${cur / 1e8}"></label>
+      <button class="btn" id="obNext">${S.ob.path === 'google' ? '다음' : '시작하기'}</button>
+      <button class="btn ghost" id="obBack">뒤로</button></section>`;
+    el.querySelectorAll('.ob-chips button').forEach(b => b.onclick = () => { $('#obGoal').value = +b.dataset.v / 1e8;
+      el.querySelectorAll('.ob-chips button').forEach(x => x.classList.toggle('on', x === b)); });
+    $('#obBack').onclick = () => { S.ob = {step: 'intro', path: null}; saveOb(); render(); };
+    $('#obNext').onclick = () => {
+      const v = parseFloat($('#obGoal').value); if (!(v > 0)) return toast('목표 금액을 넣어 주세요');
+      S.goal = {...S.goal, target: Math.round(v * 1e8), planYear: new Date().getFullYear()}; LS.set('goal', S.goal);
+      if (S.ob.path === 'google'){ S.ob.step = 'google'; saveOb(); return render(); }
+      startLocal();
+    };
+    return;
+  }
+  if (st === 'google'){
+    el.innerHTML = `<section class="ob">
+      <div class="ob-step">3 / 3</div>
+      <h2>구글 시트를 연결해요</h2>
+      <p class="ob-sub">가계부와 자산은 <b>내 구글 드라이브의 시트</b>에 저장돼요. 앱은 내가 고르거나 앱에서 만든 시트만 볼 수 있어요.</p>
+      <button class="ob-card" id="obNew"><b>새 시트 만들기</b><span>처음이라면 추천해요. ${new Date().getFullYear()}년 빈 가계부·자산 시트를 드라이브에 만들어요.</span></button>
+      <button class="ob-card" id="obPick"><b>이미 쓰던 시트 고르기</b><span>이 앱 양식으로 만든 시트가 있다면 골라 주세요.</span></button>
+      <button class="btn ghost" id="obBack">뒤로</button></section>`;
+    $('#obNew').onclick = () => gCreate(new Date().getFullYear());
+    $('#obPick').onclick = () => gPick();
+    $('#obBack').onclick = () => { S.ob.step = 'goal'; saveOb(); render(); };
+    return;
+  }
+  el.innerHTML = `<section class="ob">
+    <div class="ob-hero"><div class="ob-logo">₩</div><h2>자산관리</h2>
+      <p class="ob-sub">가계부와 자산을 한곳에서 보고, 목표까지 얼마나 왔는지 확인해요.</p></div>
+    <ul class="ob-list">
+      <li><b>가계부</b><span>수입·지출과 저축률을 달마다 정리해요. 대출 원금 상환도 저축으로 계산해요.</span></li>
+      <li><b>자산</b><span>계좌별 잔액으로 순자산과 변화를 그래프로 보여줘요.</span></li>
+      <li><b>분석</b><span>지금 속도라면 목표에 언제 닿는지, 계획보다 앞서는지 알려줘요.</span></li>
+    </ul>
+    <button class="btn" id="obGoogle">구글로 시작하기</button>
+    <p class="ob-note">내 구글 드라이브의 시트에 저장해요. 폰을 바꿔도, PC에서도 볼 수 있어요.</p>
+    <button class="btn ghost" id="obLocal">앱만 사용하기</button>
+    <p class="ob-note">이 기기에만 저장해요. 앱을 지우거나 폰을 바꾸면 데이터가 사라질 수 있으니, 설정에서 엑셀로 내보내 보관하세요.</p>
+    <button class="ob-link" id="obDemo">예시로 둘러보기</button></section>`;
+  $('#obGoogle').onclick = () => { if (!gReady()) return toast('구글 연결 설정이 아직 없어요'); S.ob = {step: 'goal', path: 'google'}; saveOb(); render(); };
+  $('#obLocal').onclick = () => { S.ob = {step: 'goal', path: 'local'}; saveOb(); render(); };
+  $('#obDemo').onclick = () => loadDemo();
+}
+function finishOb(){ S.ob = {step: 'done', path: S.ob.path}; saveOb(); document.body.classList.remove('onboarding'); }
+function restartOb(){
+  if (S.meta.source === 'local' && yearsList().length && !confirm('이 기기에만 저장된 가계부·자산 데이터가 지워져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return;
+  S.years = {}; S.meta = {}; LS.set('years', {}); LS.set('meta', {}); setYear(null);
+  S.ob = {step: 'intro', path: null}; saveOb(); closeSheet(); go('home');
+}
+
+/* ───────── 앱만 사용하기 (이 기기에 저장) ───────── */
+// 새 연도 데이터: 전년도가 있으면 그 항목 구성을 그대로 쓰고(금액은 비움), 없으면 템플릿 항목으로 시작해요.
+async function blankYear(y){
+  const prev = S.years?.[y - 1] || S.years?.[Math.max(...yearsList().filter(v => v < y))];
+  let M;
+  if (prev){
+    M = {year: y, prevDebt: null, budget: {}, assets: prev.assets.map(a => ({big: a.big, mid: a.mid, small: a.small, v: Array(12).fill(null)}))};
+    const last = prev.budget[12]?.length ? prev.budget[12] : Object.values(prev.budget).filter(L => L.length).pop() || [];
+    for (let m = 1; m <= 12; m++) M.budget[m] = last.map(i => ({kind: i.kind, name: i.name, amt: 0, memo: '', filled: false}));
+    if (S.years[y - 1]){ const d = aMonth(12, y - 1); if (d.has) M.prevDebt = d.debt; }
+  } else {
+    const r = await fetch('template.xlsx'); if (!r.ok) throw new Error('템플릿을 불러오지 못했어요');
+    M = parseWorkbook(await r.arrayBuffer()); M.year = y; M.prevDebt = null;
+  }
+  return M;
+}
+async function startLocal(){
+  try {
+    const y = new Date().getFullYear(), M = await blankYear(y);
+    finishOb(); setYears({[y]: M}, {source: 'local'}); go('budget');
+    toast('준비됐어요. 이번 달 가계부부터 입력해 보세요');
+  } catch(e){ toast(e.message); }
+}
+async function addLocalYear(){
+  const ys = yearsList(), next = ys.length ? Math.max(...ys) + 1 : new Date().getFullYear();
+  const ans = prompt('추가할 연도', String(next)); if (ans == null) return;
+  const y = parseInt(ans, 10); if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
+  if (S.years[y]) return toast(`${y}년은 이미 있어요`);
+  const M = await blankYear(y); S.years[y] = M; LS.set('years', S.years); setYear(y); closeSheet(); render();
+  toast(`${y}년을 추가했어요${y - 1 in S.years ? ' (전년도 항목 구성을 가져왔어요)' : ''}`);
+}
+
+/* ───────── 엑셀로 내보내기 (백업·다른 기기로 옮기기) ─────────
+   앱이 다시 읽을 수 있는 형식(설정·1~12월·자산관리)으로 연도별 파일을 만들어요. 서식·수식·그래프는 없어요. */
+function exportYear(y){
+  const M = S.years[y]; if (!M) return;
+  const wb = XLSX.utils.book_new();
+  const st = [['기준 연도', y], ['전년 12월 말 부채', M.prevDebt ?? ''], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 → "이 기기에서 엑셀 파일 열기"로 다시 불러올 수 있어요.']];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(st), '설정');
+  for (let m = 1; m <= 12; m++){
+    const rows = [[`${m}월 가계부`], [], ['구분(1차)', '항목(2차)', '금액', '메모']];
+    for (const i of M.budget[m] || []) rows.push([i.kind, i.name, i.filled ? i.amt : null, i.memo || null]);
+    rows.push(['▲ 항목 추가 시 이 행 위에 행 삽입']);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `${m}월`);
+  }
+  const ar = [['자산관리'], [], ['대분류', '중분류', '소분류', ...Array.from({length: 12}, (_, i) => `${i + 1}월`)]];
+  for (const a of M.assets) ar.push([a.big, a.mid, a.small, ...a.v.map(v => v ?? null)]);
+  ar.push(['▲ 항목 추가 시 이 행 위에 행 삽입']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ar), '자산관리');
+  XLSX.writeFile(wb, `자산관리_${y}_백업.xlsx`);
+}
+function exportAll(){
+  const ys = yearsList(); if (!ys.length) return toast('내보낼 데이터가 없어요');
+  ys.forEach((y, i) => setTimeout(() => exportYear(y), i * 400));
+  toast(`${ys.length}개 연도를 엑셀 파일로 내보냈어요`);
+}
+
 /* ───────── 시작 ───────── */
 applyTheme();
 ['token','authState','clientId','fileRef'].forEach(k => LS.del(k));   // 이전 로그인 방식 흔적 정리
 if (!S.years){ const m = LS.get('model', null); S.years = m ? {[m.year]: m} : {}; LS.set('years', S.years); LS.del('model'); }
+if (S.ob.step !== 'done' && (S.gfiles.length || (S.model && S.meta.source !== 'demo'))) { S.ob.step = 'done'; saveOb(); }   // 기존 사용자
 setYear(S.year);
 render();
 const gPending = gReturn();

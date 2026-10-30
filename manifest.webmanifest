@@ -1,6 +1,6 @@
 {
-  "name": "우리집 자산",
-  "short_name": "우리집 자산",
+  "name": "자산관리",
+  "short_name": "자산관리",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

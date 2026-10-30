@@ -67,6 +67,51 @@ input,select{font:inherit;color:var(--ink)}
 .src button{color:var(--up);font-size:13px;font-weight:600;padding:4px 2px}
 .src a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
 [hidden]{display:none!important}
+/* 입력 */
+.ebtnrow{margin:0 16px 4px}
+.ebtnrow .btn{height:44px;border-radius:14px}
+.row.tap{cursor:pointer;border-radius:10px}
+.row.tap:active{background:var(--chip)}
+.row.empty .a{color:var(--faint);font-weight:500}
+.row .pen{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--chip);color:var(--sub);flex:none}
+.row .pen svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+.memo.pend,.pend{color:var(--fixed)!important;font-weight:600}
+.eadd{display:block;color:var(--accent);font-weight:700;font-size:14px;padding:10px 0 2px}
+.sheet.ed{z-index:61;max-height:88vh;padding-bottom:calc(env(safe-area-inset-bottom) + 18px)}
+.sheet.ed.tall{height:92vh;max-height:92vh;padding-bottom:calc(env(safe-area-inset-bottom) + 96px)}
+#edScrim{z-index:60}
+.sheet.ed h4{margin:0;font-size:18px;color:var(--ink);font-weight:800;display:flex;justify-content:space-between;align-items:center}
+.sheet.ed .ex{color:var(--sub);font-size:15px;font-weight:600}
+.esub{color:var(--sub);font-size:13px;margin:2px 0 14px}
+.ewon{display:flex;align-items:baseline;gap:6px;background:var(--card);border-radius:16px;padding:6px 16px;box-shadow:var(--shadow)}
+.ewon input{flex:1;min-width:0;border:0;background:none;font-size:28px;font-weight:800;letter-spacing:-.02em;padding:8px 0;outline:none;font-variant-numeric:tabular-nums}
+.ewon input::placeholder{font-size:15px;font-weight:500;color:var(--faint)}
+.ewon span{color:var(--sub)}
+.ehint{font-size:12px;color:var(--sub);margin:6px 2px 10px;min-height:16px}
+.echips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.echips button{height:32px;padding:0 12px;border-radius:99px;background:var(--card);box-shadow:var(--shadow);font-size:13px;font-weight:600}
+.echips button.on{background:var(--accent-soft);color:var(--accent)}
+.ememo{width:100%;border:0;background:var(--card);border-radius:14px;padding:13px 14px;font-size:15px;box-shadow:var(--shadow);margin-bottom:12px;outline:none}
+.echeck{display:flex;align-items:center;gap:8px;font-size:14px;margin:0 2px 14px}
+.echeck input{width:18px;height:18px;accent-color:var(--accent)}
+.ecard{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:12px 14px;margin-bottom:12px}
+.ecard .kv{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}.ecard .kv span{color:var(--sub)}
+.etitle{font-weight:700;font-size:14px;margin:2px 0 4px}
+.frow{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+.frow:last-of-type{border-bottom:0}
+.frow .n{flex:1;min-width:0;font-size:14px}.frow .n small{display:block;color:var(--sub);font-size:11px}
+.frow input{width:136px;height:38px;border:0;border-radius:11px;background:var(--chip);text-align:right;padding:0 10px;font-weight:700;font-size:15px;outline:none;font-variant-numeric:tabular-nums}
+.frow input::placeholder{color:var(--faint);font-weight:500;font-size:13px}
+.frow.edited input{background:var(--accent-soft);color:var(--accent)}
+.frow .same{width:46px;font-size:12px;font-weight:700;color:var(--accent);text-align:center;flex:none}
+.eseg{display:flex;background:var(--chip);border-radius:12px;padding:3px;margin-bottom:12px}
+.eseg button{flex:1;padding:7px 0;border-radius:9px;font-size:13px;font-weight:600;color:var(--sub)}
+.eseg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.ebar{position:fixed;left:0;right:0;bottom:0;z-index:62;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(env(safe-area-inset-bottom) + 12px);display:flex;gap:10px;align-items:center}
+.ebar .t{flex:1;font-size:12px;color:var(--sub)}.ebar .t b{display:block;color:var(--ink);font-size:15px}
+.ebar .btn{width:136px;margin:0}
+.sheet.ed .btn + .btn{margin-top:8px}
+
 .chooser{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 12px}
 .chooser h5{margin:0 0 6px;font-size:14px}
 .chooser label{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
@@ -308,6 +353,8 @@ nav.tabs button.on{color:var(--ink)}
   </div>
 
 </section>
+<div class="scrim" id="edScrim"></div>
+<section class="sheet ed" id="ed" aria-label="입력"></section>
 <div class="toast" id="toast"></div>
 
 <script src="vendor/xlsx.full.min.js"></script>

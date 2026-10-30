@@ -588,11 +588,12 @@ function viewAnalysis(){
 function viewBudget(){
   const m = S.month.budget, b = bMonth(m), pb = bMonth(m-1);
   if (!b.has) return emptyMonth(m, '가계부');
+  const ed = canEdit();
   const dExp = pb.has ? b.expense - pb.expense : null;
   const dSav = pb.has ? b.saving - pb.saving : null;
   const exItems = b.items.filter(i=>i.kind!=='수입' && i.amt>0).sort((x,y)=>y.amt-x.amt);
   const flowTot = Math.max(b.income, b.expense, 1);
-  let html = `
+  let html = `${ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
   <section class="card hero">
     <div class="label">${m}월 저축 합계 <span class="muted">· 일반 + 대출상환</span></div>
     <div class="big num ${b.saving<0?'up':''}">${money(b.saving)}</div>
@@ -628,16 +629,18 @@ function viewBudget(){
     <div class="legend">${exItems.map((i,k)=>`
       <div class="lg"><i class="dot" style="background:${PALETTE[k%PALETTE.length]}"></i><span class="n">${esc(i.name)} <span class="muted" style="font-size:12px">${i.kind}</span></span><span class="p num">${pctPlain(i.amt/b.expense,0)}</span><span class="a num">${money(i.amt)}</span></div>`).join('')}</div>
   </section>`;
-  html += `<section class="card"><h3>상세 내역</h3>${KINDS.map(k=>{
+  html += `<section class="card"><h3>상세 내역${ed ? ' <small>항목을 누르면 고칠 수 있어요</small>' : ''}</h3>${KINDS.map(k=>{
     const its = b.items.filter(i=>i.kind===k); if (!its.length) return '';
     const tot = its.reduce((a,i)=>a+i.amt,0), color = k==='수입'?'--income':k==='고정비'?'--fixed':'--expense';
     const max = Math.max(...its.map(i=>Math.abs(i.amt)),1);
     const prevMap = {}; pb.items.filter(i=>i.kind===k).forEach(i=>prevMap[i.name]=(prevMap[i.name]||0)+i.amt);
     return `<div class="group"><div class="gh"><span><span class="tag">${k}</span></span><span class="num">${money(tot)}</span></div>
       ${its.map(i=>{ const d = pb.has && prevMap[i.name]!=null ? i.amt - prevMap[i.name] : null;
-        return `<div class="row"><div class="n">${esc(i.name)}${i.memo?`<span class="memo">${esc(i.memo)}</span>`:''}
+        const pend = S.queue.some(o => o.t === 'b' && o.y === S.year && o.m === m && o.kind === i.kind && o.name === i.name);
+        return `<div class="row${ed ? ' tap' : ''}${i.filled ? '' : ' empty'}"${ed ? ` data-act="eb" data-k="${m}|${b.items.indexOf(i)}" role="button" tabindex="0"` : ''}><div class="n">${esc(i.name)}${pend ? '<span class="memo pend">저장 대기</span>' : i.memo?`<span class="memo">${esc(i.memo)}</span>`:''}
           <div class="bar"><i style="width:${Math.abs(i.amt)/max*100}%;background:var(${color})"></i></div></div>
-          <div class="a num">${money(i.amt)}${d?`<span class="d ${dir(d)}">${signed(d)}</span>`:''}</div></div>`;}).join('')}</div>`;
+          <div class="a num">${i.filled ? money(i.amt) : '입력 안 함'}${d && i.filled?`<span class="d ${dir(d)}">${signed(d)}</span>`:''}</div>${ed ? '<span class="pen" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>' : ''}</div>`;}).join('')}
+      ${ed ? `<button class="eadd" data-act="addB" data-kind="${k}">+ ${k} 항목 추가</button>` : ''}</div>`;
   }).join('')}</section>`;
   $('#view').innerHTML = html;
   donut('cFlow', ['고정비','변동비','일반 저축'], [b.fixed,b.variable,Math.max(b.cash,0)], [css('--fixed'),css('--expense'),css('--saving')]);
@@ -708,6 +711,7 @@ function viewTrend(){
 function viewAsset(){
   const m = S.month.asset, A = analysis(m), c = A.c, p = A.p;
   if (!c.has) return emptyMonth(m, '자산');
+  const edA = canEdit();
   const d = (cur, prev, kind) => A.prevOk ? `<div class="d ${dir(cur-prev)}">${signed(cur-prev)}${prev? ' ('+pct((cur-prev)/prev)+')' : ''}</div>` : `<div class="d muted">전월 데이터 없음</div>`;
   const list = S.model.assets;
   const ms = Array.from({length:12},(_,i)=>aMonth(i+1));
@@ -730,7 +734,7 @@ function viewAsset(){
     ...list.map((a,i)=>['item:'+i, `${a.small} · ${a.mid}`])];
   if (!opt.some(o=>o[0]===S.assetPick)) S.assetPick = '__net';
 
-  let html = `
+  let html = `${edA ? `<div class="ebtnrow"><button class="btn" data-act="editAsset">✎ ${m}월 말 잔액 입력</button></div>` : ''}
   <section class="card hero">
     <div class="label">${m}월 말 순자산</div>
     <div class="big num">${money(c.net)}</div>
@@ -815,9 +819,10 @@ function viewAsset(){
 
 function emptyMonth(m, what){
   $('#view').innerHTML = !S.model ? `
-    <div class="empty"><b>아직 불러온 데이터가 없어요</b>설정에 게시 URL을 넣거나<br>예시 데이터로 먼저 둘러보세요.
+    <div class="empty"><b>아직 불러온 데이터가 없어요</b>설정에서 구글 시트를 연결하거나<br>예시 데이터로 먼저 둘러보세요.
       <div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="openSheet">설정 열기</button><button class="btn ghost" data-act="loadDemo">예시 데이터로 보기</button></div></div>`
-    : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>엑셀의 ${what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트"}에 입력하면 여기에 표시돼요.</div>`;
+    : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>${m && canEdit() ? '앱에서 바로 입력할 수 있어요.' : '시트의 ' + (what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트") + '에 입력하면 여기에 표시돼요.'}
+      ${m && canEdit() ? `<div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="${what==='자산'?'editAsset':'editBudget'}">${m}월 ${what==='자산'?'잔액':'가계부'} 입력하기</button></div>` : ''}</div>`;
 }
 
 /* ───────── 라우팅 ───────── */
@@ -938,6 +943,7 @@ $('#syncBtn').onclick = () => S.gfiles.length ? syncNow(true) : openSheet();
 /* ───────── 데이터 반영 ───────── */
 function setYears(years, meta, keepView){
   const y = S.year, keep = {...S.month};
+  if (meta.source === 'google' && S.queue?.length) reapplyQueue(years);   // 아직 시트에 못 쓴 입력은 유지
   S.years = years; S.meta = {...meta, syncedAt: Date.now()};
   LS.set('years', years); LS.set('meta', S.meta);
   S.year = null; setYear(keepView && years[y] ? y : defaultYear());
@@ -954,6 +960,8 @@ async function loadDemo(){
 }
 const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 function updateStatus(){
+  const q = S.queue?.length || 0;
+  if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '저장 대기 ' + q + '건 · 연결되면 시트에 저장해요'}</span>`; return; }
   $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` :
     S.meta.source==='file' ? `기기 파일 · ${fmtTime(S.meta.syncedAt)}` : '예시 데이터로 보는 중';
 }
@@ -1205,7 +1213,355 @@ $('#gPick').onclick = gPick; $('#gCreate').onclick = gCreate; $('#gOut').onclick
 
 // 화면 안 버튼 동작 (CSP 때문에 onclick 속성 대신 위임)
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return;
-  if (b.dataset.act === 'openSheet') openSheet(); else if (b.dataset.act === 'loadDemo') loadDemo(); });
+  const a = b.dataset.act;
+  if (a === 'openSheet') openSheet(); else if (a === 'loadDemo') loadDemo();
+  else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
+  else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k]; editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
+  else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
+
+/* ───────── 입력: 앱에서 고친 값을 구글 시트에 저장 ─────────
+   - 고친 값은 먼저 화면(기기 데이터)에 반영하고 저장 대기열(queue)에 넣은 뒤 시트에 써요.
+   - 시트에 쓰기 직전, 해당 시트를 다시 읽어 행 위치를 이름으로 찾고(구분+항목 / 대분류+중분류+소분류),
+     그 칸의 현재 값이 앱이 알던 값과 다르면 덮어쓰기 전에 물어봐요.
+   - 인터넷이 끊기면 대기열에 남겨 두고, 연결되면 다시 저장해요.
+   - 합계·저축·그래프 수식은 건드리지 않아요. 금액·메모·잔액 칸과 새 항목 행만 써요. */
+S.queue = LS.get('queue', []);
+const saveQueue = () => LS.set('queue', S.queue);
+const gfileOf = y => S.gfiles.find(f => f.year === y);
+const canEdit = (y = S.year) => S.meta.source === 'google' && !!gfileOf(y) && (gfileOf(y).mime || MIME_SHEET) === MIME_SHEET;
+const editNote = y => S.meta.source !== 'google' ? '구글 시트를 연결하면 앱에서 입력할 수 있어요'
+  : !gfileOf(y) ? `${y}년 시트가 연결돼 있지 않아요` : '엑셀(.xlsx) 파일은 구글 시트로 변환해야 앱에서 입력할 수 있어요';
+const colL = i => { let s = ''; i++; while (i){ const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); } return s; };
+const qs = s => `'${String(s).replace(/'/g, "''")}'`;   // 시트 이름 따옴표
+const parseWon = s => { s = String(s ?? '').replace(/[,\s원]/g, ''); if (!s) return null;
+  const m = /^(-?\d+(?:\.\d+)?)(억|만)?$/.exec(s); if (!m) return NaN; return Math.round(+m[1] * (m[2] === '억' ? 1e8 : m[2] === '만' ? 1e4 : 1)); };
+const fmtWon = n => n == null || isNaN(n) ? '' : Math.round(n).toLocaleString('ko-KR');
+const sameVal = (a, b, memo) => memo ? str(a) === str(b) : (toNum(a) ?? null) === (toNum(b) ?? null);
+
+// 화면 데이터에서 항목 찾기 (같은 이름이 여러 번이면 순서로 구분)
+function findBudget(Y, m, kind, name, idx){ return (Y?.budget?.[m] || []).filter(i => i.kind === kind && i.name === name)[idx || 0]; }
+function findAsset(Y, big, mid, small, idx){ return (Y?.assets || []).filter(a => a.big === big && a.mid === mid && a.small === small)[idx || 0]; }
+function occ(list, it, keyFn){ const k = keyFn(it); return list.filter(x => keyFn(x) === k).indexOf(it); }
+const bKey = i => i.kind + '|' + i.name, aKey = a => a.big + '|' + a.mid + '|' + a.small;
+
+// 대기열 작업을 화면 데이터에 반영
+function applyOp(years, op){
+  const Y = years?.[op.y]; if (!Y) return;
+  if (op.t === 'b'){ const it = findBudget(Y, op.m, op.kind, op.name, op.idx); if (!it) return;
+    if (op.f === 'memo') it.memo = op.v || ''; else { it.amt = op.v ?? 0; it.filled = op.v != null; } }
+  else if (op.t === 'a'){ const a = findAsset(Y, op.big, op.mid, op.small, op.idx); if (a) a.v[op.m - 1] = op.v; }
+  else if (op.t === 'addB'){ for (const m of op.months){ const L = Y.budget[m] = Y.budget[m] || [];
+      if (!L.some(i => i.kind === op.kind && i.name === op.name)) L.push({kind: op.kind, name: op.name, amt: 0, memo: '', filled: false}); } }
+  else if (op.t === 'addA'){ if (!findAsset(Y, op.big, op.mid, op.small)) Y.assets.push({big: op.big, mid: op.mid, small: op.small, v: Array(12).fill(null)}); }
+}
+function reapplyQueue(years){ for (const op of S.queue) applyOp(years, op); }
+
+// 화면에 바로 반영하고 대기열에 넣은 뒤 저장 시도
+function commit(ops){
+  if (!ops.length) return;
+  for (const op of ops){ op.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7); op.fileId = gfileOf(op.y)?.id; applyOp(S.years, op); S.queue.push(op); }
+  saveQueue(); LS.set('years', S.years); render();
+  flushQueue(true);
+}
+
+// 시트 읽기 (계산되지 않은 원래 값)
+async function readRanges(fileId, ranges, tok){
+  const q = new URLSearchParams({valueRenderOption: 'UNFORMATTED_VALUE'}); ranges.forEach(r => q.append('ranges', r));
+  const j = await (await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values:batchGet?${q}`, {cache: 'no-store'}, tok)).json();
+  return (j.valueRanges || []).map(v => v.values || []);
+}
+// 가계부 'N월' 시트에서 행 위치 찾기 → {rows: [{row, kind, name, amt, memo}], marker}
+function locateBudget(V){
+  const h = V.findIndex(r => str(r[0]).startsWith('구분')); if (h < 0) return null;
+  const rows = []; let marker = null;
+  for (let i = h + 1; i < V.length; i++){ const r = V[i] || [], k = str(r[0]);
+    if (k.startsWith('▲')){ marker = i + 1; break; }
+    if (KINDS.includes(k)) rows.push({row: i + 1, kind: k, name: str(r[1]) || '(이름 없음)', amt: r[2], memo: r[3]}); }
+  return {rows, marker};
+}
+function locateAsset(V){
+  const h = V.findIndex(r => str((r || [])[0]) === '대분류'); if (h < 0) return null;
+  const col = {}; (V[h] || []).forEach((c, i) => { const mm = /^(\d{1,2})월$/.exec(str(c)); if (mm) col[+mm[1]] = i; });
+  const rows = []; let marker = null;
+  for (let i = h + 1; i < V.length; i++){ const r = V[i] || [], b = str(r[0]);
+    if (b.startsWith('▲') || b === '요약'){ marker = b.startsWith('▲') ? i + 1 : null; break; }
+    if (BIGS.includes(b)) rows.push({row: i + 1, big: b, mid: str(r[1]) || '기타', small: str(r[2]) || str(r[1]) || '항목', r}); }
+  return {rows, col, marker};
+}
+let sheetIds = {};   // fileId → {시트이름: sheetId}
+async function sheetIdOf(fileId, title, tok){
+  if (!sheetIds[fileId]){
+    const j = await (await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}?fields=sheets.properties(sheetId,title)`, {}, tok)).json();
+    sheetIds[fileId] = Object.fromEntries((j.sheets || []).map(s => [s.properties.title, s.properties.sheetId]));
+  }
+  return sheetIds[fileId][title];
+}
+async function insertRow(fileId, title, rowNum, tok){   // rowNum(1부터) 위치에 빈 행 넣기 (위 행 서식·드롭다운 이어받음)
+  const sid = await sheetIdOf(fileId, title, tok); if (sid == null) throw new Error(`'${title}' 시트를 찾지 못했어요`);
+  await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({requests: [{insertDimension: {range: {sheetId: sid, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum}, inheritFromBefore: true}}]})}, tok);
+}
+async function writeCells(fileId, data, tok){
+  if (!data.length) return;
+  await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({valueInputOption: 'RAW', data})}, tok);
+}
+
+let flushing = false;
+async function flushQueue(interactive){
+  if (flushing || !S.queue.length) return;
+  if (!navigator.onLine){ updateStatus(); if (interactive) toast('오프라인이에요. 입력은 보관해 두고 연결되면 저장할게요'); return; }
+  flushing = true; updateStatus();
+  let saved = 0;
+  try {
+    let tok; try { tok = await gToken(interactive, 'sync'); } catch(e){ if (interactive) toast(e.message); return; }
+    if (!tok){ if (interactive) toast('로그인이 필요해요. 새로고침 버튼을 눌러 주세요'); return; }
+    // 1) 새 항목 행부터 (행이 밀리니 하나씩)
+    for (const op of S.queue.filter(o => o.t === 'addB' || o.t === 'addA')){
+      if (op.t === 'addB'){
+        for (const m of op.months){
+          const title = m + '월', [V] = await readRanges(op.fileId, [`${qs(title)}!A1:D400`], tok), L = locateBudget(V);
+          if (!L || !L.marker) throw new Error(`${title} 시트에서 '▲' 행을 찾지 못했어요`);
+          if (L.rows.some(r => r.kind === op.kind && r.name === op.name)) continue;
+          await insertRow(op.fileId, title, L.marker, tok);
+          await writeCells(op.fileId, [{range: `${qs(title)}!A${L.marker}:B${L.marker}`, values: [[op.kind, op.name]]}], tok);
+        }
+      } else {
+        const [V] = await readRanges(op.fileId, [`'자산관리'!A1:Z300`], tok), L = locateAsset(V);
+        if (!L || !L.marker) throw new Error("'자산관리' 시트에서 '▲' 행을 찾지 못했어요");
+        if (!L.rows.some(r => r.big === op.big && r.mid === op.mid && r.small === op.small)){
+          await insertRow(op.fileId, '자산관리', L.marker, tok);
+          await writeCells(op.fileId, [{range: `'자산관리'!A${L.marker}:C${L.marker}`, values: [[op.big, op.mid, op.small]]}], tok);
+        }
+      }
+      S.queue = S.queue.filter(o => o !== op); saveQueue(); saved++;
+    }
+    // 2) 값 쓰기: 파일·시트별로 한 번 읽고, 이름으로 칸을 찾아 비교 후 쓰기
+    const byFile = {}; for (const op of S.queue) (byFile[op.fileId] = byFile[op.fileId] || []).push(op);
+    for (const [fileId, ops] of Object.entries(byFile)){
+      const titles = [...new Set(ops.map(o => o.t === 'b' ? o.m + '월' : '자산관리'))];
+      const Vs = await readRanges(fileId, titles.map(t => t === '자산관리' ? `'자산관리'!A1:Z300` : `${qs(t)}!A1:D400`), tok);
+      const loc = Object.fromEntries(titles.map((t, i) => [t, t === '자산관리' ? locateAsset(Vs[i]) : locateBudget(Vs[i])]));
+      const data = [], done = [], conflicts = [];
+      for (const op of ops){
+        let range, cur;
+        if (op.t === 'b'){
+          const L = loc[op.m + '월'], hit = L && L.rows.filter(r => r.kind === op.kind && r.name === op.name)[op.idx || 0];
+          if (!hit){ op.err = '시트에서 항목을 찾지 못했어요'; continue; }
+          range = `${qs(op.m + '월')}!${op.f === 'memo' ? 'D' : 'C'}${hit.row}`; cur = op.f === 'memo' ? hit.memo : hit.amt;
+        } else {
+          const L = loc['자산관리'], hit = L && L.rows.filter(r => r.big === op.big && r.mid === op.mid && r.small === op.small)[op.idx || 0];
+          if (!hit || L.col[op.m] == null){ op.err = '시트에서 항목이나 월 열을 찾지 못했어요'; continue; }
+          range = `'자산관리'!${colL(L.col[op.m])}${hit.row}`; cur = hit.r[L.col[op.m]];
+        }
+        if (!op.force && !sameVal(cur, op.o, op.f === 'memo') && !sameVal(cur, op.v, op.f === 'memo')){ conflicts.push({op, cur}); continue; }
+        data.push({range, values: [[op.v == null ? '' : op.v]]}); done.push(op);
+      }
+      await writeCells(fileId, data, tok);
+      S.queue = S.queue.filter(o => !done.includes(o)); saveQueue(); saved += done.length;
+      if (conflicts.length && interactive) await resolveConflicts(conflicts);
+      else for (const c of conflicts) c.op.conflict = true;
+    }
+    const stuck = S.queue.filter(o => o.err);
+    if (stuck.length) toast(`${stuck.length}건을 저장하지 못했어요: ${stuck[0].err}`);
+    else if (saved && interactive) toast(`구글 시트에 저장했어요${saved > 1 ? ` (${saved}건)` : ''}`);
+    S.meta.savedAt = Date.now(); LS.set('meta', S.meta);
+  } catch(e){
+    if (interactive) toast(e instanceof TypeError ? '연결이 불안정해 저장을 미뤘어요. 연결되면 다시 저장할게요' : '저장하지 못했어요: ' + e.message);
+  } finally { flushing = false; saveQueue(); render(); }
+}
+window.addEventListener('online', () => flushQueue(false));
+
+// 다른 곳에서 먼저 고친 칸: 하나씩 물어보기
+function resolveConflicts(list){
+  return new Promise(done => {
+    const next = () => {
+      const c = list.shift(); if (!c){ closeEd(); return done(); }
+      const op = c.op, label = op.t === 'b' ? `${op.m}월 ${op.name}${op.f === 'memo' ? ' 메모' : ''}` : `${op.m}월 ${op.small}`;
+      const show = v => op.f === 'memo' ? esc(str(v) || '(비어 있음)') : (toNum(v) == null ? '비어 있음' : fmtWon(toNum(v)) + '원');
+      openEd(`<h4>시트 값이 바뀌었어요</h4><div class="esub">앱을 연 뒤 다른 곳에서 '${esc(label)}'이(가) 고쳐졌어요.</div>
+        <div class="ecard"><div class="kv"><span>시트의 현재 값</span><b class="num">${show(c.cur)}</b></div><div class="kv"><span>지금 입력한 값</span><b class="num">${show(op.v)}</b></div></div>
+        <button class="btn" id="cfMine">내 값으로 저장</button><button class="btn ghost" id="cfTheirs">시트 값 유지</button>`, {noClose: true});
+      $('#cfMine').onclick = () => { op.force = true; delete op.conflict; saveQueue(); next(); setTimeout(() => flushQueue(true), 0); };
+      $('#cfTheirs').onclick = () => { S.queue = S.queue.filter(o => o !== op); saveQueue();
+        applyOp(S.years, {...op, v: op.f === 'memo' ? str(c.cur) : toNum(c.cur)}); LS.set('years', S.years); next(); };
+    };
+    next();
+  });
+}
+
+/* 입력용 아래 시트 */
+function openEd(html, opt = {}){
+  const el = $('#ed'); el.className = 'sheet ed on' + (opt.tall ? ' tall' : ''); el.innerHTML = '<div class="grab"></div>' + html;
+  $('#edScrim').classList.add('on'); $('#edScrim').onclick = opt.noClose ? null : closeEd;
+  const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60);
+}
+function closeEd(){ $('#ed').classList.remove('on'); $('#edScrim').classList.remove('on'); }
+function bindWon(inp, onChange){
+  inp.addEventListener('input', () => {
+    const raw = inp.value, n = parseWon(raw);
+    if (/^[\d,]*$/.test(raw.replace(/\s/g, ''))){ const pos = raw.length - inp.selectionStart; inp.value = fmtWon(n); try { inp.setSelectionRange(inp.value.length - pos, inp.value.length - pos); } catch(e){} }
+    onChange && onChange(parseWon(inp.value));
+  });
+}
+
+// ② 가계부 항목 하나 고치기
+function editBudgetItem(m, kind, name, idx){
+  const y = S.year; if (!canEdit(y)) return toast(editNote(y));
+  const it = findBudget(S.years[y], m, kind, name, idx); if (!it) return;
+  const prev = bMonth(m - 1).items.filter(i => i.kind === kind && i.name === name)[0];
+  const hist = []; for (let k = 1; k <= 6; k++){ const x = bMonth(m - k); if (x.has){ const p = x.items.find(i => i.kind === kind && i.name === name); if (p && p.filled) hist.push(p.amt); } }
+  const avg = hist.length ? hist.reduce((a, b) => a + b, 0) / hist.length : null;
+  openEd(`<h4>${esc(name)} <button class="ex" id="edX">취소</button></h4>
+    <div class="esub">${y}년 ${m}월 · ${kind}${prev ? ` · 지난달 ${prev.filled ? money(prev.amt) : '입력 안 함'}` : ''}${avg != null ? ` · 최근 평균 ${money(avg)}` : ''}</div>
+    <div class="ewon"><input id="edAmt" inputmode="numeric" autocomplete="off" placeholder="금액 (예: 1200000 또는 120만)" value="${it.filled ? fmtWon(it.amt) : ''}" autofocus><span>원</span></div>
+    <div class="ehint" id="edHint"></div>
+    <div class="echips">${prev && prev.filled ? '<button data-v="prev">지난달과 같게</button>' : ''}<button data-v="1e4">+1만</button><button data-v="1e5">+10만</button><button data-v="1e6">+100만</button><button data-v="clear">지우기</button></div>
+    <input id="edMemo" class="ememo" maxlength="80" placeholder="메모 (선택) · 예: 여행, 가전 구입" value="${esc(it.memo)}">
+    <button class="btn" id="edSave">저장</button>`);
+  const inp = $('#edAmt'), hint = v => $('#edHint').textContent = v == null ? '비워 두면 "입력 안 함"으로 저장돼요' : isNaN(v) ? '숫자만 넣어 주세요 (예: 120만)' : '= ' + money(v);
+  bindWon(inp, hint); hint(parseWon(inp.value));
+  $('#ed').querySelectorAll('.echips button').forEach(b => b.onclick = () => {
+    const cur = parseWon(inp.value) || 0, v = b.dataset.v;
+    inp.value = v === 'clear' ? '' : fmtWon(v === 'prev' ? prev.amt : cur + +v); hint(parseWon(inp.value)); inp.focus(); });
+  $('#edX').onclick = closeEd;
+  $('#edSave').onclick = () => {
+    const v = parseWon(inp.value), memo = $('#edMemo').value.trim();
+    if (Number.isNaN(v)) return toast('금액은 숫자로 넣어 주세요');
+    const base = {t: 'b', y, m, kind, name, idx}, ops = [];
+    const oldAmt = it.filled ? it.amt : null;
+    if (v !== oldAmt) ops.push({...base, f: 'amt', v, o: oldAmt});
+    if (memo !== str(it.memo)) ops.push({...base, f: 'memo', v: memo, o: str(it.memo)});
+    closeEd(); commit(ops);
+  };
+}
+
+// ③ 이번 달 한꺼번에 입력
+function editBudgetMonth(m){
+  const y = S.year; if (!canEdit(y)) return toast(editNote(y));
+  const items = S.years[y].budget[m] || [], prevB = bMonth(m - 1);
+  const prevOf = it => prevB.items.filter(i => i.kind === it.kind && i.name === it.name)[0];
+  const val = new Map(items.map(it => [it, it.filled ? it.amt : null]));
+  const rowH = (it, k) => { const p = prevOf(it);
+    return `<div class="frow" data-k="${k}"><div class="n">${esc(it.name)}${p && p.filled ? `<small>지난달 ${money(p.amt)}</small>` : ''}</div>
+      <input inputmode="numeric" autocomplete="off" placeholder="금액 입력" value="${it.filled ? fmtWon(it.amt) : ''}">
+      ${p && p.filled ? '<button class="same">같게</button>' : '<span class="same"></span>'}</div>`; };
+  openEd(`<h4>${m}월 가계부 입력 <button class="ex" id="edX">닫기</button></h4>
+    <div class="esub">${y}년 · 비워 둔 칸은 "입력 안 함"으로 저장돼요</div>
+    <div class="echips"><button id="fillFixed">고정비 지난달 값으로 채우기</button><button id="onlyEmpty">빈 칸만 보기</button></div>
+    ${KINDS.map(k => { const its = items.filter(i => i.kind === k);
+      return `<div class="ecard"><div class="etitle">${k}</div>${its.map(it => rowH(it, items.indexOf(it))).join('') || '<p class="note" style="margin:0">항목이 없어요</p>'}
+        <button class="eadd" data-kind="${k}">+ ${k} 항목 추가</button></div>`; }).join('')}
+    <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
+  const rows = [...$('#ed').querySelectorAll('.frow')];
+  const sumUp = () => {
+    let changed = 0, inc = 0, exp = 0;
+    for (const it of items){ const v = val.get(it); if ((it.filled ? it.amt : null) !== v) changed++; if (v) (it.kind === '수입' ? inc += v : exp += v); }
+    $('#fSum').innerHTML = `${changed}개 항목 변경<b class="num">일반 저축 ${money(inc - exp)}</b>`;
+  };
+  rows.forEach(r => {
+    const it = items[+r.dataset.k], inp = r.querySelector('input');
+    bindWon(inp, v => { val.set(it, Number.isNaN(v) ? null : v); r.classList.toggle('edited', (it.filled ? it.amt : null) !== val.get(it)); sumUp(); });
+    const b = r.querySelector('button.same'); if (b) b.onclick = () => { inp.value = fmtWon(prevOf(it).amt); inp.dispatchEvent(new Event('input')); };
+  });
+  $('#fillFixed').onclick = () => rows.forEach(r => { const it = items[+r.dataset.k], p = prevOf(it);
+    if (it.kind === '고정비' && p && p.filled && !r.querySelector('input').value){ r.querySelector('input').value = fmtWon(p.amt); r.querySelector('input').dispatchEvent(new Event('input')); } });
+  $('#onlyEmpty').onclick = e => { const on = e.target.classList.toggle('on'); rows.forEach(r => r.hidden = on && !!r.querySelector('input').value); };
+  $('#ed').querySelectorAll('.eadd').forEach(b => b.onclick = () => {
+    const n = items.filter(it => (it.filled ? it.amt : null) !== val.get(it)).length;
+    if (n && !confirm(`입력 중인 ${n}개 값은 저장되지 않아요. 먼저 저장하려면 취소를 누르세요.`)) return;
+    addBudgetItem(m, b.dataset.kind); });
+  $('#edX').onclick = closeEd;
+  $('#edSave').onclick = () => {
+    if ([...rows].some(r => Number.isNaN(parseWon(r.querySelector('input').value)))) return toast('숫자가 아닌 칸이 있어요');
+    const ops = [];
+    for (const it of items){ const v = val.get(it), o = it.filled ? it.amt : null;
+      if (v !== o) ops.push({t: 'b', y, m, kind: it.kind, name: it.name, idx: occ(items, it, bKey), f: 'amt', v, o}); }
+    closeEd(); commit(ops); if (!ops.length) toast('바뀐 값이 없어요');
+  };
+  sumUp();
+}
+
+// 가계부 항목 추가
+function addBudgetItem(m, kind){
+  const y = S.year; if (!canEdit(y)) return toast(editNote(y));
+  openEd(`<h4>${kind} 항목 추가 <button class="ex" id="edX">취소</button></h4>
+    <div class="esub">${y}년 ${m}월 시트의 ${kind} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
+    <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 넷플릭스, 보험료)" autofocus>
+    <label class="echeck"><input type="checkbox" id="adAfter" checked> ${m < 12 ? `${m + 1}~12월 시트에도 추가` : '이 달에만 추가'}</label>
+    <button class="btn" id="edSave">추가</button>`);
+  if (m === 12) $('#adAfter').closest('label').hidden = true;
+  $('#edX').onclick = closeEd;
+  $('#edSave').onclick = () => {
+    const name = $('#adName').value.trim(); if (!name) return toast('항목 이름을 넣어 주세요');
+    if ((S.years[y].budget[m] || []).some(i => i.kind === kind && i.name === name)) return toast('같은 이름의 항목이 이미 있어요');
+    const months = $('#adAfter').checked ? Array.from({length: 13 - m}, (_, i) => m + i) : [m];
+    closeEd(); commit([{t: 'addB', y, kind, name, months}]);
+    setTimeout(() => editBudgetItem(m, kind, name, 0), 50);
+  };
+}
+
+// ④ 자산 월말 잔액 입력
+function editAssetMonth(m, bigSel){
+  const y = S.year; if (!canEdit(y)) return toast(editNote(y));
+  const big = bigSel || '유동자산', list = S.years[y].assets, pv = aMonth(m - 1), cur = aMonth(m);
+  const its = list.filter(a => a.big === big), mids = [...new Set(its.map(a => a.mid))];
+  const st = editAssetMonth.state && editAssetMonth.state.m === m && editAssetMonth.state.y === y ? editAssetMonth.state : (editAssetMonth.state = {y, m, val: new Map()});
+  const V = {get: a => st.val.has(a) ? st.val.get(a) : a.v[m - 1], set: (a, v) => st.val.set(a, v)};   // 탭을 바꿔도 입력값 유지
+  const rowH = a => { const p = pv.has ? pv.val(a) : null, v = V.get(a);
+    return `<div class="frow${v !== a.v[m - 1] ? ' edited' : ''}" data-k="${list.indexOf(a)}"><div class="n">${esc(a.small)}${p != null && pv.has ? `<small>${pv.m}월 ${money(p)}</small>` : ''}</div>
+      <input inputmode="numeric" autocomplete="off" placeholder="잔액 입력" value="${v != null ? fmtWon(v) : ''}">
+      ${pv.has ? '<button class="same">그대로</button>' : '<span class="same"></span>'}</div>`; };
+  const net = () => { let t = 0; for (const a of list){ const v = V.get(a) ?? 0; t += a.big === '부채' ? -v : v; } return t; };
+  const changed = () => list.filter(a => V.get(a) !== a.v[m - 1]).length;
+  openEd(`<h4>${m}월 말 잔액 <button class="ex" id="edX">닫기</button></h4>
+    <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
+    <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
+    ${pv.has ? '<div class="echips"><button id="fillSame">빈 칸 모두 지난달 값으로</button></div>' : ''}
+    <div class="ecard">${mids.map(md => `<span class="tag">${esc(md)}</span>${its.filter(a => a.mid === md).map(rowH).join('')}`).join('') || '<p class="note" style="margin:0">항목이 없어요</p>'}
+      <button class="eadd" id="adA">+ ${big} 항목 추가</button></div>
+    <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>
+    <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
+  const upd = () => { const n = net(), d = pv.has ? n - pv.net : null;
+    $('#aNet').textContent = money(n); $('#aDiff').innerHTML = d == null ? '-' : `<span class="${dir(d)}">${signed(d)}</span>`;
+    const c = changed(), left = list.filter(a => V.get(a) == null && (pv.has ? pv.val(a) : 0)).length;
+    $('#fSum').innerHTML = `${c}개 항목 변경${left ? ` · ${left}개 비어 있음` : ''}<b>${cur.has || c ? '저장하면 시트에 반영돼요' : '처음 입력하는 달이에요'}</b>`; };
+  $('#ed').querySelectorAll('.frow').forEach(r => {
+    const a = list[+r.dataset.k], inp = r.querySelector('input');
+    bindWon(inp, v => { V.set(a, Number.isNaN(v) ? null : v); r.classList.toggle('edited', V.get(a) !== a.v[m - 1]); upd(); });
+    const b = r.querySelector('button.same'); if (b) b.onclick = () => { const p = pv.val(a); inp.value = fmtWon(p); inp.dispatchEvent(new Event('input')); };
+  });
+  $('#ed').querySelectorAll('.eseg button').forEach(b => b.onclick = () => editAssetMonth(m, b.dataset.b));
+  if (pv.has) $('#fillSame').onclick = () => { for (const a of list) if (V.get(a) == null && pv.val(a)) V.set(a, pv.val(a)); editAssetMonth(m, big); toast('빈 칸을 지난달 값으로 채웠어요 (모든 분류)'); };
+  $('#adA').onclick = () => addAssetItem(m, big);
+  $('#edX').onclick = () => { editAssetMonth.state = null; closeEd(); };
+  $('#edSave').onclick = () => {
+    if ([...$('#ed').querySelectorAll('.frow input')].some(i => Number.isNaN(parseWon(i.value)))) return toast('숫자가 아닌 칸이 있어요');
+    const ops = list.filter(a => V.get(a) !== a.v[m - 1]).map(a => ({t: 'a', y, m, big: a.big, mid: a.mid, small: a.small, idx: occ(list, a, aKey), v: V.get(a), o: a.v[m - 1]}));
+    editAssetMonth.state = null; closeEd(); commit(ops); if (!ops.length) toast('바뀐 값이 없어요');
+  };
+  upd();
+}
+function addAssetItem(m, big){
+  const y = S.year;
+  const mids = [...new Set([...(big === '부채' ? ['대출'] : big === '유동자산' ? ['저축', '투자', '코인'] : ['부동산', '퇴직금', '청약']),
+    ...S.years[y].assets.filter(a => a.big === big).map(a => a.mid)])];
+  openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
+    <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
+    <div class="etitle">중분류</div><div class="echips" id="adMid">${mids.map((md, i) => `<button data-v="${esc(md)}"${i ? '' : ' class="on"'}>${esc(md)}</button>`).join('')}</div>
+    <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>
+    <p class="note">중분류에 따라 홈의 묶음이 정해져요: 투자·퇴직금·코인 = 금융투자, 저축·청약 = 현금, 부동산 = 부동산</p>
+    <button class="btn" id="edSave">추가</button>`);
+  let mid = mids[0];
+  $('#adMid').querySelectorAll('button').forEach(b => b.onclick = () => { mid = b.dataset.v; $('#adMid').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
+  $('#edX').onclick = () => editAssetMonth(m, big);
+  $('#edSave').onclick = () => {
+    const small = $('#adName').value.trim(); if (!small) return toast('항목 이름을 넣어 주세요');
+    if (findAsset(S.years[y], big, mid, small)) return toast('같은 항목이 이미 있어요');
+    commit([{t: 'addA', y, big, mid, small}]);
+    editAssetMonth.state = null; editAssetMonth(m, big);
+  };
+}
 
 /* ───────── 시작 ───────── */
 applyTheme();
@@ -1217,6 +1573,7 @@ const gPending = gReturn();
 if (gPending === 'pick') gPick();
 else if (gPending && gPending.startsWith('create:')) gCreate(+gPending.slice(7));
 const stale = () => S.gfiles.length && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
+if (S.queue.length) flushQueue(false);   // 지난번에 못 쓴 입력부터 저장
 if (gPending === 'sync' && S.gfiles.length) syncGoogle(true);
 else if (!gPending && S.gfiles.length && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncNow(false);
 document.addEventListener('visibilitychange', () => {

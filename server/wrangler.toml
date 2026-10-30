@@ -1,0 +1,18 @@
+name = "alllever-asset-auth"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+GOOGLE_CLIENT_ID = "919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com"
+# 로그인 후 돌아갈 수 있는 앱 주소 (쉼표로 구분)
+ALLOWED_RETURN = "https://cham0919.github.io/AllLever-asset/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "alllever-asset-auth"
+database_id = "__D1_ID__"   # 배포할 때 GitHub Actions가 채움
+migrations_dir = "migrations"
+
+[triggers]
+crons = ["17 18 * * *"]   # 매일 03:17 (한국 시간) 오래된 세션 정리

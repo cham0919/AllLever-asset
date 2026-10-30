@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>개인정보처리방침 · 올레버 자산관리</title>
+<style>
+:root{--bg:#fff;--ink:#111827;--sub:#4b5563;--line:#e5e7eb;--accent:#2f80ed}
+@media (prefers-color-scheme: dark){:root{--bg:#0f1115;--ink:#f3f4f6;--sub:#9ca3af;--line:#262a33;--accent:#5b9cf0}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
+main{max-width:720px;margin:0 auto;padding:32px 16px 64px}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 8px;padding-top:16px;border-top:1px solid var(--line)}
+p,li{color:var(--sub)}b{color:var(--ink)}a{color:var(--accent)}
+table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
+</style>
+</head>
+<body>
+<main>
+<h1>개인정보처리방침</h1>
+<p>올레버 자산관리(이하 "앱") · 시행일 2026-10-30</p>
+
+<h2>1. 한눈에 보기</h2>
+<ul>
+  <li>가계부·자산 데이터는 <b>사용자의 구글 시트</b>에 있고, 앱은 그 데이터를 <b>사용자의 기기에만</b> 저장해요. 앱 운영자의 서버로는 보내지 않아요.</li>
+  <li>로그인 유지를 위해 서버에는 <b>구글 계정 이메일</b>과 <b>암호화된 구글 갱신 토큰</b>만 보관해요.</li>
+  <li>앱은 사용자가 <b>직접 고르거나 앱에서 만든 시트만</b> 볼 수 있어요(구글 <code>drive.file</code> 권한). 드라이브의 다른 파일에는 접근하지 않아요.</li>
+</ul>
+
+<h2>2. 처리하는 정보</h2>
+<table>
+  <tr><th>정보</th><th>어디에</th><th>왜</th><th>보관 기간</th></tr>
+  <tr><td>가계부·자산 데이터(시트 내용)</td><td>사용자 기기(브라우저 저장소)</td><td>화면 표시, 오프라인 보기</td><td>사용자가 연결 해제·앱 삭제할 때까지</td></tr>
+  <tr><td>연결한 시트 목록(파일 ID·이름·연도)</td><td>사용자 기기</td><td>다음에 같은 시트를 불러오기</td><td>연결 해제할 때까지</td></tr>
+  <tr><td>구글 계정 이메일</td><td>사용자 기기, 로그인 서버</td><td>연결된 계정 표시, 다시 로그인할 때 계정 자동 선택</td><td>연결 해제 시 즉시 삭제, 180일 미사용 시 서버에서 자동 삭제</td></tr>
+  <tr><td>구글 갱신 토큰</td><td>로그인 서버 (AES-GCM 암호화)</td><td>다시 로그인하지 않고 시트를 불러오기</td><td>연결 해제 시 즉시 삭제 및 구글 권한 취소, 180일 미사용 시 자동 삭제</td></tr>
+  <tr><td>세션 값</td><td>사용자 기기 (서버에는 해시값만)</td><td>사용자 기기를 로그인 서버가 알아보기</td><td>위와 같음</td></tr>
+</table>
+<p>앱은 광고, 분석 도구, 제3자 추적 도구를 쓰지 않아요.</p>
+
+<h2>3. 구글 사용자 데이터 이용</h2>
+<p>앱이 구글 API로 받은 정보는 위 목적(사용자의 시트를 앱 화면에 보여주기, 앱에서 새 시트 만들기)에만 쓰고, 다른 사람에게 판매하거나 제공하지 않아요. 앱의 구글 사용자 데이터 이용은 <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Google API 서비스 사용자 데이터 정책</a>(제한적 사용 요건 포함)을 따라요.</p>
+
+<h2>4. 처리를 맡기는 곳</h2>
+<ul>
+  <li><b>Google</b>: 로그인, 구글 드라이브·시트 이용</li>
+  <li><b>Cloudflare</b>: 로그인 서버 운영(Workers, D1). 저장 위치는 Cloudflare 데이터센터예요.</li>
+  <li><b>GitHub Pages</b>: 앱 화면 파일 제공</li>
+</ul>
+
+<h2>5. 삭제와 권한 취소</h2>
+<ul>
+  <li>앱 <b>설정 → 구글 계정 연결 해제</b>를 누르면 서버의 이메일·토큰이 바로 지워지고 구글 권한도 취소돼요. 기기에 저장된 데이터도 지워져요.</li>
+  <li><a href="https://myaccount.google.com/permissions" rel="noopener">구글 계정 → 서드 파티 연결</a>에서도 언제든 권한을 취소할 수 있어요. 이 경우 서버의 토큰은 다음 요청 때 자동으로 지워져요.</li>
+  <li>구글 시트 파일 자체는 사용자의 드라이브에 그대로 남아요.</li>
+</ul>
+
+<h2>6. 문의</h2>
+<p>개인정보 관련 문의: <a href="mailto:ckadl0118@gmail.com">ckadl0118@gmail.com</a></p>
+<p>이 방침이 바뀌면 이 페이지에 시행일과 함께 알려요.</p>
+</main>
+</body>
+</html>

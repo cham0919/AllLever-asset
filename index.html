@@ -1344,6 +1344,7 @@ const GOOGLE = {
   clientId: '919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com',        // OAuth 클라이언트 ID (웹 애플리케이션) … .apps.googleusercontent.com
   apiKey:   'AIzaSyA737jtGTgXBmwvRO-DuAgPvxDMVWN3CZQ',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
   appId:    '919106003112',        // Google Cloud 프로젝트 번호 (숫자)
+  authServer: '',      // 로그인 유지 서버 주소 (server/ 폴더, 예: https://alllever-asset-auth.xxx.workers.dev). 비우면 1시간 로그인 방식
 };
 const G_SCOPE = 'https://www.googleapis.com/auth/drive.file email';
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
@@ -1360,8 +1361,30 @@ async function gInit(){
   gClient = google.accounts.oauth2.initTokenClient({client_id: GOOGLE.clientId, scope: G_SCOPE, callback: () => {}});
 }
 // 토큰 받기. 사용자가 누른 버튼에서만 팝업이 뜰 수 있어서, 자동 동기화에서는 남은 토큰만 써요.
-async function gToken(interactive){
+// 로그인 유지 서버가 있으면: 기기에 저장된 세션으로 서버에서 새 토큰을 조용히 받아요 (다시 로그인할 필요 없음).
+// 세션이 없거나 서버가 다시 로그인하라고 하면, 사용자가 누른 동작일 때만 구글 로그인 화면으로 이동해요.
+const gServer = () => (GOOGLE.authServer || '').replace(/\/+$/, '');
+async function gToken(interactive, pending){
   if (gTok && Date.now() < gTok.exp - 60e3) return gTok.v;
+  if (gServer()){
+    const sid = LS.get('gsid', null);
+    if (sid){
+      let r;
+      try { r = await fetch(gServer() + '/token', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}, cache: 'no-store'}); }
+      catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.access_token){
+        gTok = {v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000};
+        if (j.email && j.email !== S.guser){ S.guser = j.email; LS.set('guser', j.email); }
+        return gTok.v;
+      }
+      if (r.status === 401) LS.del('gsid');   // 권한 취소·만료 → 다시 로그인
+      else throw new Error('로그인 서버 응답 오류');
+    }
+    if (!interactive) return null;
+    gLogin(pending || 'sync');
+    return new Promise(() => {});   // 구글 로그인 화면으로 이동 중
+  }
   if (!interactive) return null;
   await gInit();
   return new Promise((ok, bad) => {
@@ -1379,6 +1402,26 @@ async function gFetch(url, opt = {}, tok){
   if (r.status === 404) throw Object.assign(new Error('파일이 삭제됐거나 접근 권한이 없어요'), {gone: true});
   if (!r.ok) throw new Error('구글 응답 오류 ' + r.status);
   return r;
+}
+function gLogin(pending){
+  try { sessionStorage.setItem(LSP + 'pending', pending); } catch(e){}
+  const back = location.origin + location.pathname;
+  location.href = gServer() + '/auth/start?return=' + encodeURIComponent(back) + (S.guser ? '&hint=' + encodeURIComponent(S.guser) : '');
+}
+// 구글 로그인에서 돌아왔을 때: 주소의 #alv_sid=… 를 저장하고 주소창에서 지운 뒤, 하려던 동작을 이어서 해요.
+function gReturn(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (!h.has('alv_sid') && !h.has('alv_err')) return null;
+  history.replaceState(null, '', location.pathname + location.search);
+  let pending = null; try { pending = sessionStorage.getItem(LSP + 'pending'); sessionStorage.removeItem(LSP + 'pending'); } catch(e){}
+  if (h.has('alv_err')){
+    const e = h.get('alv_err');
+    toast(e === 'access_denied' || e === 'denied' ? '구글 권한을 허용하지 않았어요' : e === 'scope' ? "구글 드라이브 권한에 체크해야 시트를 볼 수 있어요" : '구글 로그인을 마치지 못했어요 (' + e + ')');
+    return null;
+  }
+  LS.set('gsid', h.get('alv_sid'));
+  if (h.get('alv_email')){ S.guser = h.get('alv_email'); LS.set('guser', S.guser); }
+  return pending || 'sync';
 }
 async function gWhoAmI(tok){
   try { const j = await (await gFetch('https://www.googleapis.com/oauth2/v3/userinfo', {}, tok)).json();
@@ -1400,7 +1443,7 @@ function gAdd(list){
 async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   try {
-    const tok = await gToken(true); await gWhoAmI(tok);
+    const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
     await loadJs('https://apis.google.com/js/api.js');
     await new Promise(ok => gapi.load('picker', ok));
     const P = google.picker;
@@ -1416,15 +1459,19 @@ async function gPick(){
   } catch(e){ toast(e.message); }
 }
 // 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
-async function gCreate(){
+async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   const used = new Set(S.gfiles.map(f => f.year).filter(Boolean)), cy = new Date().getFullYear();
-  let y = cy; while (used.has(y)) y++;
-  const ans = prompt('몇 년도 시트를 만들까요?', String(y)); if (ans == null) return;
-  y = parseInt(ans, 10); if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
+  let y = year;
+  if (!y){
+    y = cy; while (used.has(y)) y++;
+    const ans = prompt('몇 년도 시트를 만들까요?', String(y)); if (ans == null) return;
+    y = parseInt(ans, 10);
+  }
+  if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
   if (used.has(y)) return toast(`${y}년 시트는 이미 연결돼 있어요`);
   try {
-    const tok = await gToken(true); await gWhoAmI(tok);
+    const tok = await gToken(true, 'create:' + y); if (!S.guser) await gWhoAmI(tok);
     const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
     const meta = {name: `자산관리_${y}`, mimeType: MIME_SHEET};
     const form = new FormData();
@@ -1449,8 +1496,10 @@ function gRemove(i){
 }
 function gSignOut(){
   if (!confirm('구글 계정 연결을 해제할까요? 연결한 시트 목록도 지워져요. (구글 드라이브의 파일은 그대로예요)')) return;
-  try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}
-  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser');
+  const sid = LS.get('gsid', null);
+  if (sid && gServer()) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
+  else try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}
+  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gsid');
   if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
   syncSheet();
 }
@@ -1472,7 +1521,7 @@ async function syncGoogle(interactive){
   try {
     let tok;
     try { tok = await gToken(interactive); } catch(e){ if (interactive) toast(e.message); return; }
-    if (!tok){ if (!S.model) toast('새로고침 버튼을 눌러 구글 로그인을 이어가 주세요'); return; }   // 자동 동기화: 로그인 만료
+    if (!tok){ if (!S.model || gServer()) toast('새로고침 버튼을 눌러 구글 로그인을 이어가 주세요'); return; }   // 자동 동기화: 로그인 만료
     if (!S.guser) await gWhoAmI(tok);
     const res = await Promise.all(S.gfiles.map(f => gDownload(f, tok).then(m => ({f, m}), e => ({f, e}))));
     const old = S.meta.source === 'google' ? (S.years || {}) : {}, next = {}, dup = [], fail = [];
@@ -1500,8 +1549,12 @@ if (!S.sources){ const p = pubXlsxUrl(LS.get('pubUrl','')); S.sources = p ? [p] 
 if (!S.years){ const m = LS.get('model', null); S.years = m ? {[m.year]: m} : {}; LS.set('years', S.years); LS.del('model'); }
 setYear(S.year);
 render();
+const gPending = gReturn();
+if (gPending === 'pick') gPick();
+else if (gPending && gPending.startsWith('create:')) gCreate(+gPending.slice(7));
 const stale = () => (S.gfiles.length || S.sources.length) && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
-if ((S.gfiles.length || S.sources.length) && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncNow(false);
+if (gPending === 'sync' && S.gfiles.length) syncGoogle(true);
+else if (!gPending && (S.gfiles.length || S.sources.length) && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncNow(false);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && (S.meta.source === 'pub' || S.meta.source === 'google') && stale()) syncNow(false);
 });

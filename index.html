@@ -67,6 +67,13 @@ input,select{font:inherit;color:var(--ink)}
 .src button{color:var(--up);font-size:13px;font-weight:600;padding:4px 2px}
 .src a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
 [hidden]{display:none!important}
+.chooser{border:1px solid var(--line);border-radius:14px;padding:12px;margin:0 0 12px}
+.chooser h5{margin:0 0 6px;font-size:14px}
+.chooser label{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.chooser label:last-of-type{border-bottom:0}
+.chooser label small{display:block;color:var(--sub);font-size:12px}
+.chooser input{width:20px;height:20px;accent-color:var(--accent);flex:none}
+.chooser .row2{display:flex;gap:8px;margin-top:10px}.chooser .row2 .btn{margin:0}
 details.adv{margin-top:14px}
 details.adv summary{font-size:13px;color:var(--sub);font-weight:600;padding:6px 2px;cursor:pointer}
 
@@ -292,6 +299,7 @@ nav.tabs button.on{color:var(--ink)}
   <div class="card" style="padding:14px" id="gCard">
     <div class="kv"><span>계정</span><span id="gUser">연결 안 됨</span></div>
     <div id="gList" style="margin:6px 0 12px"></div>
+    <div id="gChooser" class="chooser" hidden></div>
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
     <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
     <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제</button>
@@ -1440,10 +1448,46 @@ function gAdd(list){
   for (const d of list) if (!S.gfiles.some(f => f.id === d.id)){ S.gfiles.push({id: d.id, name: d.name, mime: d.mime, year: null}); n++; }
   gSave(); renderG(); return n;
 }
+// 시트 고르기: 먼저 이 앱이 접근할 수 있는 시트(전에 고른 시트·앱이 만든 시트)를 드라이브에서 직접 목록으로 보여주고,
+// 목록에 없는 시트는 구글 선택 창(Picker)으로 추가해요. 홈 화면 앱에서는 Picker가 막힐 수 있어서 이 순서로 해요.
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
 async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   try {
     const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
+    if (!$('#sheet').classList.contains('on')) openSheet();
+    const q = `(mimeType='${MIME_SHEET}' or mimeType='${MIME_XLSX}') and trashed=false`;
+    const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, orderBy: 'modifiedTime desc', pageSize: '100',
+      fields: 'files(id,name,mimeType,modifiedTime)'}), {cache: 'no-store'}, tok)).json();
+    const files = (j.files || []).filter(f => !S.gfiles.some(g => g.id === f.id));
+    gChooser(files);
+  } catch(e){ toast(e.message); }
+}
+function gChooser(files){
+  const el = $('#gChooser'), sa = isStandalone();
+  const day = t => { const d = new Date(t); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} 수정`; };
+  el.innerHTML = `<h5>연결할 시트 고르기</h5>
+    ${files.length ? files.map(f => `<label><input type="checkbox" value="${esc(f.id)}"><span>${esc(f.name)}<small>${day(f.modifiedTime)}</small></span></label>`).join('')
+      : S.gfiles.length ? `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트는 모두 연결돼 있어요. 다른 시트는 아래 <b>구글 선택 창</b>에서 찾아 주세요.</p>`
+      : `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트가 아직 없어요. 처음엔 아래 <b>구글 선택 창</b>에서 시트를 고르거나, <b>템플릿으로 새 시트 만들기</b>를 눌러 주세요.</p>`}
+    <div class="row2">${files.length ? '<button class="btn" id="gcOk">연결하기</button>' : ''}<button class="btn ghost" id="gcCancel">닫기</button></div>
+    <button class="btn ghost" id="gcPicker" style="margin-top:8px">목록에 없는 시트 찾기 (구글 선택 창)</button>
+    ${sa ? `<p class="note">홈 화면 앱에서는 구글 선택 창이 열리지 않을 수 있어요. 그럴 땐 <b>사파리</b>에서 이 주소를 열고 같은 계정으로 시트를 한 번 고르면, 이 목록에 나타나요.</p>` : ''}`;
+  el.hidden = false;
+  el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+  $('#gcCancel').onclick = () => { el.hidden = true; };
+  $('#gcPicker').onclick = () => gPicker();
+  if (files.length) $('#gcOk').onclick = () => {
+    const ids = [...el.querySelectorAll('input:checked')].map(i => i.value);
+    if (!ids.length) return toast('연결할 시트를 골라 주세요');
+    el.hidden = true;
+    const n = gAdd(files.filter(f => ids.includes(f.id)).map(f => ({id: f.id, name: f.name, mime: f.mimeType})));
+    if (n) syncGoogle(true);
+  };
+}
+async function gPicker(){
+  try {
+    const tok = await gToken(true, 'pick');
     await loadJs('https://apis.google.com/js/api.js');
     await new Promise(ok => gapi.load('picker', ok));
     const P = google.picker;
@@ -1453,6 +1497,7 @@ async function gPick(){
       .setCallback(async d => {
         if (d[P.Response.ACTION] !== P.Action.PICKED) return;
         const docs = d[P.Response.DOCUMENTS].map(x => ({id: x[P.Document.ID], name: x[P.Document.NAME], mime: x[P.Document.MIME_TYPE]}));
+        $('#gChooser').hidden = true;
         const n = gAdd(docs); if (n) syncGoogle(true); else toast('이미 연결된 시트예요');
       }).build();
     picker.setVisible(true);

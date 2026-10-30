@@ -8,8 +8,7 @@ const LS = {
   del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
 };
 const S = {
-  tab: (t => t === 'report' ? 'budget' : t)(LS.get('tab','home')),
-  reportOpen: false,   // 가계부 안의 월말 레포트 화면
+  tab: (t => ['home','budget','trend','asset','analysis'].includes(t) ? t : 'home')(LS.get('tab','home')),
   theme: LS.get('theme','system'),
   unit: LS.get('unit','short'),
   gfiles: LS.get('gfiles', []),          // 구글 연결 시트 [{id, name, year, mime}]
@@ -94,29 +93,7 @@ function parseWorkbook(buf){
     const v = []; for (let m=1; m<=12; m++) v.push(monthCol[m]!=null ? toNum(r[monthCol[m]]) : null);
     assets.push({big:b, mid: str(r[1]) || '기타', small: str(r[2]) || str(r[1]) || '항목', v});
   }
-  // 결산 시트: 1행 머리글(연월·작성일·제목·한 줄 요약·본문·상태), 한 달에 한 줄
-  const reports = {};
-  const RP = rows('결산');
-  if (RP){
-    const h = RP.findIndex(r => r.some(c => str(c) === '연월'));
-    if (h >= 0){
-      const col = name => RP[h].findIndex(c => str(c).replace(/\s/g,'') === name);
-      const ix = {ym: col('연월'), date: col('작성일'), title: col('제목'), summary: col('한줄요약'), body: col('본문'), status: col('상태')};
-      const ymOf = v => {
-        if (typeof v === 'number'){ const d = new Date(Math.round((v - 25569) * 864e5)); return `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,'0')}`; }
-        const m = /(\d{4})\D+(\d{1,2})/.exec(str(v)); return m ? `${m[1]}-${m[2].padStart(2,'0')}` : null;
-      };
-      const dateOf = v => typeof v === 'number' ? new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0,10) : str(v);
-      for (let i = h + 1; i < RP.length; i++){
-        const r = RP[i], ym = ymOf(r[ix.ym]); if (!ym) continue;
-        const body = ix.body >= 0 ? str(r[ix.body]) : '', summary = ix.summary >= 0 ? str(r[ix.summary]) : '';
-        if (!body && !summary) continue;
-        reports[ym] = {ym, date: ix.date >= 0 ? dateOf(r[ix.date]) : '', title: ix.title >= 0 ? str(r[ix.title]) : '', summary, body,
-                       status: ix.status >= 0 ? str(r[ix.status]) : ''};
-      }
-    }
-  }
-  return {year, budget, assets, prevDebt, reports};
+  return {year, budget, assets, prevDebt};
 }
 
 /* ───────── 계산 ───────── */
@@ -280,126 +257,6 @@ function viewHome(){
   </div>
   <p class="note" style="margin:0 4px 12px">${span ? `연평균 수익률: ${span.from.y}년 ${span.from.m}월 → ${cur.y}년 ${cur.m}월 (${span.n}개월) 잔액 기준 연환산${span.n < 12 ? ' · <b>1년 미만 기간이라 실제보다 크게 보일 수 있어요</b>' : ''}. 저축·추가 납입도 포함돼요.` : '연평균 수익률은 두 달 이상 기록이 쌓이면 표시돼요.'}
   현금비중은 순자산 대비예요.</p>`;
-}
-
-/* ───────── 화면: 결산 ───────── */
-// 간단한 마크다운 → HTML (제목 ##, 목록 -, 굵게 **, 표 |). 먼저 HTML을 이스케이프해서 안전하게 표시
-function md(src){
-  const inline = t => esc(t).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  const lines = String(src || '').replace(/\r/g, '').split('\n'), out = [];
-  let i = 0;
-  while (i < lines.length){
-    const ln = lines[i];
-    if (!ln.trim()){ i++; continue; }
-    let m;
-    if ((m = /^(#{1,3})\s+(.*)$/.exec(ln))){ const lv = Math.max(2, m[1].length); out.push(`<h${lv}>${inline(m[2])}</h${lv}>`); i++; continue; }
-    if (/^\s*\|/.test(ln)){
-      const rows = []; while (i < lines.length && /^\s*\|/.test(lines[i])) rows.push(lines[i++]);
-      const cells = r => r.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-      const body = rows.filter(r => !/^\s*\|?\s*:?-{2,}/.test(r.replace(/\|/g, ' | ').trim()) && !/^[\s|:-]+$/.test(r));
-      const [head, ...rest] = body;
-      out.push(`<table class="num"><thead><tr>${cells(head).map(c => `<th>${inline(c)}</th>`).join('')}</tr></thead><tbody>${rest.map(r => `<tr>${cells(r).map(c => `<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`);
-      continue;
-    }
-    if (/^\s*[-*]\s+/.test(ln)){
-      const items = []; while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])){ const l = lines[i++]; items.push({lv: l.match(/^\s*/)[0].length >= 2 ? 1 : 0, t: l.replace(/^\s*[-*]\s+/, '')}); }
-      let h = '<ul>', open = false;
-      items.forEach((it, k) => {
-        if (it.lv === 1 && !open){ h = h.replace(/<\/li>$/, ''); h += '<ul>'; open = true; }
-        if (it.lv === 0 && open){ h += '</ul></li>'; open = false; }
-        h += `<li>${inline(it.t)}</li>`;
-      });
-      if (open) h += '</ul></li>';
-      out.push(h + '</ul>'); continue;
-    }
-    const para = []; while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|\s*\||\s*[-*]\s+)/.test(lines[i])) para.push(lines[i++]);
-    out.push(`<p>${para.map(inline).join('<br>')}</p>`);
-  }
-  return out.join('');
-}
-const allReports = () => Object.values(S.years || {}).flatMap(M => Object.values(M.reports || {})).sort((a, b) => b.ym.localeCompare(a.ym));
-function viewReport(){
-  const m = S.month.budget, y = S.year, b = bMonth(m, y), pb = bMonth(m - 1, y), yb = bMonth(m, y - 1);
-  const ym = `${y}-${String(m).padStart(2,'0')}`;
-  const rp = (S.years[y]?.reports || {})[ym];
-  const A = analysis(m), c = A.c;
-  const list = allReports();
-
-  // 평소보다 많이/적게 쓴 항목: 직전 최대 6개월(입력된 달) 평균과 비교
-  let unusual = [];
-  if (b.has){
-    const prevMonths = []; for (let k = 1; k <= 12 && prevMonths.length < 6; k++){ const x = bMonth(m - k, y); if (x.has) prevMonths.push(x); }
-    if (prevMonths.length){
-      const avgOf = name => prevMonths.reduce((s, x) => s + x.items.filter(i => i.name === name && i.kind !== '수입').reduce((a, i) => a + i.amt, 0), 0) / prevMonths.length;
-      const names = [...new Set(b.items.filter(i => i.kind !== '수입').map(i => i.name))];
-      unusual = names.map(n => { const cur = b.items.filter(i => i.name === n && i.kind !== '수입').reduce((a, i) => a + i.amt, 0), av = avgOf(n); return {n, cur, av, d: cur - av}; })
-        .filter(x => Math.abs(x.d) >= Math.max(100000, Math.abs(x.av) * 0.2)).sort((p, q) => Math.abs(q.d) - Math.abs(p.d)).slice(0, 4);
-      unusual.months = prevMonths.length;
-    }
-  }
-  const row = (k, v, pv, yv) => `<span class="k">${k}</span><span class="v num">${money(v)}</span>
-    <span class="d num">${pv != null ? `<span class="${dir(v - pv)}">${signed(v - pv)}</span>` : '<span class="muted">-</span>'}</span>`;
-  const T = S.goal.target, prog = c.has ? c.net / T : null, pprog = A.prevOk ? A.p.net / T : null;
-
-  $('#view').innerHTML = !b.has && !c.has && !rp ? `<div class="empty"><b>${m}월 결산할 데이터가 없어요</b>가계부나 자산을 입력하면 자동 결산이 표시돼요.</div>` : `
-  <section class="card">
-    <h3>${y}년 ${m}월 자동 결산 <small>앱 계산</small></h3>
-    ${b.has ? `<div class="chg">
-      <span class="k" style="font-size:12px">항목</span><span class="k" style="font-size:12px;text-align:right">${m}월</span><span class="k" style="font-size:12px;text-align:right">전월 대비</span>
-      ${row('수입', b.income, pb.has ? pb.income : null)}
-      ${row('지출', b.expense, pb.has ? pb.expense : null)}
-      ${row('일반 저축', b.cash, pb.has ? pb.cash : null)}
-      ${row('대출상환 저축', b.repay, pb.has ? pb.repay : null)}
-      ${row('<b style="color:var(--ink)">저축 합계</b>', b.saving, pb.has ? pb.saving : null)}
-      <span class="k">저축률</span><span class="v num">${pctPlain(b.rate)}</span><span class="d num">${pb.has ? `<span class="${dir(b.rate - pb.rate)}">${(b.rate - pb.rate >= 0 ? '+' : '') + ((b.rate - pb.rate) * 100).toFixed(1)}%p</span>` : '-'}</span>
-    </div>
-    ${yb.has ? `<p class="note">전년 동월(${y - 1}년 ${m}월) 대비 · 지출 <span class="${dir(b.expense - yb.expense)}">${signed(b.expense - yb.expense)}</span> · 저축 합계 <span class="${dir(b.saving - yb.saving)}">${signed(b.saving - yb.saving)}</span></p>` : ''}` : '<p class="note">이 달의 가계부가 아직 입력되지 않았어요.</p>'}
-  </section>
-
-  ${(() => { // 투자 성과: 홈의 금융투자 묶음 + 부동산, 전월 대비 (잔액 기준)
-    if (!A.prevOk) return '';
-    const list2 = S.years[y].assets, G = HOME_GROUPS;
-    const grp = [['금융투자', list2.filter(G.invest.match)], ['부동산', list2.filter(G.estate.match)]].filter(g => g[1].length);
-    const item = a => { const v = c.val(a), pv = A.p.val(a), d = v - pv;
-      return `<div class="row sub-row"><div class="n">${esc(a.small)}</div><div class="a num">${money(v)}<span class="d ${dir(d)}">${d ? signed(d) + (pv ? ` (${pct(d / pv, 1)})` : '') : '변동 없음'}</span></div></div>`; };
-    return `<section class="card"><h3>투자 성과 <small>전월 대비 · 잔액 기준</small></h3>
-      ${grp.map(([n, its]) => { const v = its.reduce((s2, a) => s2 + c.val(a), 0), pv = its.reduce((s2, a) => s2 + A.p.val(a), 0), d = v - pv;
-        return `<div class="group"><div class="gh"><span><span class="tag">${n}</span></span><span class="num" style="text-align:right">${money(v)}<span class="${dir(d)}" style="display:block;font-size:12px;font-weight:500">${d ? signed(d) + (pv ? ` (${pct(d / pv, 1)})` : '') : '변동 없음'}</span></span></div>${its.filter(a => c.val(a) || A.p.val(a)).map(item).join('')}</div>`; }).join('')}
-      <p class="note">추가 매수·납입도 포함된 잔액 변화예요. 시황 해석은 아래 월간 레포트에 있어요.</p></section>`; })()}
-
-  ${unusual.length ? `<section class="card"><h3>평소와 달랐던 지출 <small>직전 ${unusual.months}개월 평균 대비</small></h3>
-    ${unusual.map(x => `<div class="row"><div class="n">${esc(x.n)}<span class="memo">평균 ${money(x.av)}</span></div><div class="a num">${money(x.cur)}<span class="d ${dir(x.d)}">${signed(x.d)}</span></div></div>`).join('')}
-  </section>` : ''}
-
-  ${c.has ? `<section class="card"><h3>순자산 변동 <small>${A.prevOk ? '전월 대비' : '전월 자산 없음'}</small></h3>
-    <div class="big2 num ${A.prevOk ? dir(A.dNet) : ''}">${A.prevOk ? signed(A.dNet) : money(c.net)}</div>
-    ${A.prevOk ? `<div class="flow" style="margin-top:12px">${A.saving > 0 ? `<i style="width:${Math.min(100, A.saving / Math.max(Math.abs(A.saving) + Math.abs(A.other), 1) * 100)}%;background:var(--saving)"></i>` : ''}<i style="width:${Math.min(100, Math.abs(A.other) / Math.max(Math.abs(A.saving) + Math.abs(A.other), 1) * 100)}%;background:${A.other >= 0 ? 'var(--accent)' : 'var(--expense)'}"></i></div>
-    <div class="stats" style="margin-top:8px">
-      <div class="stat"><div class="t"><i class="dot" style="background:var(--saving)"></i> 저축 합계</div><div class="v num">${signed(A.saving)}</div></div>
-      <div class="stat"><div class="t"><i class="dot" style="background:var(--accent)"></i> 저축 외 변동</div><div class="v num ${dir(A.other)}">${signed(A.other)}</div><div class="h">투자손익 · 시세 (${A.rOther != null ? pct(A.rOther, 2) : '-'})</div></div>
-      <div class="stat"><div class="t">월말 순자산</div><div class="v num">${money(c.net)}</div></div>
-      <div class="stat"><div class="t">목표 ${T / 1e8}억 진척도</div><div class="v num">${pctPlain(prog, 1)}</div><div class="h">${pprog != null ? `전월 대비 ${((prog - pprog) * 100 >= 0 ? '+' : '') + ((prog - pprog) * 100).toFixed(2)}%p` : ''}</div></div>
-    </div>` : ''}
-  </section>` : ''}
-
-  <section class="card">
-    <h3>월간 레포트 ${rp ? `<span class="badge ${rp.status === '확정' ? 'final' : 'draft'}">${esc(rp.status || '초안')}</span>` : ''}</h3>
-    ${rp ? `<div style="font-size:18px;font-weight:800;letter-spacing:-.02em">${esc(rp.title || ym + ' 결산')}</div>
-      <div class="note" style="margin:2px 0 0">작성 ${esc(rp.date || '-')}</div>
-      ${rp.summary ? `<div class="quote">${esc(rp.summary)}</div>` : ''}
-      <div class="md">${md(rp.body)}</div>`
-    : `<p class="note" style="margin:0">${y}년 ${m}월 레포트가 아직 없어요. 스프레드시트의 '결산' 시트에 레포트가 기록되면 여기에 표시돼요.</p>`}
-  </section>
-
-  <section class="card"><h3>지난 결산 <small>${list.length}개</small></h3>
-    ${list.length ? list.map(r => `<button class="rep ${r.ym === ym ? 'on' : ''}" data-ym="${r.ym}"><div class="r1"><span>${esc(r.title || r.ym)}</span><span class="badge ${r.status === '확정' ? 'final' : 'draft'}">${esc(r.status || '초안')}</span></div>
-      <div class="r2">${esc(r.summary)}</div></button>`).join('') : '<p class="note" style="margin:0">아직 기록된 레포트가 없어요.</p>'}
-  </section>`;
-  document.querySelectorAll('.rep').forEach(btn => btn.onclick = () => {
-    const [yy, mm] = btn.dataset.ym.split('-').map(Number);
-    if (!S.years[yy]) return toast(`${yy}년 파일이 등록되어 있지 않아요`);
-    setYear(yy); S.month.budget = mm; window.scrollTo(0, 0); render();
-  });
 }
 
 /* ───────── 화면: 분석 ───────── */
@@ -829,10 +686,7 @@ function emptyMonth(m, what){
 const TITLES = {home:'홈', budget:'가계부', trend:'월별추이', asset:'자산', analysis:'분석'};
 function render(){
   killCharts();
-  const inReport = S.tab === 'budget' && S.reportOpen;
-  $('#title').innerHTML = (inReport ? '월말 레포트' : TITLES[S.tab]) + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
-  $('#backBtn').hidden = !inReport;
-  $('#repBtn').hidden = !(S.tab === 'budget' && !inReport && S.model);
+  $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
   const key = S.tab==='asset' ? 'asset' : 'budget';
   const step = $('#stepper'); step.style.display = (S.model && S.tab !== 'home' && S.tab !== 'analysis') ? 'flex' : 'none';
@@ -848,17 +702,10 @@ function render(){
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }
   updateStatus();
-  if (S.model){   // 이 달 레포트가 있으면 버튼에 빨간 점
-    const m = S.month.budget, ym = `${S.year}-${String(m).padStart(2,'0')}`;
-    $('#repDot').hidden = !(S.years[S.year]?.reports || {})[ym];
-  }
   if (!S.model) return emptyMonth(null, '');
-  if (inReport) return viewReport();
   ({home:viewHome, budget:viewBudget, trend:viewTrend, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
-function go(tab){ S.tab = tab; S.reportOpen = false; LS.set('tab', tab); window.scrollTo(0,0); render(); }
-$('#repBtn').onclick = () => { S.reportOpen = true; window.scrollTo(0,0); render(); };
-$('#backBtn').onclick = () => { S.reportOpen = false; window.scrollTo(0,0); render(); };
+function go(tab){ S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => go(b.dataset.tab));
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };

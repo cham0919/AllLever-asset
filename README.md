@@ -150,3 +150,12 @@
 | `js/main.js` | 시작 |
 
 새 버전을 낼 때는 `sw.js`의 `SHELL`(예: alv-shell-v40)만 올려요. 설정의 버전 표시는 이 이름에서 읽어요.
+
+## 앱 (머니머슬 · 아이폰/안드로이드)
+
+같은 웹 코드를 [Capacitor](https://capacitorjs.com)로 감싸서 앱으로 만들어요. 앱 ID: `com.alllever.asset`
+
+- `npm run sync` — 웹 파일을 `www/`로 모아 `android/`, `ios/` 프로젝트에 넣어요.
+- `npm run assets` — `assets/`의 아이콘·시작 화면 원본으로 앱 아이콘을 만들어요.
+- 빌드 확인은 GitHub Actions의 **App build**가 해요 (안드로이드 APK, 아이폰 시뮬레이터 실행 화면은 `ci-screens` 브랜치).
+- 웹 버전(GitHub Pages)은 지금처럼 저장소 루트 파일로 그대로 운영돼요.

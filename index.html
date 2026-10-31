@@ -419,6 +419,13 @@ body:not(.onboarding) #setBtn{display:none}
 .tgl{appearance:none;-webkit-appearance:none;margin-left:auto;width:51px;height:31px;border-radius:99px;background:var(--line);position:relative;transition:background .2s;flex:none;cursor:pointer}
 .tgl:before{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
 .tgl:checked{background:#34C759}.tgl:checked:before{transform:translateX(20px)}
+.setpage .slist.pl{border-radius:16px;border:0;box-shadow:var(--shadow)}
+.setpage .slist.pl .srow{padding:0 16px}.setpage .slist.pl .srow + .srow:before{left:16px}
+.srow .chk{margin-left:auto;color:var(--accent);font-size:18px;font-weight:800;visibility:hidden}.srow.on .chk{visibility:visible}
+.edpage h4{display:none}
+.edpage .btn + .btn{margin-top:8px}
+.edpage .ebar{bottom:calc(env(safe-area-inset-bottom) + 62px);z-index:31}
+.edpage .ebar ~ *:last-child,.edpage:has(.ebar){padding-bottom:84px}
 </style>
 </head>
 <body>
@@ -455,9 +462,8 @@ body:not(.onboarding) #setBtn{display:none}
     <button class="srow" data-sa="catExp"><span>지출 항목</span><em id="svExp"></em><i>›</i></button>
     <button class="srow" data-sa="reps"><span>반복 거래</span><em id="svReps"></em><i>›</i></button>
     <button class="srow" data-sa="bud"><span>예산</span><em id="svBud"></em><i>›</i></button>
+    <button class="srow" data-go="pay"><span>결제수단</span><em id="svPay"></em><i>›</i></button>
   </div>
-  <h5 class="shd">결제수단</h5>
-  <div class="slist" id="slPay"></div>
   <h5 class="shd">목표 · 화면</h5>
   <div class="slist">
     <button class="srow" data-go="goal"><span>목표와 계획</span><em id="svGoal"></em><i>›</i></button>
@@ -479,6 +485,12 @@ body:not(.onboarding) #setBtn{display:none}
     <button class="srow danger" id="btnRestart"><span>처음 화면으로</span></button>
   </div>
 </div>
+<div class="spage" data-page="pay">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>결제수단</b><span></span></div>
+  <p class="note" style="margin:0 4px 10px">거래를 입력할 때 고를 수 있는 결제수단이에요. 체크한 것만 보여요.</p>
+  <div class="slist pl" id="slPay"></div>
+</div>
+<div class="spage edpage" data-page="edit" id="edp"></div>
 <div class="spage" data-page="google">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>구글 계정 · 시트</b><span></span></div>
   <div class="card" style="padding:14px">

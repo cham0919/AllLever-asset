@@ -756,7 +756,7 @@ function render(){
   if (!S.model) return emptyMonth(null, '');
   ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
-function go(tab){ if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+function go(tab){ endEdPage(); if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
@@ -832,17 +832,19 @@ function syncSheet(){
   if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => i.kind !== '수입').length}개`;
     $('#svReps').textContent = `${(LY.reps[lm] || []).length}개`; const bt = its.filter(i => i.bud > 0).reduce((a, i) => a + i.bud, 0); $('#svBud').textContent = bt ? `${lm}월 ${money(bt)}` : '없음'; }
   // 결제수단: 거래 입력 화면에 보일 수단
-  $('#slPay').innerHTML = PAY_OPTS.map(p => `<label class="srow"><span>${p}</span><input type="checkbox" class="tgl" data-pay="${p}"${S.payOff.includes(p) ? '' : ' checked'}></label>`).join('');
-  $('#slPay').querySelectorAll('.tgl').forEach(t => t.onchange = () => {
-    const off = PAY_OPTS.filter(p => !$(`#slPay [data-pay="${p}"]`).checked);
-    if (off.length === PAY_OPTS.length){ t.checked = true; return toast('결제수단을 하나 이상 켜 두세요'); }
-    S.payOff = off; LS.set('payOff', off); });
+  const payOn = PAY_OPTS.filter(p => !S.payOff.includes(p));
+  $('#svPay').textContent = payOn.length === PAY_OPTS.length ? '전체' : payOn.join(' · ');
+  $('#slPay').innerHTML = PAY_OPTS.map(p => `<button class="srow${S.payOff.includes(p) ? '' : ' on'}" data-pay="${p}"><span>${p}</span><b class="chk">✓</b></button>`).join('');
+  $('#slPay').querySelectorAll('[data-pay]').forEach(b => b.onclick = () => {
+    const p = b.dataset.pay, off = S.payOff.includes(p) ? S.payOff.filter(x => x !== p) : [...S.payOff, p];
+    if (off.length === PAY_OPTS.length) return toast('결제수단을 하나 이상 골라 두세요');
+    S.payOff = off; LS.set('payOff', off); syncSheet(); });
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v26';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v27';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -856,7 +858,9 @@ $('#sheet').addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g){ syncSheet(); sPage(g.dataset.go, g.dataset.go === 'main'); return; }
   const a = e.target.closest('[data-sa]'); if (!a) return;
   const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
+  startEdPage();
   ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
+  if (edPage && !$('#ed').innerHTML) endEdPage();
 });
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();
@@ -1451,13 +1455,27 @@ function swipeClose(el, canClose, close){
 }
 let edNoClose = false;
 swipeClose($('#ed'), () => !edNoClose, () => closeEd());
+// 설정에서 여는 편집 화면은 아래에서 올라오는 창 대신 설정 안의 한 페이지로 열어요.
+// 편집 코드는 모두 #ed 를 쓰므로, 페이지 모드 동안 설정 페이지(#edp)와 아래 창의 id를 바꿔 둡니다.
+let edPage = false;
+function startEdPage(){ if (edPage) return; edPage = true; const sh = $('#ed'), pg = $('#edp'); sh.id = 'edSheet'; pg.id = 'ed'; }
+function endEdPage(){ if (!edPage) return; edPage = false; const pg = $('#ed'), sh = $('#edSheet'); pg.innerHTML = ''; pg.id = 'edp'; sh.id = 'ed'; }
 function openEd(html, opt = {}){
+  if (edPage){
+    const el = $('#ed'); el.innerHTML = '<div class="shead"><button class="sback" id="edBack">‹ 뒤로</button><b></b><span></span></div>' + html;
+    $('#edBack').onclick = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
+    const h = el.querySelector('h4'); if (h) el.querySelector('.shead b').textContent = (h.childNodes[0]?.textContent || '').trim();
+    sPage('edit'); const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60); return;
+  }
   edNoClose = !!opt.noClose;
   const el = $('#ed'); el.className = 'sheet ed on' + (opt.tall ? ' tall' : ''); el.innerHTML = '<div class="grab"></div>' + html;
   $('#edScrim').classList.add('on'); $('#edScrim').onclick = opt.noClose ? null : closeEd;
   const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60);
 }
-function closeEd(){ $('#ed').classList.remove('on'); $('#edScrim').classList.remove('on'); }
+function closeEd(){
+  if (edPage){ endEdPage(); if (S.tab === 'settings'){ syncSheet(); sPage('main', true); } return; }
+  $('#ed').classList.remove('on'); $('#edScrim').classList.remove('on');
+}
 function bindWon(inp, onChange){
   inp.addEventListener('input', () => {
     const raw = inp.value, n = parseWon(raw);

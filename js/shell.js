@@ -65,6 +65,7 @@ function applyTheme(){
   document.documentElement.dataset.theme = t;
   document.querySelector('meta[name=theme-color]').content = t==='dark' ? '#0E1013' : '#F1F1EE';
   document.documentElement.style.backgroundColor = t==='dark' ? '#15171B' : '#F9F9F6'; document.documentElement.style.colorScheme = t;
+  if (NATIVE) nativePlugin('SystemBars')?.setStyle({style: t==='dark' ? 'DARK' : 'LIGHT'}).catch(() => {});   // 앱: 상단 시계·배터리 글자색
 }
 mq.addEventListener?.('change', () => { if (S.theme==='system'){ applyTheme(); render(); } });
 
@@ -113,7 +114,7 @@ function syncSheet(){
   appVersion().then(v => { $('#sVer').textContent = v; });
 }
 // 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요
-const appVersion = () => (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
+const appVersion = () => window.ALV_APP_VERSION ? Promise.resolve(window.ALV_APP_VERSION) : (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);

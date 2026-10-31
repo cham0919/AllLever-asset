@@ -1,0 +1,83 @@
+# 아이폰·안드로이드 앱 빌드 확인 (서명 없이). 웹 버전(GitHub Pages) 배포와는 따로 돌아요.
+# 결과물: 안드로이드 설치 파일(APK), 아이폰 시뮬레이터 실행 화면 캡처 — Actions 실행 결과의 Artifacts에서 받을 수 있어요.
+name: App build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'theme-boot.js'
+      - 'js/**'
+      - 'fonts/**'
+      - 'vendor/**'
+      - 'android/**'
+      - 'ios/**'
+      - 'assets/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'capacitor.config.json'
+      - 'tools/build-www.mjs'
+      - '.github/workflows/app-build.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npm run sync
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moneymuscle-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run sync
+      - name: Build for simulator (no signing)
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
+      - name: Run in simulator and take screenshots
+        run: |
+          set -e
+          DEV=$(xcrun simctl list devices available | grep -E 'iPhone 1[5-9]|iPhone 2[0-9]' | grep -v Plus | grep -v Max | head -1 | grep -oE '[0-9A-F-]{36}')
+          echo "simulator: $DEV"
+          xcrun simctl boot "$DEV"; xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" build/Build/Products/Debug-iphonesimulator/App.app
+          mkdir -p shots
+          xcrun simctl ui "$DEV" appearance light
+          xcrun simctl launch "$DEV" com.alllever.asset; sleep 12
+          xcrun simctl io "$DEV" screenshot shots/ios-light.png
+          xcrun simctl terminate "$DEV" com.alllever.asset || true
+          xcrun simctl ui "$DEV" appearance dark
+          xcrun simctl launch "$DEV" com.alllever.asset; sleep 10
+          xcrun simctl io "$DEV" screenshot shots/ios-dark.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: moneymuscle-ios-screens
+          path: shots/

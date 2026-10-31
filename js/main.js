@@ -18,4 +18,5 @@ else if (!gPending && S.gfiles.length && (S.meta.source !== 'file' && S.meta.sou
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.meta.source === 'google' && stale()) syncNow(false);
 });
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(()=>{});
+if (!NATIVE && 'serviceWorker' in navigator && location.protocol === 'https:')   // 앱은 파일이 기기 안에 있어서 필요 없어요
+  navigator.serviceWorker.register('sw.js').catch(()=>{});

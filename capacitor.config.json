@@ -1,0 +1,19 @@
+{
+  "appId": "com.alllever.asset",
+  "appName": "머니머슬",
+  "webDir": "www",
+  "backgroundColor": "#F1F1EE",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#F1F1EE"
+  },
+  "android": {
+    "backgroundColor": "#F1F1EE"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "native",
+      "initialViewportFitValueHint": "cover"
+    }
+  }
+}

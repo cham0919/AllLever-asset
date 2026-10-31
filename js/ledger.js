@@ -287,12 +287,11 @@ function openBudEdit(){
     openEd(`<h4>${m}월 예산 <button class="ex" id="edX">닫기</button></h4>
       <div class="btot"><div class="lab">지출 예산 합계 (항목 합계로 자동)</div><div class="v num" id="bdTot">${tot ? money(tot) : '0원'}</div>${prevSpent != null ? `<small>지난달 실제 지출 ${money(prevSpent)}</small>` : ''}</div>
       ${has('last') || has('pbud') ? `<div class="bqf"><span>빠르게 채우기</span>${has('last') ? '<button data-f="last">지난달 지출</button>' : ''}${ref.some(R => R.avgN >= 2) ? '<button data-f="avg">최근 3개월 평균</button>' : ''}${has('pbud') ? '<button data-f="pbud">지난달 예산 그대로</button>' : ''}</div>` : ''}
-      ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}${k === '고정비' ? ' <span class="muted" style="font-weight:500">· 반복 거래 금액이 기본값</span>' : ''}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
+      ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기">빼기</button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
         || '<p class="note" style="text-align:center;margin:18px 0">아직 예산을 정한 항목이 없어요. 위 버튼으로 채우거나 아래에서 항목을 추가하세요.</p>'}
       ${off.length ? `<div class="elbl" style="margin-top:14px">+ 예산 항목 추가</div><div class="echips">${off.map(i => `<button class="badd-c" data-x="${items.indexOf(i)}">+ ${esc(i.name)}</button>`).join('')}</div>` : ''}
-      <p class="note">왼쪽으로 밀면 예산에서 빠져요. 저장하면 ${m < 12 ? `${m}월부터 12월까지` : '12월에'} 같은 예산이 적용돼요.</p>
-      <div class="ebar"><div class="t">시트의 '월 예산' 칸에 저장돼요</div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
+      <div class="ebar"><div class="t"></div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
     $('#ed').scrollTop = sc;
     const upd = () => { const t = total(); $('#bdTot').textContent = t ? money(t) : '0원'; };
     $('#ed').querySelectorAll('.bin').forEach(inp => bindWon(inp, v => { const x = +inp.dataset.x; ed[x] = {v: Number.isNaN(v) ? NaN : v, rep: false, on: true}; inp.classList.remove('rep'); upd(); }));
@@ -425,7 +424,6 @@ function openReps(){
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const L = Y.reps[m] || [];
   openEd(`<h4>반복 거래 <button class="ex" id="edX">닫기</button></h4>
-    <div class="esub">${m}월 시트 기준 · 날짜가 되면 거래 내역에 자동으로 들어가요</div>
     ${KINDS.map(k => { const R = L.filter(r => r.kind === k); return R.length ? `<div class="ecard"><div class="etitle">${k}</div>${R.map(r => `<div class="row tap" data-ri="${L.indexOf(r)}"><div class="n">${esc(r.memo || r.sub || r.name)}<small>${esc(r.name)}${r.sub ? ' › ' + esc(r.sub) : ''} · 매달 ${r.day}일${r.pay ? ' · ' + esc(r.pay) : ''}</small></div><div class="a num">${r.amt == null ? '금액 없음' : fmtWon(r.amt)}</div></div>`).join('')}</div>` : ''; }).join('') || '<p class="note">아직 반복 거래가 없어요. 월급·관리비·통신비·적금처럼 매달 있는 거래를 등록해 두세요.</p>'}
     <button class="btn" id="rpAdd">+ 반복 거래 추가</button>`, {tall: L.length > 4});
   $('#edX').onclick = closeEd; $('#rpAdd').onclick = () => editRep(null);
@@ -481,7 +479,6 @@ function openCats(kinds){
   const draw = () => {
     const sc = $('#ed').scrollTop;
     openEd(`<h4>${catKinds.length === 2 ? '지출 항목' : catKinds.length === 1 ? catKinds[0] + ' 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
-      <div class="esub">1~12월 모든 달에 적용돼요 · 항목 이름을 누르면 바꾸거나 지울 수 있어요</div>
       ${catKinds.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>
           <div class="echips sm">${e.subs.map((s, j) => `<button class="csub" data-j="${j}">${esc(s)} <b aria-label="삭제">×</b></button>`).join('')}<button class="add cadd">+ 세부분류</button></div></div>`; }).join('')}

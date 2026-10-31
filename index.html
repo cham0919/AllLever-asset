@@ -419,6 +419,7 @@ body:not(.onboarding) #setBtn{display:none}
 .ebar{z-index:62}
 .toast{z-index:90!important}
 :root{--navfill:#F9F9F6}:root[data-theme="dark"]{--navfill:#15171B}
+.slines{margin:14px 2px 0;padding:0;list-style:none;font-size:12px;line-height:1.5;color:var(--sub)}.slines li+li{margin-top:3px}
 .zt{display:block;width:100%;padding:12px 0 2px;font-size:13px;font-weight:600;color:var(--sub);text-align:center}
 .gmark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#fff;margin-right:4px;flex:none}.gmark svg{width:18px;height:18px}
 .ymlabel{min-width:132px;text-align:center;font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
@@ -488,7 +489,6 @@ body:not(.onboarding) #setBtn{display:none}
 </div>
 <div class="spage" data-page="pay">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>결제수단</b><span></span></div>
-  <p class="note" style="margin:0 4px 10px">거래를 입력할 때 고를 수 있는 결제수단이에요. 체크한 것만 보여요.</p>
   <div class="slist pl" id="slPay"></div>
 </div>
 <div class="spage" data-page="google">
@@ -500,7 +500,7 @@ body:not(.onboarding) #setBtn{display:none}
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
     <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
     <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제</button>
-    <p class="note">앱은 <b>직접 고르거나 앱에서 만든 시트만</b> 볼 수 있어요. 드라이브의 다른 파일에는 접근하지 않아요. 연도는 시트 '설정'의 <b>기준 연도</b>로 자동 구분되고, 데이터는 이 기기에만 저장돼요.</p>
+    <ul class="slines"><li>앱은 직접 고르거나 앱에서 만든 시트만 볼 수 있어요.</li><li>드라이브의 다른 파일에는 접근하지 않아요.</li><li>연도는 시트 '설정'의 기준 연도로 자동 구분돼요.</li><li>데이터는 이 기기에만 저장돼요.</li></ul>
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
   
   </div>

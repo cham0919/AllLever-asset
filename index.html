@@ -344,8 +344,8 @@ nav.tabs button.on{color:var(--ink)}
 /* 예산 */
 .btrack{position:relative;height:12px;border-radius:9px;background:var(--chip);margin:24px 0 6px}
 .btrack.sm{height:8px;margin:8px 0 3px}
-.btrack i{position:absolute;left:0;top:0;bottom:0;border-radius:9px;background:var(--accent)}
-.btrack i.warn{background:var(--warn)}.btrack i.over{background:var(--expense)}.btrack i.done{background:var(--faint)}
+.btrack i{position:absolute;left:0;top:0;bottom:0;height:auto;margin:0;padding:0;border-radius:9px;background:var(--accent)}
+.btrack i.bf-warn{background:var(--warn)}.btrack i.bf-over{background:var(--expense)}.btrack i.bf-done{background:var(--faint)}
 .bpace{position:absolute;top:-5px;bottom:-5px;width:2px;margin-left:-1px;background:var(--ink);border-radius:2px}
 .btrack.sm .bpace{top:-3px;bottom:-3px}
 .bpace[data-l]:after{content:attr(data-l);position:absolute;top:-17px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;white-space:nowrap;color:var(--ink)}
@@ -369,8 +369,8 @@ nav.tabs button.on{color:var(--ink)}
 .bit .am{font-size:13px;color:var(--sub)}.bit .am b{color:var(--ink);font-size:14px}
 .bsub{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--sub)}.bsub .up{color:var(--expense)}
 .btag{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 6px}
-.btag.ok,.btag.fit{background:var(--good-soft);color:var(--good-ink)}.btag.warn{background:var(--warn-soft);color:var(--warn-ink)}
-.btag.over{background:var(--bad-soft);color:var(--bad-ink)}.btag.done,.btag.plan{background:var(--chip);color:var(--sub)}
+.btag.t-ok,.btag.t-fit{background:var(--good-soft);color:var(--good-ink)}.btag.t-warn{background:var(--warn-soft);color:var(--warn-ink)}
+.btag.t-over{background:var(--bad-soft);color:var(--bad-ink)}.btag.t-done,.btag.t-plan{background:var(--chip);color:var(--sub)}
 .bempty{text-align:center;padding:26px 20px}.bempty b{font-size:17px}.bempty p{color:var(--sub);font-size:13.5px;margin:8px 0 16px}
 .bstrip{display:block;width:100%;text-align:left;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .bstrip .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub)}.bstrip .l b{color:var(--ink)}.bstrip .l b.up{color:var(--expense)}

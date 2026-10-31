@@ -800,7 +800,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = '버전 ' + APP_VER;
 }
-const APP_VER = 'v20';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v21';   // sw.js 캐시 이름과 같이 올려요
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   $('#sheet').scrollTop = 0;
@@ -1731,7 +1731,7 @@ function budState(y, m){
   const varBud = rows.filter(r => !r.fixed).reduce((a, r) => a + r.it.bud, 0);
   return {y, m, nd, day, frac, cur, ended, canProj, rows, unb, unbAmt, total, spent, okLine, proj, left, daily, dayBase: varBud / nd};
 }
-const bClass = r => r > 1 ? 'over' : r >= .85 ? 'warn' : '';
+const bClass = r => r > 1 ? 'bf-over' : r >= .85 ? 'bf-warn' : '';   // 막대 색 (전역 .warn 과 겹치지 않게 bf- 접두어)
 function budStrip(bs){
   const rem = bs.total - bs.spent, r = bs.spent / bs.total;
   return `<button class="bstrip" data-act="goBud"><div class="l"><span>${rem >= 0 ? `예산 <b>${money(rem)}</b> 남음` : `예산 <b class="up">${money(-rem)}</b> 넘음`}${bs.cur && bs.daily ? ` · 하루 ${money(bs.daily)}` : ''}</span><span class="num">${Math.round(r * 100)}% ›</span></div>
@@ -1765,8 +1765,8 @@ function viewBud(){
     else if (x.fixed) l = x.st === 'done' ? '이번 달 냈어요' : `남은 ${money(i.bud - i.amt)}`;
     else { const d = i.amt - x.exp; l = bs.cur ? (Math.abs(d) < 1e4 ? '적정선에 맞게 쓰는 중' : d > 0 ? `적정선보다 ${money(d)} 더 씀` : `적정선보다 ${money(-d)} 덜 씀`) : `${Math.round(rr * 100)}% 사용`;
       rt = `남은 ${money(i.bud - i.amt)}${bs.cur && bs.left ? ` · 하루 ${money((i.bud - i.amt) / bs.left)}` : ''}`; }
-    return `<button class="bit" data-bi="${idx}"><div class="r1"><span class="nm">${esc(i.name)} <span class="btag ${x.st}">${TAG[x.st]}</span></span><span class="am num"><b>${money(i.amt)}</b> / ${money(i.bud)}</span></div>
-      <div class="btrack sm"><i class="${x.st === 'done' ? 'done' : bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur && !x.fixed ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
+    return `<button class="bit" data-bi="${idx}"><div class="r1"><span class="nm">${esc(i.name)} <span class="btag t-${x.st}">${TAG[x.st]}</span></span><span class="am num"><b>${money(i.amt)}</b> / ${money(i.bud)}</span></div>
+      <div class="btrack sm"><i class="${x.st === 'done' ? 'bf-done' : bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur && !x.fixed ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
       <div class="bsub"><span>${l}</span><span>${rt}</span></div></button>`; };
   const grp = k => { const R = bs.rows.filter(x => x.it.kind === k); return R.length ? `<div class="bkind">${k}</div>` + R.sort((a, z) => z.it.bud - a.it.bud).map(rowHtml).join('') : ''; };
   html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${grp('변동비')}${grp('고정비')}</section>`;

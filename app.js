@@ -749,6 +749,7 @@ function render(){
     if (!trend) $('#selM').innerHTML = Array.from({length:12}, (_,i) => i+1).map(m =>
       `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월</option>`).join('');
     $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
+    $('#ymLabel').textContent = trend ? `${S.year}년` : `${S.year}년 ${S.month[key]}월`;
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }
   updateStatus();
@@ -844,7 +845,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v31';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v32';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);

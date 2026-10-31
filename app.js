@@ -1010,6 +1010,7 @@ function busy(t, sub = ''){   // 전체 화면 로딩창 (t 없으면 닫기)
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!leaveLocalOk()) return;
+  if (S.gfiles.some(f => !f.year)) await syncGoogle(false);   // 연도를 아직 모르는 시트가 있으면 먼저 확인
   const used = new Set(S.gfiles.map(f => f.year).filter(Boolean)), cy = new Date().getFullYear();
   let y = year;
   if (!y){
@@ -1076,22 +1077,29 @@ async function syncGoogle(interactive){
     if (!S.guser) await gWhoAmI(tok);
     const res = await Promise.all(S.gfiles.map(f => gDownload(f, tok).then(m => ({f, m}), e => ({f, e}))));
     const old = S.meta.source === 'google' ? (S.years || {}) : {}, next = {}, dup = [], fail = [];
+    // 같은 연도 시트는 하나만: 먼저 연결한 시트를 남기고, 나중에 연결한 시트는 연결을 풀어요 (드라이브 파일은 그대로)
+    const owner = {};
+    for (const r of res) if (r.m && r.f.year === r.m.year && !(r.m.year in owner)) owner[r.m.year] = r.f;   // 이미 그 연도로 쓰던 시트 우선
     for (const r of res){
-      if (r.m){ if (next[r.m.year]) dup.push(r.m.year); next[r.m.year] = r.m; r.f.year = r.m.year; }
-      else fail.push(r);
+      if (!r.m){ fail.push(r); continue; }
+      const y = r.m.year;
+      if (owner[y] && owner[y] !== r.f || next[y]){ dup.push(r.f); continue; }
+      next[y] = r.m; r.f.year = y; owner[y] = r.f;
     }
+    if (dup.length) S.gfiles = S.gfiles.filter(f => !dup.includes(f));
     for (const r of fail){ const y = r.f.year; if (y && old[y] && !next[y]) next[y] = old[y]; }   // 실패한 연도는 이전 데이터 유지
     gSave(); renderG();
     if (!res.some(r => r.m)){   // 하나도 못 받았으면 기존 데이터·동기화 시각을 그대로 둬요
       toast(fail.some(r => r.e.auth) ? '구글 로그인이 만료됐어요. 새로고침 버튼을 눌러 다시 로그인해 주세요' : '불러오기 실패: ' + fail[0].e.message); return; }
     finishOb(); setYears(next, {source: 'google'}, S.meta.source === 'google'); applyReps();
-    if (dup.length) toast(`${[...new Set(dup)].join(', ')}년 시트가 여러 개예요. 기준 연도를 확인해 주세요`);
+    if (dup.length){ const d = dup[0], y = res.find(r => r.f === d).m.year;
+      toast(`${y}년 시트는 이미 연결돼 있어서 '${d.name}'${dup.length > 1 ? ` 외 ${dup.length - 1}개` : ''}는 연결하지 않았어요`); }
     else if (fail.length) toast(`${fail.length}개 시트를 불러오지 못했어요: ${fail[0].e.message}`);
     else if (interactive) toast('최신 데이터로 업데이트했어요');
   } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); }
 }
 function syncNow(interactive){ if (S.gfiles.length) return syncGoogle(interactive); if (interactive){ toast('설정에서 구글 시트를 연결하세요'); openSheet(); } }
-$('#gPick').onclick = gPick; $('#gCreate').onclick = gCreate; $('#gOut').onclick = gSignOut;
+$('#gPick').onclick = gPick; $('#gCreate').onclick = () => gCreate(); $('#gOut').onclick = gSignOut;
 
 // 화면 안 버튼 동작 (CSP 때문에 onclick 속성 대신 위임)
 document.addEventListener('click', e => { const t = e.target.closest('#view [data-tx]'); if (t) return editTx(t.dataset.tx); });

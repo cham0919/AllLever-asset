@@ -319,6 +319,26 @@ nav.tabs button.on{color:var(--ink)}
 .busy .s{font-size:13px;color:var(--sub);margin-top:6px}
 @keyframes busySpin{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.busy .spin{animation-duration:2.4s}}
+.spage{display:none}
+.spage.on{display:block;animation:spIn .24s cubic-bezier(.2,.8,.2,1)}
+.spage.on.back{animation-name:spBack}
+@keyframes spIn{from{transform:translateX(28px);opacity:0}to{transform:none;opacity:1}}
+@keyframes spBack{from{transform:translateX(-28px);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.spage.on{animation:none}}
+.shead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin:2px 0 14px;min-height:36px}
+.shead b{font-size:17px}
+.sback{justify-self:start;color:var(--accent);font-size:15px;font-weight:600;padding:6px 2px}
+.sdone{justify-self:end;color:var(--accent);font-size:15px;font-weight:600;padding:6px 2px}
+.slist{background:var(--card);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.srow{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:0 16px;font-size:15px;color:var(--ink);text-align:left;text-decoration:none;background:none}
+.srow + .srow{border-top:1px solid var(--line)}
+.srow span{flex:none;font-weight:600}
+.srow em{flex:1;min-width:0;text-align:right;font-style:normal;color:var(--sub);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.srow i{font-style:normal;color:var(--faint);font-size:20px;line-height:1;margin-left:auto}
+.srow em + i{margin-left:2px}
+#sheet{min-height:min(600px,78vh)}
+.srow:active{background:var(--chip)}
+.sver{text-align:center;color:var(--faint);font-size:12px;margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -352,47 +372,29 @@ nav.tabs button.on{color:var(--ink)}
 
 <div class="scrim" id="scrim"></div>
 <section class="sheet" id="sheet" aria-label="설정">
-  <div class="grab"></div>
-  <h2>설정 <button id="closeSheet" style="font-size:15px;color:var(--accent);font-weight:600">완료</button></h2>
-
-  <h4>화면</h4>
-  <div class="card" style="padding:14px">
-    <div class="field"><span>테마</span>
-      <div class="seg" id="segTheme"><button data-v="system">시스템</button><button data-v="light">라이트</button><button data-v="dark">다크</button></div></div>
-    <div class="field" style="margin:0"><span>금액 표시</span>
-      <div class="seg" id="segUnit"><button data-v="short">억 · 만원</button><button data-v="full">원 단위</button></div></div>
+<div class="grab"></div>
+<div class="spage on" data-page="main">
+  <h2>설정 <button id="closeSheet" data-close style="font-size:15px;color:var(--accent);font-weight:600">완료</button></h2>
+  <div class="slist">
+    <button class="srow" data-go="google"><span>구글 계정 · 시트</span><em id="svGoogle"></em><i>›</i></button>
+    <button class="srow" data-go="data"><span>데이터</span><em id="svData"></em><i>›</i></button>
   </div>
-
-  <h4>데이터</h4>
-  <div class="card" style="padding:14px">
-    <div class="kv"><span>데이터</span><span id="sSource">-</span></div>
-    <div class="kv"><span>마지막 동기화</span><span id="sSync">-</span></div>
-    <div style="margin-top:12px">
-      <button class="btn" id="btnSync">지금 불러오기</button>
-      <button class="btn ghost" id="btnAddYear" hidden>새 연도 추가</button>
-      <button class="btn ghost" id="btnExport" hidden>엑셀로 내보내기 (백업)</button>
-      <button class="btn ghost" id="btnFile">이 기기에서 엑셀 파일 열기</button>
-      <button class="btn ghost" id="btnDemo">예시 데이터로 보기</button>
-      <button class="btn ghost" id="btnRestart">처음 화면으로</button>
-    </div>
-    <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+  <div class="slist">
+    <button class="srow" data-go="goal"><span>목표와 계획</span><em id="svGoal"></em><i>›</i></button>
+    <button class="srow" data-go="fire"><span>FIRE 계산</span><em id="svFire"></em><i>›</i></button>
+    <button class="srow" data-go="view"><span>화면</span><em id="svView"></em><i>›</i></button>
   </div>
-
-  <h4>분석 · 목표와 계획</h4>
-  <div class="card" style="padding:14px">
-    <label class="field"><span>목표 순자산 (억원)</span><input id="gTarget" type="number" inputmode="decimal" step="1"></label>
-    <label class="field"><span>계획 연 수익률 (%)</span><input id="gRate" type="number" inputmode="decimal" step="0.5"></label>
-    <label class="field"><span>계획 연 저축 (만원)</span><input id="gSave" type="number" inputmode="numeric" step="100"></label>
-    <label class="field"><span>계획 시작 연도</span><input id="gYear" type="number" inputmode="numeric"></label>
-    <label class="field" style="margin:0"><span>계획 시작 순자산 (만원 · 전년도 말 기준, 비우면 첫 기록값)</span><input id="gBase" type="number" inputmode="numeric" placeholder="자동"></label>
-    <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
-    <label class="field" style="margin-top:12px"><span>FIRE 연 배당률 (%)</span><input id="gDiv" type="number" inputmode="decimal" step="0.5"></label>
-    <label class="field" style="margin:0"><span>FIRE 세후 비율 (%) · 배당소득세 15.4% 원천징수면 84.6</span><input id="gNet" type="number" inputmode="decimal" step="0.1"></label>
+  <div class="slist">
+    <button class="srow" id="btnDemo"><span>예시 데이터로 보기</span></button>
+    <button class="srow" id="btnRestart"><span>처음 화면으로</span></button>
+    <a class="srow" href="privacy.html" target="_blank" rel="noopener"><span>개인정보 처리방침</span><i>›</i></a>
   </div>
-
-  <h4>구글 계정 연결 · 연도별 시트</h4>
-  <div class="card" style="padding:14px" id="gCard">
-    <div class="kv"><span>계정</span><span id="gUser">연결 안 됨</span></div>
+  <p class="sver" id="sVer"></p>
+</div>
+<div class="spage" data-page="google">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>구글 계정 · 시트</b><button class="sdone" data-close>완료</button></div>
+  <div class="card" style="padding:14px">
+<div class="kv"><span>계정</span><span id="gUser">연결 안 됨</span></div>
     <div id="gList" style="margin:6px 0 12px"></div>
     <div id="gChooser" class="chooser" hidden></div>
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
@@ -400,8 +402,54 @@ nav.tabs button.on{color:var(--ink)}
     <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제</button>
     <p class="note">앱은 <b>직접 고르거나 앱에서 만든 시트만</b> 볼 수 있어요. 드라이브의 다른 파일에는 접근하지 않아요. 연도는 시트 '설정'의 <b>기준 연도</b>로 자동 구분되고, 데이터는 이 기기에만 저장돼요.</p>
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
+  
   </div>
-
+</div>
+<div class="spage" data-page="data">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>데이터</b><button class="sdone" data-close>완료</button></div>
+  <div class="card" style="padding:14px">
+<div class="kv"><span>데이터</span><span id="sSource">-</span></div>
+    <div class="kv"><span>마지막 동기화</span><span id="sSync">-</span></div>
+    <div style="margin-top:12px">
+      <button class="btn" id="btnSync">지금 불러오기</button>
+      <button class="btn ghost" id="btnAddYear" hidden>새 연도 추가</button>
+      <button class="btn ghost" id="btnExport" hidden>엑셀로 내보내기 (백업)</button>
+      <button class="btn ghost" id="btnFile">이 기기에서 엑셀 파일 열기</button>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+  
+  </div>
+</div>
+<div class="spage" data-page="goal">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>목표와 계획</b><button class="sdone" data-close>완료</button></div>
+  <div class="card" style="padding:14px">
+<label class="field"><span>목표 순자산 (억원)</span><input id="gTarget" type="number" inputmode="decimal" step="1"></label>
+    <label class="field"><span>계획 연 수익률 (%)</span><input id="gRate" type="number" inputmode="decimal" step="0.5"></label>
+    <label class="field"><span>계획 연 저축 (만원)</span><input id="gSave" type="number" inputmode="numeric" step="100"></label>
+    <label class="field"><span>계획 시작 연도</span><input id="gYear" type="number" inputmode="numeric"></label>
+    <label class="field" style="margin:0"><span>계획 시작 순자산 (만원 · 전년도 말 기준, 비우면 첫 기록값)</span><input id="gBase" type="number" inputmode="numeric" placeholder="자동"></label>
+    <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
+    
+  </div>
+</div>
+<div class="spage" data-page="fire">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>FIRE 계산</b><button class="sdone" data-close>완료</button></div>
+  <div class="card" style="padding:14px">
+<label class="field"><span>FIRE 연 배당률 (%)</span><input id="gDiv" type="number" inputmode="decimal" step="0.5"></label>
+    <label class="field" style="margin:0"><span>FIRE 세후 비율 (%) · 배당소득세 15.4% 원천징수면 84.6</span><input id="gNet" type="number" inputmode="decimal" step="0.1"></label>
+  
+  </div>
+</div>
+<div class="spage" data-page="view">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>화면</b><button class="sdone" data-close>완료</button></div>
+  <div class="card" style="padding:14px">
+<div class="field"><span>테마</span>
+      <div class="seg" id="segTheme"><button data-v="system">시스템</button><button data-v="light">라이트</button><button data-v="dark">다크</button></div></div>
+    <div class="field" style="margin:0"><span>금액 표시</span>
+      <div class="seg" id="segUnit"><button data-v="short">억 · 만원</button><button data-v="full">원 단위</button></div></div>
+  
+  </div>
+</div>
 </section>
 <div class="scrim" id="edScrim"></div>
 <section class="sheet ed" id="ed" aria-label="입력"></section>

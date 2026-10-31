@@ -789,17 +789,35 @@ function syncSheet(){
   $('#btnAddYear').hidden = S.meta.source !== 'local'; $('#btnExport').hidden = !S.model || S.meta.source === 'demo'; $('#btnSync').hidden = S.meta.source !== 'google';
   renderG();
   $('#sSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '-';
+  // 첫 화면 목록 오른쪽 요약
+  const src = S.meta.source, g = S.goal;
+  $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
+  $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트${S.meta.syncedAt ? ' · ' + fmtTime(S.meta.syncedAt) : ''}`
+    : src === 'local' ? '이 기기에 저장' : src === 'file' ? '기기 파일' : '예시 데이터';
+  $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
+  $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
+  $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
+  $('#sVer').textContent = '버전 ' + APP_VER;
 }
-function openSheet(){ syncSheet(); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
+const APP_VER = 'v19';   // sw.js 캐시 이름과 같이 올려요
+function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
+  $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
+  $('#sheet').scrollTop = 0;
+}
+function openSheet(page = 'main'){ syncSheet(); sPage(page); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
+$('#sheet').addEventListener('click', e => {
+  const go = e.target.closest('[data-go]'); if (go){ syncSheet(); sPage(go.dataset.go, go.dataset.go === 'main'); return; }
+  if (e.target.closest('[data-close]')) closeSheet();
+});
 function closeSheet(){
   $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
 }
-$('#setBtn').onclick = openSheet; $('#closeSheet').onclick = closeSheet; $('#scrim').onclick = closeSheet;
+$('#setBtn').onclick = () => openSheet(); $('#scrim').onclick = closeSheet;
 $('#btnSync').onclick = () => { $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); syncNow(true); };
 $('#btnDemo').onclick = () => { if (S.meta.source === 'local' && !confirm('예시 데이터로 바꾸면 이 기기에 저장된 데이터가 화면에서 사라져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return; closeSheet(); loadDemo(); };
 $('#btnExport').onclick = () => exportAll();
 $('#btnAddYear').onclick = () => addLocalYear();
-$('#btnRestart').onclick = () => restartOb();
+$('#btnRestart').onclick = () => { if (S.meta.source !== 'local' && !confirm('처음 화면으로 돌아갈까요? 연결한 구글 시트는 그대로 남아요')) return; restartOb(); };
 $('#btnFile').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; closeSheet();
   try { const md = parseWorkbook(await f.arrayBuffer());
@@ -808,7 +826,7 @@ $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) ret
     const ys = S.meta.source === 'local' ? {...S.years} : {}; ys[md.year] = md;   // 이 기기 저장 데이터에 연도별로 합침
     finishOb(); setYears(ys, {source:'local', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요. 이제 앱에서 입력할 수 있어요`); }
   catch(err){ toast('파일을 읽지 못했어요: ' + err.message); } e.target.value=''; };
-$('#syncBtn').onclick = () => S.gfiles.length ? syncNow(true) : openSheet();
+$('#syncBtn').onclick = () => S.gfiles.length ? syncNow(true) : openSheet('google');
 
 /* ───────── 데이터 반영 ───────── */
 function setYears(years, meta, keepView){
@@ -953,7 +971,7 @@ async function gPick(){
   if (!leaveLocalOk()) return;
   try {
     const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
-    if (!$('#sheet').classList.contains('on')) openSheet();
+    if (!$('#sheet').classList.contains('on')) openSheet('google');
     const q = `(mimeType='${MIME_SHEET}' or mimeType='${MIME_XLSX}') and trashed=false`;
     const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, orderBy: 'modifiedTime desc', pageSize: '100',
       fields: 'files(id,name,mimeType,modifiedTime)'}), {cache: 'no-store'}, tok)).json();
@@ -1098,14 +1116,14 @@ async function syncGoogle(interactive){
     else if (interactive) toast('최신 데이터로 업데이트했어요');
   } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); }
 }
-function syncNow(interactive){ if (S.gfiles.length) return syncGoogle(interactive); if (interactive){ toast('설정에서 구글 시트를 연결하세요'); openSheet(); } }
+function syncNow(interactive){ if (S.gfiles.length) return syncGoogle(interactive); if (interactive){ toast('설정에서 구글 시트를 연결하세요'); openSheet('google'); } }
 $('#gPick').onclick = gPick; $('#gCreate').onclick = () => gCreate(); $('#gOut').onclick = gSignOut;
 
 // 화면 안 버튼 동작 (CSP 때문에 onclick 속성 대신 위임)
 document.addEventListener('click', e => { const t = e.target.closest('#view [data-tx]'); if (t) return editTx(t.dataset.tx); });
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
-  if (a === 'openSheet') openSheet(); else if (a === 'loadDemo') loadDemo(); else if (a === 'obRestart') restartOb(); else if (a === 'sync') syncNow(true);
+  if (a === 'openSheet') openSheet('google'); else if (a === 'loadDemo') loadDemo(); else if (a === 'obRestart') restartOb(); else if (a === 'sync') syncNow(true);
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];
     if (S.years[S.year].txMode) openItemTx(m, k); else editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
@@ -1372,7 +1390,7 @@ function swipeClose(el, canClose, close){
   let y0 = null, dy = 0, drag = false;
   el.addEventListener('touchstart', e => { y0 = null;
     if (!el.classList.contains('on') || !canClose() || e.touches.length > 1) return;
-    if (el.scrollTop > 0 && !e.target.closest('.grab,h4')) return;
+    if (el.scrollTop > 0 && !e.target.closest('.grab,h4,.shead')) return;
     y0 = e.touches[0].clientY; dy = 0; drag = false; }, {passive: true});
   el.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0;
     if (!drag){ if (dy < 10){ if (dy < -4) y0 = null; return; } drag = true; el.style.transition = 'none'; document.activeElement?.blur?.(); }

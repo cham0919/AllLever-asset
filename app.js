@@ -798,6 +798,7 @@ function applyTheme(){
   const t = S.theme==='system' ? (mq.matches?'dark':'light') : S.theme;
   document.documentElement.dataset.theme = t;
   document.querySelector('meta[name=theme-color]').content = t==='dark' ? '#0E1013' : '#F5F6F8';
+  document.documentElement.style.backgroundColor = t==='dark' ? '#0E1013' : '#F5F6F8'; document.documentElement.style.colorScheme = t;
 }
 mq.addEventListener?.('change', () => { if (S.theme==='system'){ applyTheme(); render(); } });
 
@@ -845,7 +846,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v32';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v33';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);

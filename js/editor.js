@@ -20,7 +20,7 @@ function closeEd(){
 }
 const edBackAction = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
 /* 뒤로 가기: 화면을 열 때 브라우저 기록을 하나 쌓아서, 안드로이드 뒤로 버튼·사파리 뒤로 밀기·나중에 앱으로 감쌀 때도 같은 동작을 해요 */
-const H = {open: false, skip: false};
+const H = {open: !!(history.state && history.state.alv), skip: false};   // 새로고침 전에 쌓인 기록이 남아 있으면 다음에 여는 화면이 그대로 써요
 function hPush(){ if (H.open) return; try { history.pushState({alv: 1}, ''); H.open = true; } catch(e){} }
 function hPop(){ if (!H.open) return; H.open = false; H.skip = true; history.back(); }
 function backAction(){

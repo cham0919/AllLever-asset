@@ -10,9 +10,10 @@ S.queue = LS.get('queue', []);
 const saveQueue = () => LS.set('queue', S.queue);
 const gfileOf = y => S.gfiles.find(f => f.year === y);
 const canEdit = (y = S.year) => S.meta.source === 'local' ? !!S.years?.[y]
-  : S.meta.source === 'google' && !!gfileOf(y) && (gfileOf(y).mime || MIME_SHEET) === MIME_SHEET;
+  : S.meta.source === 'google' && !!gfileOf(y) && (gfileOf(y).mime || MIME_SHEET) === MIME_SHEET && !gfileOf(y).ro && !gfileOf(y).gone;
 const editNote = y => S.meta.source === 'demo' ? '예시 데이터는 고칠 수 없어요' : S.meta.source !== 'google' ? '구글 시트를 연결하거나 "앱만 사용하기"로 시작하면 입력할 수 있어요'
-  : !gfileOf(y) ? `${y}년 시트가 연결돼 있지 않아요` : '엑셀(.xlsx) 파일은 구글 시트로 변환해야 앱에서 입력할 수 있어요';
+  : !gfileOf(y) ? `${y}년 시트가 연결돼 있지 않아요` : gfileOf(y).gone ? `${y}년 시트를 찾을 수 없어요. 설정 › 구글 계정 · 시트에서 연결을 확인해 주세요`
+  : gfileOf(y).ro ? `${y}년 시트는 보기 전용이에요. 시트 주인에게 편집 권한을 받아야 입력할 수 있어요` : '엑셀(.xlsx) 파일은 구글 시트로 변환해야 앱에서 입력할 수 있어요';
 const colL = i => { let s = ''; i++; while (i){ const r = (i - 1) % 26; s = String.fromCharCode(65 + r) + s; i = Math.floor((i - 1) / 26); } return s; };
 const qs = s => `'${String(s).replace(/'/g, "''")}'`;   // 시트 이름 따옴표
 const parseWon = s => { s = String(s ?? '').replace(/[,\s원]/g, ''); if (!s) return null;
@@ -116,12 +117,18 @@ async function flushQueue(interactive){
   if (flushing || !S.queue.length) return;
   if (!navigator.onLine){ updateStatus(); if (interactive) toast('오프라인이에요. 입력은 보관해 두고 연결되면 저장할게요'); return; }
   flushing = true; updateStatus();
-  let saved = 0;
+  let saved = 0, curFile = null, again = false;
   try {
     let tok; try { tok = await gToken(interactive, 'sync'); } catch(e){ if (interactive) toast(e.message); return; }
     if (!tok){ if (interactive) toast('로그인이 필요해요. 새로고침 버튼을 눌러 주세요'); return; }
+    for (const o of S.queue){   // 지난번 실패 표시는 지우고 다시 판단해요
+      delete o.err; const f = S.gfiles.find(g => g.id === o.fileId);
+      if (!o.fileId || !f) o.err = `${o.y}년 시트가 연결돼 있지 않아요`;
+      else if (f.gone) o.err = '시트를 찾을 수 없어요';
+      else if (f.ro) o.err = '보기 전용 시트라 저장할 수 없어요';
+    }
     // 1) 새 항목 행부터 (행이 밀리니 하나씩)
-    for (const op of S.queue.filter(o => ['addB', 'addA', 'renB', 'delB'].includes(o.t))){
+    for (const op of S.queue.filter(o => !o.err && ['addB', 'addA', 'renB', 'delB'].includes(o.t))){ curFile = op.fileId;
       if (op.t === 'renB' || op.t === 'delB'){
         for (const m of op.months){
           const title = m + '월', [V] = await readRanges(op.fileId, [`${qs(title)}!A1:Z2200`], tok), L = locateBudget(V);
@@ -166,9 +173,9 @@ async function flushQueue(interactive){
     }
     // 2) 거래 내역·반복 거래·세부분류: 그 달 시트를 읽어 ID로 합친 뒤 블록을 통째로 다시 써요
     const LT = ['tx', 'reps', 'cat'], byMon = {};
-    for (const op of S.queue.filter(o => LT.includes(o.t))) (byMon[op.fileId + '|' + op.m] = byMon[op.fileId + '|' + op.m] || []).push(op);
+    for (const op of S.queue.filter(o => !o.err && LT.includes(o.t))) (byMon[op.fileId + '|' + op.m] = byMon[op.fileId + '|' + op.m] || []).push(op);
     for (const ops of Object.values(byMon)){
-      const fileId = ops[0].fileId, title = ops[0].m + '월';
+      const fileId = ops[0].fileId, title = ops[0].m + '월'; curFile = fileId;
       const [V] = await readRanges(fileId, [`${qs(title)}!A1:Z2200`], tok);
       const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = h >= 0 ? ledgerCols(V, h) : null;
       if (!C || C.tx < 0 || C.rep < 0 || C.sub < 0){ ops.forEach(o => o.err = `${title} 시트에 거래 내역 칸이 없어요 (새 양식 시트가 필요해요)`); continue; }
@@ -201,8 +208,8 @@ async function flushQueue(interactive){
       S.queue = S.queue.filter(o => !done.includes(o)); saveQueue(); saved += done.length;
     }
     // 3) 값 쓰기: 파일·시트별로 한 번 읽고, 이름으로 칸을 찾아 비교 후 쓰기
-    const byFile = {}; for (const op of S.queue.filter(o => o.t === 'b' || o.t === 'a')) (byFile[op.fileId] = byFile[op.fileId] || []).push(op);
-    for (const [fileId, ops] of Object.entries(byFile)){
+    const byFile = {}; for (const op of S.queue.filter(o => !o.err && (o.t === 'b' || o.t === 'a'))) (byFile[op.fileId] = byFile[op.fileId] || []).push(op);
+    for (const [fileId, ops] of Object.entries(byFile)){ curFile = fileId;
       const titles = [...new Set(ops.map(o => o.t === 'b' ? o.m + '월' : '자산관리'))];
       const Vs = await readRanges(fileId, titles.map(t => t === '자산관리' ? `'자산관리'!A1:Z300` : `${qs(t)}!A1:D400`), tok);
       const loc = Object.fromEntries(titles.map((t, i) => [t, t === '자산관리' ? locateAsset(Vs[i]) : locateBudget(Vs[i])]));
@@ -231,8 +238,14 @@ async function flushQueue(interactive){
     else if (saved && interactive) toast(withNote(`구글 시트에 저장했어요${saved > 1 ? ` (${saved}건)` : ''}`));
     S.meta.savedAt = Date.now(); LS.set('meta', S.meta);
   } catch(e){
-    if (interactive) toast(e instanceof TypeError ? '연결이 불안정해 저장을 미뤘어요. 연결되면 다시 저장할게요' : '저장하지 못했어요: ' + e.message);
-  } finally { flushing = false; saveQueue(); render(); }
+    const f = curFile && S.gfiles.find(g => g.id === curFile);
+    if (f && (e.status === 403 || e.status === 404)){   // 보기 전용·삭제된 시트: 그 시트 입력만 멈추고 나머지는 계속
+      if (e.status === 404) f.gone = true; else f.ro = true; gSave();
+      for (const o of S.queue) if (o.fileId === curFile) o.err = e.status === 404 ? '시트를 찾을 수 없어요' : '보기 전용 시트라 저장할 수 없어요';
+      toast(e.status === 404 ? '시트를 찾을 수 없어 그 시트의 입력은 저장하지 못했어요' : '보기 전용 시트라 그 시트의 입력은 저장하지 못했어요');
+      again = S.queue.some(o => o.fileId !== curFile);
+    } else if (interactive) toast(e instanceof TypeError ? '연결이 불안정해 저장을 미뤘어요. 연결되면 다시 저장할게요' : '저장하지 못했어요: ' + e.message);
+  } finally { flushing = false; saveQueue(); render(); if (again) setTimeout(() => flushQueue(false), 0); }
 }
 window.addEventListener('online', () => flushQueue(false));
 
@@ -252,4 +265,37 @@ function resolveConflicts(list){
     };
     next();
   });
+}
+
+// 저장 대기 목록: 상단 '저장 대기 N건'을 누르면 열려요. 저장할 수 없는 입력은 버릴 수 있어요 (버리면 시트에서 다시 불러와요)
+function opLabel(o){
+  const m = o.m ? `${o.m}월 ` : '', t = o.tx || {};
+  switch (o.t){
+    case 'tx': return o.act === 'del' ? `${m}거래 삭제` : `${m}${t.d}일 ${t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name)} ${fmtWon(t.amt)}원`;
+    case 'reps': return `${m}반복 거래 변경`;
+    case 'cat': return `${m}${o.name} 세부분류·예산`;
+    case 'b': return `${m}${o.name}${o.f === 'memo' ? ' 메모' : ''}`;
+    case 'a': return `${m}${o.small} 잔액`;
+    case 'addB': return `항목 추가 · ${o.name}`;
+    case 'addA': return `자산 항목 추가 · ${o.small}`;
+    case 'renB': return `이름 바꾸기 · ${o.name} → ${o.to}`;
+    case 'delB': return `항목 삭제 · ${o.name}`;
+  }
+  return '입력';
+}
+function openPending(){
+  const draw = () => {
+    if (!S.queue.length){ closeEd(); if (S.dropped){ S.dropped = false; syncGoogle(true); } else toast('저장 대기 중인 입력이 없어요'); return; }
+    openEd(`<h4>저장 대기 <button class="ex" id="edX">닫기</button></h4>
+      <div class="esub">아직 구글 시트에 저장되지 않은 입력이에요. 저장할 수 없는 입력은 버리면 시트 내용으로 다시 맞춰요.</div>
+      <div class="ecard">${S.queue.map((o, i) => `<div class="row"><div class="n">${esc(opLabel(o))}<small>${o.y ? o.y + '년 · ' : ''}${o.err ? `<b class="up">${esc(o.err)}</b>` : o.conflict ? '시트 값과 달라 확인이 필요해요' : '저장 대기 중'}</small></div><button class="pq-drop" data-i="${i}">버리기</button></div>`).join('')}</div>
+      <button class="btn" id="pqRetry">다시 저장하기</button>`);
+    $('#edX').onclick = () => { closeEd(); if (S.dropped){ S.dropped = false; syncGoogle(true); } };
+    $('#pqRetry').onclick = () => { closeEd(); flushQueue(true); };
+    $('#ed').querySelectorAll('.pq-drop').forEach(b => b.onclick = () => {
+      const o = S.queue[+b.dataset.i]; if (!o || !confirm(`'${opLabel(o)}' 입력을 버릴까요? 앱 화면은 시트 내용으로 다시 맞춰요.`)) return;
+      S.queue.splice(+b.dataset.i, 1); saveQueue(); S.dropped = true; updateStatus(); draw();
+    });
+  };
+  draw();
 }

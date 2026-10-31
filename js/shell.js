@@ -166,7 +166,8 @@ async function loadDemo(){
 const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 function updateStatus(){
   const q = S.queue?.length || 0;
-  if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '오프라인 · 대기 ' + q + '건'}</span>`; return; }
+  if (q && S.model){ const bad = S.queue.some(o => o.err);
+    $('#status').innerHTML = `<button class="pend${bad ? ' bad' : ''}" data-act="pending">${flushing ? '저장 중…' : !navigator.onLine ? '오프라인 · 대기 ' + q + '건' : bad ? '저장 안 됨 ' + q + '건' : '저장 대기 ' + q + '건'}</button>`; return; }
   if (S.model && S.meta.source === 'demo'){ $('#status').innerHTML = '<button class="slink" data-act="obRestart">내 데이터로 시작</button>'; return; }
   $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}` : S.meta.source==='local' ? '이 기기에 저장' : `기기 파일 · ${fmtTime(S.meta.syncedAt)}`;
 }

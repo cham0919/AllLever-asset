@@ -61,8 +61,9 @@ async function gToken(interactive, pending){
 async function gFetch(url, opt = {}, tok){
   const r = await fetch(url, {...opt, headers: {...(opt.headers || {}), Authorization: 'Bearer ' + tok}});
   if (r.status === 401){ gTok = null; throw Object.assign(new Error('구글 로그인이 만료됐어요'), {auth: true}); }
-  if (r.status === 404) throw Object.assign(new Error('파일이 삭제됐거나 접근 권한이 없어요'), {gone: true});
-  if (!r.ok) throw new Error('구글 응답 오류 ' + r.status);
+  if (r.status === 404) throw Object.assign(new Error('파일이 삭제됐거나 접근 권한이 없어요'), {gone: true, status: 404});
+  if (r.status === 403) throw Object.assign(new Error('이 시트를 고칠 권한이 없어요'), {status: 403});
+  if (!r.ok) throw Object.assign(new Error('구글 응답 오류 ' + r.status), {status: r.status});
   return r;
 }
 function gLogin(pending){
@@ -96,6 +97,11 @@ async function gWhoAmI(tok){
     if (j.email){ S.guser = j.email; LS.set('guser', j.email); } } catch(e){}
 }
 async function gDownload(f, tok){
+  try {   // 편집 권한 (보기 전용 공유 시트는 앱에서 입력을 막아요) · 휴지통
+    const c = await (await gFetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id) + '?fields=capabilities(canEdit),trashed', {cache: 'no-store'}, tok)).json();
+    if (c.trashed) throw Object.assign(new Error('시트가 휴지통에 있어요'), {gone: true, status: 404});
+    f.ro = c.capabilities?.canEdit === false;
+  } catch(e){ if (e.gone || e.auth) throw e; }
   const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id);
   const url = f.mime === MIME_SHEET || !f.mime ? `${base}/export?mimeType=${encodeURIComponent(MIME_XLSX)}` : `${base}?alt=media`;
   const buf = await (await gFetch(url, {cache: 'no-store'}, tok)).arrayBuffer(), h = new Uint8Array(buf.slice(0, 2));
@@ -226,7 +232,7 @@ function renderG(){
   $('#gUser').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
   $('#gOut').hidden = !(S.guser || S.gfiles.length);
   const list = S.gfiles.slice().sort((a, b) => (a.year || 9999) - (b.year || 9999));
-  $('#gList').innerHTML = list.length ? list.map(f => `<div class="src"><span class="y">${f.year ? f.year + '년' : '확인 전'}</span>
+  $('#gList').innerHTML = list.length ? list.map(f => `<div class="src"><span class="y">${f.year ? f.year + '년' : '확인 전'}${f.gone ? ' · <b class="up">찾을 수 없음</b>' : f.ro ? ' · 보기 전용' : ''}</span>
       <span class="u">${esc(f.name)}</span><a href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(f.id)}/edit" target="_blank" rel="noopener">열기</a><button data-i="${S.gfiles.indexOf(f)}">해제</button></div>`).join('')
     : '<p class="note" style="margin:0">연결된 시트가 없어요</p>';
   $('#gList').querySelectorAll('button').forEach(b => b.onclick = () => gRemove(+b.dataset.i));
@@ -246,6 +252,7 @@ async function syncGoogle(interactive){
     const owner = {};
     for (const r of res) if (r.m && r.f.year === r.m.year && !(r.m.year in owner)) owner[r.m.year] = r.f;   // 이미 그 연도로 쓰던 시트 우선
     for (const r of res){
+      r.f.gone = !r.m && !!r.e?.gone;
       if (!r.m){ fail.push(r); continue; }
       const y = r.m.year;
       if (owner[y] && owner[y] !== r.f || next[y]){ dup.push(r.f); continue; }
@@ -270,6 +277,7 @@ $('#gPick').onclick = gPick; $('#gCreate').onclick = () => gCreate(); $('#gOut')
 document.addEventListener('click', e => { const t = e.target.closest('#view [data-tx]'); if (t) return editTx(t.dataset.tx); });
 document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b) return;
   const a = b.dataset.act;
+  if (a === 'pending') return openPending();
   if (a === 'openSheet') openSheet('google'); else if (a === 'loadDemo') loadDemo(); else if (a === 'obRestart') restartOb(); else if (a === 'sync') syncNow(true);
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];

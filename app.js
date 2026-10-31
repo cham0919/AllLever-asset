@@ -846,7 +846,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v33';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v34';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -1773,10 +1773,10 @@ function viewCal(){
   const isToday = d => now.getFullYear() === y && now.getMonth() + 1 === m && now.getDate() === d;
   const fut = d => new Date(y, m - 1, d) > now;
   const per = {}; for (const t of T){ const p = per[t.d] = per[t.d] || {i: 0, e: 0, v: 0}; if (t.kind === '수입') p.i += t.amt; else { p.e += t.amt; if (t.kind === '변동비') p.v += t.amt; } }
-  const bs = budState(y, m), hot = d => bs.dayBase > 0 && per[d] && per[d].v > bs.dayBase;   // 하루 변동비 예산보다 많이 쓴 날
+  const bs = budState(y, m);
   let cells = WD.map((w, i) => `<div class="w${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('') + '<div></div>'.repeat(first);
   for (let d = 1; d <= n; d++){ const p = per[d];
-    cells += `<button class="d${d === d0 ? ' sel' : ''}${isToday(d) ? ' today' : ''}${fut(d) ? ' fut' : ''}" data-day="${d}"><span>${d}</span>${p && p.i ? `<small class="inc">+${shortAmt(p.i)}</small>` : ''}${p && p.e ? `<small class="exp${hot(d) ? ' hot' : ''}">-${shortAmt(p.e)}</small>` : ''}</button>`; }
+    cells += `<button class="d${d === d0 ? ' sel' : ''}${isToday(d) ? ' today' : ''}${fut(d) ? ' fut' : ''}" data-day="${d}"><span>${d}</span>${p && p.i ? `<small class="inc">+${shortAmt(p.i)}</small>` : ''}${p && p.e ? `<small class="exp">-${shortAmt(p.e)}</small>` : ''}</button>`; }
   const dayT = T.filter(t => t.d === d0).sort((a, z) => (a.kind === '수입') - (z.kind === '수입') || z.amt - a.amt);
   const dSum = dayT.reduce((a, t) => a + (t.kind === '수입' ? t.amt : -t.amt), 0);
   const reps = (Y.reps[m] || []).length;

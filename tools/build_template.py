@@ -92,10 +92,11 @@ EX = {  # 예시 값 (1~3월)
 HDR = 8; A0 = HDR + 1; A_END = A0 + len(ASSETS)   # 자산관리: 1~7행 제목 + 1월 대비 요약
 S0 = A_END + 2; DEBT_ROW = S0 + 4                  # 요약 블록 머리글 / 부채 합계 행
 # ── 월 시트 배치 ──
-# 왼쪽(A~G) 위→아래: 요약(4~8행) · 달력(10~23행) · 항목별 표(26행 머리글)
+# 왼쪽(A~G) 위→아래: 요약(4~8행) · 달력(10~23행) · 수입 배분 그래프(25행~) · 항목별 표(42행 머리글)
 # 오른쪽(I~P) 위→아래: 반복 거래(4행 머리글, 20줄) · 거래 내역(27행 머리글)
 CAL_T = 10; CAL_H = 11; CAL0 = 12            # 달력 제목 / 요일 / 첫 주
-T0 = 27                                      # 항목별 표 첫 행 (머리글 26행)
+CHART_ROW = 25                               # 수입 배분 그래프 (달력 아래)
+T0 = 43                                      # 항목별 표 첫 행 (머리글 42행)
 T_END = T0 + len(BUDGET)                     # 마커 행 (범위에 포함 → 위에 삽입 시 범위 자동 확장)
 RC = 9                                       # 오른쪽 블록 시작 열 (I)
 REP_H0 = 4; REP_CAP = 20                     # 반복 거래 머리글 행 / 칸 수
@@ -200,21 +201,18 @@ for m in range(1, 13):
                          error="설정 시트 목록에 없는 항목입니다. 그대로 사용하려면 '예'를 누르세요.")
     ws.add_data_validation(dv2); dv2.add(f"B{T0}:B{T_END - 1}")
 
-    # ── 그래프 (오른쪽 끝) + 그래프용 값 ──
-    GX = RC + 10   # S열
-    ws.cell(4, GX + 8, "그래프 데이터").font = f(True, 9, SUB)
-    for i, (lab, fm) in enumerate([("고정비", "=B6"), ("변동비", "=C6"), ("일반저축", "=MAX(E6,0)"), (None, None),
-                                   ("일반 저축", "=MAX(E6,0)"), ("대출상환 저축", "=F6")]):
-        if not lab: continue
-        ws.cell(5 + i, GX + 8, lab).font = f(False, 9, SUB)
-        c = ws.cell(5 + i, GX + 9, fm); c.font = f(False, 9, SUB); c.number_format = WON
-    for (r0, r1, ttl, anchor) in ((5, 7, f"{m}월 수입 배분 (지출·저축)", 3), (9, 10, f"{m}월 저축 구성", 20)):
-        pie = PieChart(); pie.title = ttl
-        pie.add_data(Reference(ws, min_col=GX + 9, min_row=r0, max_row=r1), titles_from_data=False)
-        pie.set_categories(Reference(ws, min_col=GX + 8, min_row=r0, max_row=r1))
-        pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True; pie.dataLabels.showCatName = True
-        pie.height = 8; pie.width = 11
-        ws.add_chart(pie, f"{L(GX)}{anchor}")
+    # ── 수입 배분 그래프 (왼쪽, 달력 아래) · 그래프용 값은 오른쪽 끝(S~T열) ──
+    GX = RC + 10
+    ws.cell(4, GX, "그래프 데이터").font = f(True, 9, SUB)
+    for i, (lab, fm) in enumerate([("고정비", "=B6"), ("변동비", "=C6"), ("일반저축", "=MAX(E6,0)")]):
+        ws.cell(5 + i, GX, lab).font = f(False, 9, SUB)
+        c = ws.cell(5 + i, GX + 1, fm); c.font = f(False, 9, SUB); c.number_format = WON
+    pie = PieChart(); pie.title = f"{m}월 수입 배분 (지출·저축)"
+    pie.add_data(Reference(ws, min_col=GX + 1, min_row=5, max_row=7), titles_from_data=False)
+    pie.set_categories(Reference(ws, min_col=GX, min_row=5, max_row=7))
+    pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True; pie.dataLabels.showCatName = True
+    pie.height = 7.5; pie.width = 15
+    ws.add_chart(pie, f"A{CHART_ROW}")
     widths = [13, 13, 13, 13, 18, 13, 13, 3, 6, 9, 12, 10, 12, 12, 18, 10, 3]
     for i, w in enumerate(widths): ws.column_dimensions[L(1 + i)].width = w
     ws.freeze_panes = "A3"

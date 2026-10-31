@@ -2028,7 +2028,7 @@ function exportYear(y){
       for (let d = 1; d <= nd; d++){ const i = off + d - 1, w = Math.floor(i / 7), k = i % 7;
         const v = live.filter(t => t.d === d && t.kind !== '수입').reduce((a, t) => a + t.amt, 0);
         put(11 + w * 2, k, d); put(12 + w * 2, k, v || null); }
-      const T0 = 26; put(T0 - 2, 0, '항목별 합계');
+      const T0 = 42; put(T0 - 2, 0, '항목별 합계');
       ['구분(1차)', '항목(2차)', '금액', '메모', '세부분류', '월 예산'].forEach((h, j) => put(T0 - 1, j, h));
       its.forEach((it, i) => [it.kind, it.name, it.amt, it.memo || null, (it.subs || []).join(', ') || null, it.bud ?? null].forEach((v, j) => put(T0 + i, j, v)));
       put(T0 + its.length, 0, '▲ 항목 추가 시 이 행 위에 행 삽입');

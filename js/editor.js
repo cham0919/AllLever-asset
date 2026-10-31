@@ -113,9 +113,9 @@ function editBudgetMonth(m){
   $('#fillFixed').onclick = () => rows.forEach(r => { const it = items[+r.dataset.k], p = prevOf(it);
     if (it.kind === '고정비' && p && p.filled && !r.querySelector('input').value){ r.querySelector('input').value = fmtWon(p.amt); r.querySelector('input').dispatchEvent(new Event('input')); } });
   $('#onlyEmpty').onclick = e => { const on = e.target.classList.toggle('on'); rows.forEach(r => r.hidden = on && !!r.querySelector('input').value); };
-  $('#ed').querySelectorAll('.eadd').forEach(b => b.onclick = () => {
+  $('#ed').querySelectorAll('.eadd').forEach(b => b.onclick = async () => {
     const n = items.filter(it => (it.filled ? it.amt : null) !== val.get(it)).length;
-    if (n && !confirm(`입력 중인 ${n}개 값은 저장되지 않아요. 먼저 저장하려면 취소를 누르세요.`)) return;
+    if (n && !(await ask(`입력 중인 ${n}개 값은 저장되지 않아요.\n먼저 저장하려면 취소를 누르세요.`, {ok: '저장 안 하고 추가'}))) return;
     addBudgetItem(m, b.dataset.kind); });
   $('#edX').onclick = closeEd;
   $('#edSave').onclick = () => {

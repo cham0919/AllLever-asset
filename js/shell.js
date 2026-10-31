@@ -112,6 +112,7 @@ function syncSheet(){
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세금 15.4%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   appVersion().then(v => { $('#sVer').textContent = v; });
+  syncNativeSheet();
 }
 // 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요
 const appVersion = () => window.ALV_APP_VERSION ? Promise.resolve(window.ALV_APP_VERSION) : (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
@@ -133,15 +134,15 @@ $('#sheet').addEventListener('click', e => {
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();
 $('#btnSync').onclick = () => syncNow(true);
-$('#btnDemo').onclick = () => { if (S.meta.source === 'local' && !confirm('예시 데이터로 바꾸면 이 기기에 저장된 데이터가 화면에서 사라져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return; closeSheet(); loadDemo(); };
+$('#btnDemo').onclick = async () => { if (S.meta.source === 'local' && !(await ask('이 기기에 저장된 데이터가 화면에서 사라져요.\n먼저 엑셀로 내보내기를 권해요.', {title: '예시 데이터로 바꿀까요?', ok: '바꾸기'}))) return; closeSheet(); loadDemo(); };
 $('#btnExport').onclick = () => exportAll();
 $('#btnAddYear').onclick = () => addLocalYear();
-$('#btnRestart').onclick = () => { if (S.meta.source !== 'local' && !confirm('처음 화면으로 돌아갈까요? 연결한 구글 시트는 그대로 남아요')) return; restartOb(); };
+$('#btnRestart').onclick = async () => { if (S.meta.source !== 'local' && !(await ask('연결한 구글 시트는 그대로 남아요.', {title: '처음 화면으로 돌아갈까요?', ok: '처음으로'}))) return; restartOb(); };
 $('#btnFile').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; closeSheet();
   try { const md = parseWorkbook(await f.arrayBuffer());
-    if (S.meta.source === 'google' && !confirm('구글 시트 연결 대신 이 파일을 이 기기에 저장해서 쓸까요? (구글 시트 연결은 유지돼요)')) { e.target.value=''; return; }
-    if (S.meta.source === 'local' && S.years[md.year] && !confirm(`이 기기에 저장된 ${md.year}년 데이터를 이 파일 내용으로 바꿀까요?`)) { e.target.value=''; return; }
+    if (S.meta.source === 'google' && !(await ask('구글 시트 연결은 유지돼요.', {title: '이 파일을 이 기기에 저장해서 쓸까요?', ok: '이 파일 쓰기'}))) { e.target.value=''; return; }
+    if (S.meta.source === 'local' && S.years[md.year] && !(await ask('', {title: `이 기기의 ${md.year}년 데이터를 이 파일 내용으로 바꿀까요?`, ok: '바꾸기', danger: true}))) { e.target.value=''; return; }
     const ys = S.meta.source === 'local' ? {...S.years} : {}; ys[md.year] = md;   // 이 기기 저장 데이터에 연도별로 합침
     finishOb(); setYears(ys, {source:'local', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요. 이제 앱에서 입력할 수 있어요`); }
   catch(err){ toast('파일을 읽지 못했어요: ' + err.message); } e.target.value=''; };

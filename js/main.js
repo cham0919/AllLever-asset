@@ -7,6 +7,7 @@ if (!S.years){ const m = LS.get('model', null); S.years = m ? {[m.year]: m} : {}
 if (S.ob.step !== 'done' && (S.gfiles.length || (S.model && S.meta.source !== 'demo'))) { S.ob.step = 'done'; saveOb(); }   // 기존 사용자
 setYear(S.year);
 render();
+nativeInit();   // 앱(아이폰·안드로이드)에서만: 잠금·알림
 if (S.meta.source === 'local') applyReps();
 const gPending = gReturn();
 if (gPending === 'pick') gPick();

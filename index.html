@@ -420,6 +420,38 @@ body:not(.onboarding) #setBtn{display:none}
 .toast{z-index:90!important}
 :root{--navfill:#F9F9F6}:root[data-theme="dark"]{--navfill:#15171B}
 .slines{margin:14px 2px 0;padding:0;list-style:none;font-size:12px;line-height:1.5;color:var(--sub)}.slines li+li{margin-top:3px}
+/* 확인창 (앱 디자인) */
+.dlg-bg{position:fixed;inset:0;z-index:85;display:grid;place-items:center;padding:24px;background:rgba(20,20,24,.38);opacity:0;transition:opacity .16s}
+.dlg-bg.on{opacity:1}.dlg-bg.out{opacity:0}
+.dlg{width:100%;max-width:320px;background:var(--card);border-radius:20px;padding:22px 20px 16px;box-shadow:0 12px 40px rgba(0,0,0,.18);transform:scale(.96);transition:transform .16s}
+.dlg-bg.on .dlg{transform:none}
+.dlg-t{display:block;font-size:17px;font-weight:700;line-height:1.4;color:var(--ink)}
+.dlg-m{margin:8px 0 0;font-size:14.5px;line-height:1.55;color:var(--sub)}
+.dlg-t + .dlg-m:empty{display:none}
+.dlg-i{display:block;width:100%;margin-top:14px;border:1px solid var(--line);border-radius:12px;background:var(--chip);padding:12px 14px;font-size:16px;outline:none;color:var(--ink)}
+.dlg-i:focus{border-color:var(--accent)}
+.dlg-b{display:flex;gap:8px;margin-top:18px}
+.dlg-b button{flex:1;height:46px;border-radius:13px;font-weight:700;font-size:15px}
+.dlg-c{background:var(--btn2);color:var(--ink)}
+.dlg-o{background:var(--accent);color:#fff}.dlg-o.danger{background:var(--expense)}
+/* 앱(아이폰·안드로이드)에서만 보이는 것 · 웹 티 없애기 */
+.native-only{display:none!important}
+html.native .native-only{display:block!important}
+html.native{touch-action:manipulation}
+html.native body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html.native input,html.native textarea,html.native [contenteditable]{-webkit-user-select:text;user-select:text}
+/* 켜고 끄는 스위치 */
+.srow .tg{margin-left:auto;flex:none;width:50px;height:30px;border-radius:99px;background:var(--btn2);position:relative;transition:background .2s}
+.srow .tg:after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .2s}
+.srow[aria-checked="true"] .tg{background:var(--accent)}.srow[aria-checked="true"] .tg:after{transform:translateX(20px)}
+/* 앱 잠금 화면 */
+#lockScr{display:none;position:fixed;inset:0;z-index:100;background:var(--bg);flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px}
+html.locked #lockScr{display:flex}
+html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
+#lockScr img{width:76px;height:76px;border-radius:22.4%;box-shadow:0 4px 14px rgba(40,50,110,.18)}
+#lockScr b{font-size:20px;font-weight:800;color:var(--ink)}
+#lockScr p{margin:0;color:var(--sub);font-size:14px}
+#lockScr .btn{width:auto;min-width:180px;margin-top:10px}
 .zt{display:block;width:100%;padding:12px 0 2px;font-size:13px;font-weight:600;color:var(--sub);text-align:center}
 .gmark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#fff;margin-right:4px;flex:none}.gmark svg{width:18px;height:18px}
 .ymlabel{min-width:132px;text-align:center;font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
@@ -430,6 +462,7 @@ body:not(.onboarding) #setBtn{display:none}
 </style>
 </head>
 <body>
+<div id="lockScr" aria-live="polite"><img src="icon-180.png" alt=""><b>머니머슬</b><p>잠겨 있어요</p><button class="btn" id="lockBtn">잠금 해제</button></div>
 <header class="top">
   <div class="top-row">
     <div style="display:flex;align-items:center;gap:4px;min-width:0">
@@ -466,6 +499,13 @@ body:not(.onboarding) #setBtn{display:none}
     <button class="srow" data-sa="bud"><span>예산</span><em id="svBud"></em><i>›</i></button>
     <button class="srow" data-go="pay"><span>결제수단</span><em id="svPay"></em><i>›</i></button>
   </div>
+  <div class="native-only">
+  <h5 class="shd">보안 · 알림</h5>
+  <div class="slist">
+    <button class="srow" data-go="lock"><span>앱 잠금</span><em id="svLock"></em><i>›</i></button>
+    <button class="srow" data-go="noti"><span>알림</span><em id="svNoti"></em><i>›</i></button>
+  </div>
+  </div>
   <h5 class="shd">목표 · 화면</h5>
   <div class="slist">
     <button class="srow" data-go="goal"><span>목표와 계획</span><em id="svGoal"></em><i>›</i></button>
@@ -486,6 +526,34 @@ body:not(.onboarding) #setBtn{display:none}
     <div class="srow srow-info"><span>버전</span><em id="sVer"></em></div>
     <button class="srow danger" id="btnRestart"><span>처음 화면으로</span></button>
   </div>
+</div>
+<div class="spage" data-page="lock">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>앱 잠금</b><span></span></div>
+  <div class="slist pl"><button class="srow" id="lkOn" role="switch" aria-checked="false"><span id="lkName">Face ID로 잠금</span><b class="tg"></b></button></div>
+  <div id="lkDelay" hidden>
+    <h5 class="shd">다시 잠그기</h5>
+    <div class="slist pl">
+      <button class="srow" data-d="0"><span>바로</span><b class="chk">✓</b></button>
+      <button class="srow" data-d="60"><span>1분 후</span><b class="chk">✓</b></button>
+      <button class="srow" data-d="300"><span>5분 후</span><b class="chk">✓</b></button>
+    </div>
+  </div>
+  <ul class="slines"><li>앱을 열거나 다른 앱에서 돌아올 때 확인해요.</li><li>인증이 안 되면 휴대폰 암호로 열 수 있어요.</li><li>얼굴·지문 정보는 앱이 받지 않아요.</li></ul>
+</div>
+<div class="spage" data-page="noti">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>알림</b><span></span></div>
+  <div class="slist pl">
+    <button class="srow" id="nt-daily" role="switch" aria-checked="false"><span>기록 알림</span><b class="tg"></b></button>
+    <button class="srow" id="ntTime" hidden><span>알림 시간</span><em id="ntTimeV"></em><i>›</i></button>
+  </div>
+  <div class="slist pl">
+    <button class="srow" id="nt-reps" role="switch" aria-checked="false"><span>반복 거래 알림</span><b class="tg"></b></button>
+    <button class="srow" id="nt-monthEnd" role="switch" aria-checked="false"><span>월말 정리 알림</span><b class="tg"></b></button>
+  </div>
+  <div class="slist pl">
+    <button class="srow" id="nt-amounts" role="switch" aria-checked="false"><span>알림에 금액 보이기</span><b class="tg"></b></button>
+  </div>
+  <ul class="slines"><li>기록 알림은 그날 앱에서 입력했으면 울리지 않아요.</li><li>반복 거래 알림은 거래 날짜 아침 9시에 울려요.</li><li>월말 정리 알림은 매달 마지막 날 저녁 8시에 울려요.</li><li>알림은 휴대폰 안에서 예약돼요. 서버로 보내는 정보는 없어요.</li></ul>
 </div>
 <div class="spage" data-page="pay">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>결제수단</b><span></span></div>
@@ -557,6 +625,7 @@ body:not(.onboarding) #setBtn{display:none}
 <script src="js/editor.js"></script>
 <script src="js/ledger.js"></script>
 <script src="js/onboard.js"></script>
+<script src="js/native.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

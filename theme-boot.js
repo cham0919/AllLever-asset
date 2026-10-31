@@ -7,4 +7,9 @@
   d.setAttribute('data-theme', dark ? 'dark' : 'light');
   d.style.backgroundColor = dark ? '#15171B' : '#F9F9F6'; d.style.colorScheme = dark ? 'dark' : 'light';   // 가장 바깥 바탕 = 하단 바 색
   var m = document.querySelector('meta[name=theme-color]'); if (m) m.setAttribute('content', c);
+  // 앱(아이폰·안드로이드): 앱 잠금을 켰으면 화면을 그리기 전에 가려 둬요
+  try { if (window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()){
+    d.classList.add('native');
+    var lk = JSON.parse(localStorage.getItem('alv.lock') || '{}'); if (lk && lk.on) d.classList.add('locked');
+  } } catch(e){}
 })();

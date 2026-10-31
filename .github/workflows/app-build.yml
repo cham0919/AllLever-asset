@@ -31,6 +31,8 @@ concurrency:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # 빌드 기록(로그 끝부분)을 ci-android 브랜치에 올리기 위해서만 써요
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -41,11 +43,23 @@ jobs:
       - run: npm run sync
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          mkdir -p ../logs
+          ./gradlew assembleDebug --no-daemon 2>&1 | tee ../logs/android-build.log
       - uses: actions/upload-artifact@v4
         with:
           name: moneymuscle-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+      - name: Push build log to ci-android branch
+        if: always()
+        run: |
+          set -e
+          mkdir -p out; tail -300 logs/android-build.log > out/android-build.log 2>/dev/null || echo "no log" > out/android-build.log
+          cd out; git init -q -b ci-android
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A; git commit -qm "안드로이드 빌드 기록 ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-android
 
   ios:
     runs-on: macos-15
@@ -60,9 +74,11 @@ jobs:
       - name: Build for simulator (no signing)
         run: |
           set -o pipefail
+          mkdir -p shots
           xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
             -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build > xcb.log 2>&1 || { grep -E "error:|warning: .*(Swift|swift)" xcb.log | head -60 > shots/ios-build-errors.log; tail -80 xcb.log >> shots/ios-build-errors.log; exit 1; }
+          tail -20 xcb.log
       - name: Run in simulator and take screenshots
         run: |
           set -e
@@ -70,7 +86,6 @@ jobs:
           echo "simulator: $DEV"
           xcrun simctl boot "$DEV"; xcrun simctl bootstatus "$DEV" -b
           xcrun simctl install "$DEV" build/Build/Products/Debug-iphonesimulator/App.app
-          mkdir -p shots
           xcrun simctl ui "$DEV" appearance light
           xcrun simctl launch "$DEV" com.alllever.asset; sleep 12
           xcrun simctl io "$DEV" screenshot shots/ios-light.png
@@ -87,7 +102,7 @@ jobs:
         if: always()
         run: |
           set -e
-          cd shots
+          mkdir -p shots; cd shots; [ -n "$(ls -A)" ] || echo "no output" > empty.txt
           git init -q -b ci-screens
           git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A; git commit -qm "iOS 시뮬레이터 캡처 ${GITHUB_SHA::7}"

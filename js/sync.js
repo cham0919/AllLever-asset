@@ -52,6 +52,8 @@ function reapplyQueue(years){ for (const op of S.queue) applyOp(years, op); }
 // 화면에 바로 반영하고 대기열에 넣은 뒤 저장 시도
 function commit(ops, quiet){
   if (!ops.length) return;
+  const snap = budgetSnap(ops);
+  setTimeout(() => { budgetCross(snap, budgetSnap(ops)); haptic(); LS.set('lastInput', ymdKey(new Date())); notiSoon(); }, 0);
   if (S.meta.source === 'local'){   // 이 기기에만 저장
     for (const op of ops) applyOp(S.years, op);
     LS.set('years', S.years); S.meta.savedAt = Date.now(); LS.set('meta', S.meta); render(); if (!quiet) toast(withNote('저장했어요')); return;
@@ -297,9 +299,9 @@ function openPending(){
       <button class="btn" id="pqRetry">다시 저장하기</button>`);
     $('#edX').onclick = () => { closeEd(); if (S.dropped){ S.dropped = false; syncGoogle(true); } };
     $('#pqRetry').onclick = () => { closeEd(); flushQueue(true); };
-    $('#ed').querySelectorAll('.pq-drop').forEach(b => b.onclick = () => {
-      const o = S.queue[+b.dataset.i]; if (!o || !confirm(`'${opLabel(o)}' 입력을 버릴까요? 앱 화면은 시트 내용으로 다시 맞춰요.`)) return;
-      S.queue.splice(+b.dataset.i, 1); saveQueue(); S.dropped = true; updateStatus(); draw();
+    $('#ed').querySelectorAll('.pq-drop').forEach(b => b.onclick = async () => {
+      const i = +b.dataset.i, o = S.queue[i]; if (!o || !(await ask('앱 화면은 시트 내용으로 다시 맞춰요.', {title: `'${opLabel(o)}' 입력을 버릴까요?`, ok: '버리기', danger: true})) || S.queue[i] !== o) return;
+      S.queue.splice(i, 1); saveQueue(); S.dropped = true; updateStatus(); draw();
     });
   };
   draw();

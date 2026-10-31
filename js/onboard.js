@@ -57,8 +57,8 @@ function viewOnboard(){
   $('#obDemo').onclick = () => loadDemo();
 }
 function finishOb(){ S.ob = {step: 'done', path: S.ob.path}; saveOb(); document.body.classList.remove('onboarding'); }
-function restartOb(){
-  if (S.meta.source === 'local' && yearsList().length && !confirm('이 기기에만 저장된 가계부·자산 데이터가 지워져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return;
+async function restartOb(){
+  if (S.meta.source === 'local' && yearsList().length && !(await ask('이 기기에만 저장된 가계부·자산 데이터가 지워져요.\n먼저 엑셀로 내보내기를 권해요.', {title: '처음 화면으로 갈까요?', ok: '지우고 처음으로', danger: true}))) return;
   S.years = {}; S.meta = {}; LS.set('years', {}); LS.set('meta', {}); setYear(null);
   S.ob = {step: 'intro', path: null}; saveOb(); closeSheet(); go('home');
 }
@@ -89,7 +89,7 @@ async function startLocal(){
 }
 async function addLocalYear(){
   const ys = yearsList(), next = ys.length ? Math.max(...ys) + 1 : new Date().getFullYear();
-  const ans = prompt('추가할 연도', String(next)); if (ans == null) return;
+  const ans = await askText('추가할 연도', {value: String(next), mode: 'numeric', max: 4, ok: '추가'}); if (ans == null) return;
   const y = parseInt(ans, 10); if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
   if (S.years[y]) return toast(`${y}년은 이미 있어요`);
   const M = await blankYear(y); S.years[y] = M; LS.set('years', S.years); setYear(y); closeSheet(); render();
@@ -98,8 +98,8 @@ async function addLocalYear(){
 
 /* ───────── 엑셀로 내보내기 (백업·다른 기기로 옮기기) ─────────
    앱이 다시 읽을 수 있는 형식(설정·1~12월·자산관리)으로 연도별 파일을 만들어요. 서식·수식·그래프는 없어요. */
-function exportYear(y){
-  const M = S.years[y]; if (!M) return;
+function exportYear(y){   // → {name, wb}
+  const M = S.years[y]; if (!M) return null;
   const wb = XLSX.utils.book_new();
   const st = [['기준 연도', y], [], ['이 파일은 머니머슬 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(st), '설정');
@@ -140,10 +140,10 @@ function exportYear(y){
   for (const a of M.assets) ar.push([a.big, a.mid, a.small, ...a.v.map(v => v ?? null)]);
   ar.push(['▲ 항목 추가 시 이 행 위에 행 삽입']);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ar), '자산관리');
-  XLSX.writeFile(wb, `머니머슬_${y}_백업.xlsx`);
+  return {name: `머니머슬_${y}_백업.xlsx`, wb};
 }
-function exportAll(){
+async function exportAll(){
   const ys = yearsList(); if (!ys.length) return toast('내보낼 데이터가 없어요');
-  ys.forEach((y, i) => setTimeout(() => exportYear(y), i * 400));
-  toast(`${ys.length}개 연도를 엑셀 파일로 내보냈어요`);
+  try { if (await saveFiles(ys.map(exportYear).filter(Boolean))) toast(`${ys.length}개 연도를 엑셀 파일로 내보냈어요`); }
+  catch(e){ toast('파일을 만들지 못했어요: ' + e.message); }
 }

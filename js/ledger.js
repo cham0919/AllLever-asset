@@ -245,7 +245,7 @@ function swipeDel(wrap, onDel){
     mode = null; };
   row.addEventListener('pointerup', end); row.addEventListener('pointercancel', end);
   row.addEventListener('click', e => { if (moved || open){ e.stopImmediatePropagation(); e.preventDefault(); if (!moved) close(); moved = false; } }, true);
-  wrap.querySelector('.sdel').onclick = () => { wrap.classList.add('gone'); set(-wrap.clientWidth, true); setTimeout(onDel, 200); };
+  wrap.querySelector('.sdel').onclick = () => { haptic('medium'); wrap.classList.add('gone'); set(-wrap.clientWidth, true); setTimeout(onDel, 200); };
 }
 
 // 예산 항목 하나 추가 (예산 탭 '+ 예산 항목 추가')
@@ -391,13 +391,13 @@ function editTx(id, presetDay){
     bindPay('txPayC', st);
     $('#txKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.mode = +b.dataset.v; st.name = null; st.pay = st.mode ? '' : (st.pay || favPay); draw(); });
     $('#txItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
-    $('#txSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep();
-      if (b.dataset.s === '+'){ const s = (prompt(`${st.name}의 세부분류 이름`) || '').trim().replace(/,/g, ' '); if (!s) return; st.sub = s; st.newSub = s; }
+    $('#txSub')?.querySelectorAll('button').forEach(b => b.onclick = async () => { keep();
+      if (b.dataset.s === '+'){ const s = ((await askText(`${st.name}의 세부분류 이름`, {placeholder: '예: 점심', ok: '추가'})) || '').trim().replace(/,/g, ' '); if (!s) return; st.sub = s; st.newSub = s; }
       else st.sub = st.sub === b.dataset.s ? '' : b.dataset.s; draw(); });
     $('#txDate').onchange = () => { const pm = st.m; keep(); if (st.m !== pm) draw(); else if ($('#txRepNote')) $('#txRepNote').textContent = `(매달 ${st.d}일, ${st.m < 12 ? `${st.m}~12월` : '12월'})`; };
     $('#edX').onclick = closeEd;
     $('#edSave').onclick = () => { keep(); saveTx(); };
-    if (old) $('#txDel').onclick = () => { if (!confirm('이 거래를 지울까요?')) return; closeEd();
+    if (old) $('#txDel').onclick = async () => { if (!(await ask('', {title: '이 거래를 지울까요?', ok: '지우기', danger: true}))) return; closeEd();
       commit([old.id.startsWith('R') ? {t: 'tx', y, m: m0, act: 'set', tx: {...old, amt: 0, skip: true, memo: '건너뜀'}} : {t: 'tx', y, m: m0, act: 'del', tx: {id: old.id}}]); };
   };
   const saveTx = () => {
@@ -463,7 +463,7 @@ function editRep(ri, direct){
       closeEd(); commit(ops); applyReps(); };
     $('#edSave').onclick = () => { keep(); if (st.amt == null || Number.isNaN(st.amt) || st.amt <= 0) return toast('금액을 넣어 주세요'); if (!st.name) return toast('항목을 골라 주세요');
       save({day: st.day, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.mode ? '' : (st.pay || ''), memo: st.memo}); };
-    if (old) $('#rpDel').onclick = () => { if (confirm('이 반복 거래를 그만할까요? 이미 들어간 거래는 그대로 있어요.')) save(null); };
+    if (old) $('#rpDel').onclick = async () => { if (await ask('이미 들어간 거래는 그대로 있어요.', {title: '이 반복 거래를 그만할까요?', ok: '그만하기', danger: true})) save(null); };
   };
   draw();
 }
@@ -487,7 +487,7 @@ function openCats(kinds){
     $('#ed').scrollTop = sc;
     $('#ed').querySelectorAll('.crow').forEach(r => { const x = +r.dataset.k, e = ed[x], it = items[x];
       r.querySelectorAll('.csub').forEach(b => b.onclick = () => { e.subs.splice(+b.dataset.j, 1); draw(); });
-      r.querySelector('.cadd').onclick = () => { const v = (prompt(`${it.name}에 추가할 세부분류`) || '').trim().replace(/,/g, ' ');
+      r.querySelector('.cadd').onclick = async () => { const v = ((await askText(`${it.name}에 추가할 세부분류`, {placeholder: '예: 점심', ok: '추가'})) || '').trim().replace(/,/g, ' ');
         if (!v) return; if (e.subs.includes(v)) return toast('이미 있는 세부분류예요'); e.subs.push(v); draw(); };
       r.querySelector('.cname').onclick = () => itemMenu(it); });
     $('#edX').onclick = closeEd;
@@ -518,10 +518,10 @@ function itemMenu(it){
     if (Object.values(Y.budget).some(L => L.some(i => i.kind === it.kind && i.name === to))) return toast(`'${to}' 항목이 이미 있어요`);
     const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0));
     commit([{t: 'renB', y, kind: it.kind, name: it.name, to, months}]); openCats(null); };
-  $('#imDel').onclick = () => {
+  $('#imDel').onclick = async () => {
     const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0) && !hasTx(mm));
     if (!months.length) return toast('모든 달에 거래가 있어 지울 수 없어요. 거래를 다른 항목으로 옮겨 주세요');
-    if (!confirm(`'${it.name}' 항목을 지울까요?${txMonths.length ? `\n거래가 있는 ${txMonths.join(', ')}월은 남겨 둬요.` : ''}`)) return;
+    if (!(await ask(txMonths.length ? `거래가 있는 ${txMonths.join(', ')}월은 남겨 둬요.` : '', {title: `'${it.name}' 항목을 지울까요?`, ok: '지우기', danger: true}))) return;
     commit([{t: 'delB', y, kind: it.kind, name: it.name, months}]); openCats(null); };
 }
 

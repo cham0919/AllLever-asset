@@ -89,7 +89,7 @@ let nativeOpen = null;   // 진행 중인 창 (두 번 열리지 않게)
 async function nativeAuthSession(url, host){
   if (nativeOpen) throw new Error('이미 창이 열려 있어요');
   const ios = window.Capacitor.getPlatform() === 'ios';
-  nativeOpen = (async () => {
+  nativeOpen = holdLock(async () => {
     if (ios) return (await nativePlugin('WebAuth').start({url, scheme: APP_SCHEME})).url;
     const App = nativePlugin('App'), Browser = nativePlugin('Browser');   // 안드로이드: 앱 주소로 돌아오거나 창을 닫을 때까지 기다려요
     let subs = [];
@@ -100,7 +100,7 @@ async function nativeAuthSession(url, host){
         await Browser.open({url, presentationStyle: 'popover'});
       });
     } finally { subs.forEach(s => s.remove()); Browser.close().catch(() => {}); }
-  })();
+  });
   try { return await nativeOpen; }
   catch(e){ if (e.code === 'canceled' || e.canceled) throw Object.assign(new Error(host === 'auth' ? '로그인 창을 닫았어요' : '시트 선택 창을 닫았어요'), {canceled: true}); throw e; }
   finally { nativeOpen = null; }
@@ -168,11 +168,11 @@ function gAdd(list){
 // 시트 고르기: 먼저 이 앱이 접근할 수 있는 시트(전에 고른 시트·앱이 만든 시트)를 드라이브에서 직접 목록으로 보여주고,
 // 목록에 없는 시트는 구글 선택 창(Picker)으로 추가해요. 홈 화면 앱에서는 Picker가 막힐 수 있어서 이 순서로 해요.
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
-const leaveLocalOk = () => S.meta.source !== 'local' || !yearsList().length ||
-  confirm('구글 시트를 연결하면 이 기기에만 저장된 데이터 대신 시트 데이터를 보여줘요. 먼저 설정 → 엑셀로 내보내기로 백업하세요. 계속할까요?');
+const leaveLocalOk = async () => S.meta.source !== 'local' || !yearsList().length ||
+  ask('구글 시트를 연결하면 이 기기에만 저장된 데이터 대신 시트 데이터를 보여줘요.\n먼저 설정 → 엑셀로 내보내기로 백업하세요.', {title: '구글 시트로 바꿀까요?', ok: '계속'});
 async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
-  if (!leaveLocalOk()) return;
+  if (!(await leaveLocalOk())) return;
   try {
     const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
     if (S.tab !== 'settings' || S.spage !== 'google') openSheet('google');
@@ -265,13 +265,13 @@ async function gFolder(tok){
 }
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
-  if (!leaveLocalOk()) return;
+  if (!(await leaveLocalOk())) return;
   if (S.gfiles.some(f => !f.year)) await syncGoogle(false);   // 연도를 아직 모르는 시트가 있으면 먼저 확인
   const used = new Set(S.gfiles.map(f => f.year).filter(Boolean)), cy = new Date().getFullYear();
   let y = year;
   if (!y){
     y = cy; while (used.has(y)) y++;
-    const ans = prompt('몇 년도 시트를 만들까요?', String(y)); if (ans == null) return;
+    const ans = await askText('몇 년도 시트를 만들까요?', {value: String(y), mode: 'numeric', max: 4, ok: '만들기'}); if (ans == null) return;
     y = parseInt(ans, 10);
   }
   if (!(y >= 2000 && y <= 2100)) return toast('연도를 숫자로 넣어 주세요');
@@ -295,14 +295,14 @@ async function gCreate(year){
     busy(); toast(folder ? `'${FOLDER}' 폴더에 '${f.name}' 시트를 만들었어요` : `'${f.name}' 시트를 만들었어요 (내 드라이브 맨 위)`);
   } catch(e){ busy(); toast('시트를 만들지 못했어요: ' + e.message); }
 }
-function gRemove(i){
-  const f = S.gfiles[i]; if (!confirm(`${f.year ? f.year + '년 ' : ''}'${f.name}' 연결을 해제할까요? (구글 드라이브의 파일은 지워지지 않아요)`)) return;
+async function gRemove(i){
+  const f = S.gfiles[i]; if (!(await ask('구글 드라이브의 파일은 지워지지 않아요.', {title: `${f.year ? f.year + '년 ' : ''}'${f.name}' 연결을 해제할까요?`, ok: '해제', danger: true}))) return;
   S.gfiles.splice(i, 1); gSave();
   if (S.meta.source === 'google' && f.year && !S.gfiles.some(g => g.year === f.year)){ delete S.years[f.year]; LS.set('years', S.years); setYear(S.year); render(); }
   syncSheet();
 }
-function gSignOut(){
-  if (!confirm('구글 계정 연결을 해제할까요?\n\n· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.')) return;
+async function gSignOut(){
+  if (!(await ask('· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.', {title: '구글 계정 연결을 해제할까요?', ok: '해제하고 삭제', danger: true}))) return;
   const sid = LS.get('gsid', null);
   if (sid && gServer()) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
   else try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}

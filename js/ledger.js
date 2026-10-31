@@ -477,11 +477,11 @@ function openCats(kinds){
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const items = Y.budget[m] || [];
   const ed = items.map(i => ({subs: [...(i.subs || [])], bud: i.bud ?? null}));   // 저장 전 고친 내용
-  const months = Array.from({length: 13 - m}, (_, i) => m + i);
+  const months = Array.from({length: 12}, (_, i) => i + 1);   // 세부분류는 그해 모든 달에 같이 적용
   const draw = () => {
     const sc = $('#ed').scrollTop;
     openEd(`<h4>${catKinds.length === 2 ? '지출 항목' : catKinds.length === 1 ? catKinds[0] + ' 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
-      <div class="esub">${m < 12 ? `${m}~12월` : '12월'}에 적용돼요 · 항목 이름을 누르면 바꾸거나 지울 수 있어요</div>
+      <div class="esub">1~12월 모든 달에 적용돼요 · 항목 이름을 누르면 바꾸거나 지울 수 있어요</div>
       ${catKinds.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>
           <div class="echips sm">${e.subs.map((s, j) => `<button class="csub" data-j="${j}">${esc(s)} <b aria-label="삭제">×</b></button>`).join('')}<button class="add cadd">+ 세부분류</button></div></div>`; }).join('')}

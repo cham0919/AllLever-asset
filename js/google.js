@@ -300,4 +300,5 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
     if (a === 'homeAddTx') return editTx(null);
     S.bview = a === 'homeBud' ? 'bud' : 'cal'; LS.set('bview', S.bview); go('budget'); if (a === 'homeBud') openBudEdit(); }
   else if (a === 'homeGoal') go('analysis'); else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
-  else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
+  else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind);
+  else if (a === 'zeroItems'){ S.showZero = !S.showZero; render(); } });

@@ -132,14 +132,15 @@ function editBudgetMonth(m){
 function addBudgetItem(m, kind, fromCats){
   const y = S.year; if (!canEdit(y)) return toast(editNote(y));
   openEd(`<h4>${kind} 항목 추가 <button class="ex" id="edX">취소</button></h4>
-    <div class="esub">${y}년 ${m < 12 ? `${m}~12월` : '12월'} 시트의 ${kind} 맨 아래에 추가돼요</div>
+    <div class="esub">${y}년 1~12월 시트의 ${kind} 맨 아래에 추가돼요 · 쓰지 않은 달에는 화면에 보이지 않아요</div>
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 넷플릭스, 보험료)" autofocus>
     <button class="btn" id="edSave">추가</button>`);
   $('#edX').onclick = fromCats ? openCats : closeEd;
   $('#edSave').onclick = () => {
     const name = $('#adName').value.trim(); if (!name) return toast('항목 이름을 넣어 주세요');
-    if ((S.years[y].budget[m] || []).some(i => i.kind === kind && i.name === name)) return toast('같은 이름의 항목이 이미 있어요');
-    const name2 = name.replace(/\|/g, ' '), months = Array.from({length: 13 - m}, (_, i) => m + i);
+    const name2 = name.replace(/\|/g, ' ');
+    if (Object.values(S.years[y].budget || {}).some(L => (L || []).some(i => i.kind === kind && i.name === name2))) return toast('같은 이름의 항목이 이미 있어요');
+    const months = Array.from({length: 12}, (_, i) => i + 1);   // 항목은 1~12월 모든 달에 추가 (0원인 달은 화면에서 숨겨요)
     closeEd(); commit([{t: 'addB', y, kind, name: name2, months}]);
     if (fromCats) return openCats(null);
     if (!S.years[y].txMode) setTimeout(() => editBudgetItem(m, kind, name, 0), 50);

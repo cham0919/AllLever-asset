@@ -97,7 +97,7 @@ function syncSheet(){
   // 가계부 (올해 거래 양식 파일이 있을 때만)
   const ly = ledgerYear(), LY = ly && S.years[ly], lm = ly && ledgerMonth(ly), its = LY ? (LY.budget[lm] || []) : [];
   $('#shdLedger').hidden = $('#slLedger').hidden = !LY;
-  if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => i.kind !== '수입').length}개`;
+  if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => EXP_KINDS.includes(i.kind)).length}개`; $('#svSav').textContent = `${its.filter(i => i.kind === '저축').length}개`;
     $('#svReps').textContent = `${(LY.reps[lm] || []).length}개`; const bt = its.filter(i => i.bud > 0).reduce((a, i) => a + i.bud, 0); $('#svBud').textContent = bt ? `${lm}월 ${money(bt)}` : '없음'; }
   // 결제수단: 거래 입력 화면에 보일 수단
   const payOn = PAY_OPTS.filter(p => !S.payOff.includes(p));
@@ -127,7 +127,7 @@ $('#sheet').addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
   const a = e.target.closest('[data-sa]'); if (!a) return;
   const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
-  ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
+  ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), catSav: () => openCats(['저축']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
 });
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();

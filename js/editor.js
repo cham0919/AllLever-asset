@@ -101,9 +101,9 @@ function editBudgetMonth(m){
     <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
   const rows = [...$('#ed').querySelectorAll('.frow')];
   const sumUp = () => {
-    let changed = 0, inc = 0, exp = 0;
-    for (const it of items){ const v = val.get(it); if ((it.filled ? it.amt : null) !== v) changed++; if (v) (it.kind === '수입' ? inc += v : exp += v); }
-    $('#fSum').innerHTML = `${changed}개 항목 변경<b class="num">일반 저축 ${money(inc - exp)}</b>`;
+    let changed = 0, inc = 0, exp = 0, sav = 0;
+    for (const it of items){ const v = val.get(it); if ((it.filled ? it.amt : null) !== v) changed++; if (v) (it.kind === '수입' ? inc += v : it.kind === '저축' ? sav += v : exp += v); }
+    $('#fSum').innerHTML = `${changed}개 항목 변경<b class="num">저축 ${money(sav)} · 남은 돈 ${money(inc - exp - sav)}</b>`;
   };
   rows.forEach(r => {
     const it = items[+r.dataset.k], inp = r.querySelector('input');

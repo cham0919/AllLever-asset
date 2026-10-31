@@ -215,11 +215,9 @@ async function gCreate(year){
     form.append('metadata', new Blob([JSON.stringify(meta)], {type: 'application/json'}));
     form.append('file', new Blob([await tpl.arrayBuffer()], {type: MIME_XLSX}));
     const f = await (await gFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType', {method: 'POST', body: form}, tok)).json();
-    // 기준 연도와, 전년도 데이터가 있으면 12월 말 부채를 넣어요 (1월 대출상환 저축 계산용)
-    const prev = S.years?.[y - 1] ? aMonth(12, y - 1) : null;
-    const vals = [[y], [prev && prev.has ? Math.round(prev.debt) : '']];
-    await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${f.id}/values/${encodeURIComponent('설정!B4:B5')}?valueInputOption=USER_ENTERED`,
-      {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({values: vals})}, tok);
+    // 기준 연도
+    await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${f.id}/values/${encodeURIComponent('설정!B4')}?valueInputOption=USER_ENTERED`,
+      {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({values: [[y]]})}, tok);
     gAdd([{id: f.id, name: f.name, mime: f.mimeType}]);
     busy('거의 다 됐어요', '만든 시트를 불러오고 있어요');
     await syncGoogle(true);

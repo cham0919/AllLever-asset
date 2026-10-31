@@ -54,7 +54,7 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 const PALETTE = ['#3182F6','#22B07D','#F59E0B','#8B5CF6','#F04452','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
 
 /* ───────── 엑셀 파싱 (값은 앱에서 직접 계산) ───────── */
-const KINDS = ['수입','고정비','변동비'], BIGS = ['유동자산','비유동자산','부채'];
+const KINDS = ['수입','고정비','변동비','저축'], BIGS = ['유동자산','비유동자산','부채'];
 const toNum = v => { if (v==null || v==='') return null; if (typeof v === 'number') return isFinite(v) ? v : null;
   const t = String(v).replace(/[,원\s]/g,''); if (t==='' || t==='-') return null; const n = Number(t); return isFinite(n) ? n : null; };
 const str = v => v==null ? '' : String(v).trim();
@@ -64,11 +64,9 @@ function parseWorkbook(buf){
   const rows = name => wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:null}) : null;
   let year = null;
   const st = rows('설정');
-  let prevDebt = null;   // 설정 '전년 12월 말 부채' (1월 대출 상환액 계산용)
   if (st) for (const r of st){
     const lab = c => str(c).replace(/\s/g,'');
-    let i = r.findIndex(c => lab(c) === '기준연도'); if (i >= 0 && year == null) year = toNum(r[i+1]);
-    i = r.findIndex(c => lab(c) === '전년12월말부채'); if (i >= 0) prevDebt = toNum(r[i+1]);
+    const i = r.findIndex(c => lab(c) === '기준연도'); if (i >= 0 && year == null) year = toNum(r[i+1]);
   }
   if (!year) year = new Date().getFullYear();
 
@@ -107,7 +105,7 @@ function parseWorkbook(buf){
     const v = []; for (let m=1; m<=12; m++) v.push(monthCol[m]!=null ? toNum(r[monthCol[m]]) : null);
     assets.push({big:b, mid: str(r[1]) || '기타', small: str(r[2]) || str(r[1]) || '항목', v});
   }
-  const Y = {year, budget, assets, prevDebt};
+  const Y = {year, budget, assets};
   if (txMode){ Object.assign(Y, {txMode, tx, reps}); for (let m = 1; m <= 12; m++) recalcMonth(Y, m); }
   return Y;
 }
@@ -140,17 +138,8 @@ function bMonth(m, y = S.year){
   const sum = k => items.filter(i=>i.kind===k).reduce((a,i)=>a+i.amt,0);
   const income = sum('수입'), fixed = sum('고정비'), variable = sum('변동비'), expense = fixed + variable;
   const has = items.some(i => i.filled && i.amt !== 0);
-  const cash = income - expense, repay = loanRepay(m, y), saving = cash + repay;
-  return {m, y, items, has, income, fixed, variable, expense, cash, repay, saving, rate: income ? saving/income : 0};
-}
-// 대출상환 저축 = 전월 부채 − 이번 달 부채 (줄어든 만큼만). 엑셀과 같은 규칙:
-// 1월은 설정 시트의 '전년 12월 말 부채' 우선, 없으면 등록된 전년도 파일의 12월 값.
-function loanRepay(m, y){
-  const c = aMonth(m, y); if (!c.has) return 0;
-  let prev = null;
-  if (m === 1 && S.years?.[y]?.prevDebt != null) prev = S.years[y].prevDebt;
-  else { const p = aMonth(m - 1, y); if (p.has) prev = p.debt; }
-  return prev == null ? 0 : Math.max(0, prev - c.debt);
+  const save = sum('저축'), left = income - expense - save;   // 저축 = 가계부에 '저축'으로 입력한 금액, 남은 돈 = 수입 − 지출 − 저축
+  return {m, y, items, has, income, fixed, variable, expense, save, left, saving: save, rate: income ? save/income : 0};
 }
 function aMonth(m, y = S.year){
   [m, y] = wrapYM(m, y);
@@ -183,9 +172,8 @@ function analysis(m){
   if (r.prevOk){
     r.dTotal = c.total - p.total; r.dNet = c.net - p.net;
     r.rTotal = p.total ? r.dTotal/p.total : null; r.rNet = p.net ? r.dNet/p.net : null;
-    r.cash = b.has ? b.cash : null; r.repay = b.repay;
-    r.saving = (r.cash || 0) + r.repay;
-    r.other = r.dNet - r.saving;
+    r.saving = b.has ? b.save : null;
+    r.other = r.dNet - (r.saving || 0);   // 저축 외 자산 변동 (투자손익 · 시세 등)
     r.rOther = (r.other!=null && p.net) ? r.other/p.net : null;
   }
   r.debtRatio = c.total ? c.debt/c.total : 0;

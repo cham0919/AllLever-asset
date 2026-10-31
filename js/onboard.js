@@ -69,15 +69,14 @@ async function blankYear(y){
   const prev = S.years?.[y - 1] || S.years?.[Math.max(...yearsList().filter(v => v < y))];
   let M;
   if (prev){
-    M = {year: y, prevDebt: null, budget: {}, assets: prev.assets.map(a => ({big: a.big, mid: a.mid, small: a.small, v: Array(12).fill(null)}))};
+    M = {year: y, budget: {}, assets: prev.assets.map(a => ({big: a.big, mid: a.mid, small: a.small, v: Array(12).fill(null)}))};
     const last = prev.budget[12]?.length ? prev.budget[12] : Object.values(prev.budget).filter(L => L.length).pop() || [];
     for (let m = 1; m <= 12; m++) M.budget[m] = last.map(i => ({kind: i.kind, name: i.name, amt: 0, memo: '', filled: false, subs: [...(i.subs || [])], bud: i.bud ?? null}));
     if (prev.txMode){ const lr = prev.reps?.[12] || []; Object.assign(M, {txMode: true, tx: {}, reps: {}});
       for (let m = 1; m <= 12; m++){ M.tx[m] = []; M.reps[m] = lr.map(r => ({...r})); } }
-    if (S.years[y - 1]){ const d = aMonth(12, y - 1); if (d.has) M.prevDebt = d.debt; }
   } else {
     const r = await fetch('template.xlsx'); if (!r.ok) throw new Error('템플릿을 불러오지 못했어요');
-    M = parseWorkbook(await r.arrayBuffer()); M.year = y; M.prevDebt = null;
+    M = parseWorkbook(await r.arrayBuffer()); M.year = y;
   }
   return M;
 }
@@ -102,7 +101,7 @@ async function addLocalYear(){
 function exportYear(y){
   const M = S.years[y]; if (!M) return;
   const wb = XLSX.utils.book_new();
-  const st = [['기준 연도', y], ['전년 12월 말 부채', M.prevDebt ?? ''], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
+  const st = [['기준 연도', y], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(st), '설정');
   for (let m = 1; m <= 12; m++){
     const rows = [[`${m}월 가계부`], [], ['구분(1차)', '항목(2차)', '금액', '메모']];
@@ -113,15 +112,15 @@ function exportYear(y){
       const its = M.budget[m] || [], T = (M.tx[m] || []).slice().sort((a, z) => a.d - z.d), P = M.reps[m] || [];
       const put = (r, c, v) => { while (rows.length <= r) rows.push([]); const R = rows[r]; while (R.length < c) R.push(null); R[c] = v; };
       rows.length = 0; put(0, 0, `${y}년 ${m}월 가계부`);
-      const b = bMonth(m, y), live = T.filter(t => !t.skip), bud = its.filter(i => i.kind !== '수입').reduce((a, i) => a + (i.bud || 0), 0);
+      const b = bMonth(m, y), live = T.filter(t => !t.skip), bud = its.filter(i => EXP_KINDS.includes(i.kind)).reduce((a, i) => a + (i.bud || 0), 0);
       put(3, 0, '요약');
-      [['총 수입', b.income], ['고정비', b.fixed], ['변동비', b.variable], ['총 지출', b.expense], ['일반 저축', b.cash], ['대출상환 저축', b.repay], ['저축 합계', b.saving]]
+      [['총 수입', b.income], ['고정비', b.fixed], ['변동비', b.variable], ['총 지출', b.expense], ['저축', b.save], ['남은 돈', b.left], ['저축률', b.rate]]
         .forEach(([k, v], j) => { put(4, j, k); put(5, j, v); });
-      [['저축률', b.rate], ['지출 예산', bud || null], ['예산 남은 금액', bud ? bud - b.expense : null]].forEach(([k, v], j) => { put(6, j, k); put(7, j, v); });
+      [['지출 예산', bud || null], ['예산 남은 금액', bud ? bud - b.expense : null]].forEach(([k, v], j) => { put(6, j, k); put(7, j, v); });
       put(9, 0, '달력 · 날짜별 지출'); WD.forEach((w, k) => put(10, k, w));
       const off = new Date(y, m - 1, 1).getDay(), nd = daysIn(y, m);
       for (let d = 1; d <= nd; d++){ const i = off + d - 1, w = Math.floor(i / 7), k = i % 7;
-        const v = live.filter(t => t.d === d && t.kind !== '수입').reduce((a, t) => a + t.amt, 0);
+        const v = live.filter(t => t.d === d && EXP_KINDS.includes(t.kind)).reduce((a, t) => a + t.amt, 0);
         put(11 + w * 2, k, d); put(12 + w * 2, k, v || null); }
       const T0 = 42; put(T0 - 2, 0, '항목별 합계');
       ['구분(1차)', '항목(2차)', '금액', '메모', '월 예산'].forEach((h, j) => put(T0 - 1, j, h)); put(T0 - 1, 7, '세부분류');

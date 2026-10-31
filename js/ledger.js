@@ -103,26 +103,26 @@ function selDay(y, m){
   const T = txOf(m, y) || []; return T.length ? Math.max(...T.map(t => t.d)) : 1;
 }
 function txRowHtml(t, ed){
-  const inc = t.kind === '수입';
-  return `<div class="row${ed ? ' tap' : ''}" ${ed ? `data-tx="${esc(t.id)}" role="button" tabindex="0"` : ''}><div class="tico ${inc ? 'inc' : ''}">${esc((t.sub || t.name).slice(0, 1))}</div>
+  const inc = t.kind === '수입', sav = t.kind === '저축';
+  return `<div class="row${ed ? ' tap' : ''}" ${ed ? `data-tx="${esc(t.id)}" role="button" tabindex="0"` : ''}><div class="tico ${inc ? 'inc' : sav ? 'sav' : ''}">${esc((t.sub || t.name).slice(0, 1))}</div>
     <div class="n">${esc(t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name))}${t.id.startsWith('R') ? '<span class="rep">반복</span>' : ''}<small>${esc(t.name)}${t.sub ? ' › ' + esc(t.sub) : ''}${t.pay ? ' · ' + esc(t.pay) : ''}</small></div>
-    <div class="a num ${inc ? 'inc' : 'exp'}">${inc ? '+' : '-'}${fmtWon(t.amt)}</div></div>`;
+    <div class="a num ${inc ? 'inc' : sav ? 'sav' : 'exp'}">${inc ? '+' : sav ? '' : '-'}${fmtWon(t.amt)}</div></div>`;
 }
 function viewCal(){
   const y = S.year, m = S.month.budget, Y = S.model, T = (Y.tx[m] || []).filter(t => !t.skip), b = bMonth(m), ed = canEdit();
   const n = daysIn(y, m), first = new Date(y, m - 1, 1).getDay(), d0 = selDay(y, m), now = new Date();
   const isToday = d => now.getFullYear() === y && now.getMonth() + 1 === m && now.getDate() === d;
   const fut = d => new Date(y, m - 1, d) > now;
-  const per = {}; for (const t of T){ const p = per[t.d] = per[t.d] || {i: 0, e: 0, v: 0}; if (t.kind === '수입') p.i += t.amt; else { p.e += t.amt; if (t.kind === '변동비') p.v += t.amt; } }
+  const per = {}; for (const t of T){ const p = per[t.d] = per[t.d] || {i: 0, e: 0, v: 0}; if (t.kind === '수입') p.i += t.amt; else if (t.kind === '저축') p.s = (p.s || 0) + t.amt; else { p.e += t.amt; if (t.kind === '변동비') p.v += t.amt; } }
   const bs = budState(y, m);
   let cells = WD.map((w, i) => `<div class="w${i === 0 ? ' sun' : i === 6 ? ' sat' : ''}">${w}</div>`).join('') + '<div></div>'.repeat(first);
   for (let d = 1; d <= n; d++){ const p = per[d];
-    cells += `<button class="d${d === d0 ? ' sel' : ''}${isToday(d) ? ' today' : ''}${fut(d) ? ' fut' : ''}" data-day="${d}"><span>${d}</span>${p && p.i ? `<small class="inc">+${shortAmt(p.i)}</small>` : ''}${p && p.e ? `<small class="exp">-${shortAmt(p.e)}</small>` : ''}</button>`; }
+    cells += `<button class="d${d === d0 ? ' sel' : ''}${isToday(d) ? ' today' : ''}${fut(d) ? ' fut' : ''}" data-day="${d}"><span>${d}</span>${p && p.i ? `<small class="inc">+${shortAmt(p.i)}</small>` : ''}${p && p.e ? `<small class="exp">-${shortAmt(p.e)}</small>` : ''}${p && p.s ? `<small class="sav">${shortAmt(p.s)}</small>` : ''}</button>`; }
   const dayT = T.filter(t => t.d === d0).sort((a, z) => (a.kind === '수입') - (z.kind === '수입') || z.amt - a.amt);
-  const dSum = dayT.reduce((a, t) => a + (t.kind === '수입' ? t.amt : -t.amt), 0);
+  const dSum = dayT.reduce((a, t) => a + (t.kind === '수입' ? t.amt : t.kind === '저축' ? 0 : -t.amt), 0);
   const reps = (Y.reps[m] || []).length;
   $('#view').innerHTML = bsegHtml() + `
-  <section class="card"><div class="sum3 num"><div>수입<b class="inc">${money(b.income)}</b></div><div>지출<b class="exp">${money(b.expense)}</b></div><div>일반 저축<b class="sav">${money(b.cash)}</b></div></div>${bs.total ? budStrip(bs) : ''}</section>
+  <section class="card"><div class="sum3 num"><div>수입<b class="inc">${money(b.income)}</b></div><div>지출<b class="exp">${money(b.expense)}</b></div><div>저축<b class="sav">${money(b.save)}</b></div></div>${bs.total ? budStrip(bs) : ''}</section>
   <section class="card calcard"><div class="cal num">${cells}</div></section>
   <section class="card">
     <div class="dayhead"><b>${m}월 ${d0}일 ${WD[new Date(y, m - 1, d0).getDay()]}요일</b><span class="num">${dayT.length ? (dSum > 0 ? '+' : '') + fmtWon(dSum) + '원' : ''}</span></div>
@@ -350,31 +350,34 @@ function statInto(host){
 }
 
 /* 거래 입력 / 고치기 */
-function itemsFor(y, m, inc){ return (S.years[y]?.budget?.[m] || []).filter(i => inc ? i.kind === '수입' : i.kind !== '수입'); }
+// 입력 구분(mode): 0 지출(고정비·변동비) · 1 수입 · 2 저축
+const kindMode = k => k === '수입' ? 1 : k === '저축' ? 2 : 0;
+function itemsFor(y, m, mode){ return (S.years[y]?.budget?.[m] || []).filter(i => mode === 1 || mode === true ? i.kind === '수입' : mode === 2 ? i.kind === '저축' : EXP_KINDS.includes(i.kind)); }
+const modeSeg = (id, mode) => `<div class="eseg" id="${id}">${['지출', '수입', '저축'].map((l, v) => `<button data-v="${v}"${mode === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`;
 function usage(y){ const c = {}; for (const L of Object.values(S.years[y]?.tx || {})) for (const t of L) if (!t.skip){ c[t.kind + '|' + t.name] = (c[t.kind + '|' + t.name] || 0) + 1; c['s|' + t.name + '|' + t.sub] = (c['s|' + t.name + '|' + t.sub] || 0) + 1; c['p|' + t.pay] = (c['p|' + t.pay] || 0) + 1; } return c; }
 function editTx(id, presetDay){
   const y = S.year; if (!canEdit(y)) return toast(editNote(y));
   const m0 = S.month.budget, Y = S.years[y], old = id ? (Y.tx[m0] || []).find(t => t.id === id) : null;
   if (id && !old) return;
   const U = usage(y);
-  const st = old ? {inc: old.kind === '수입', amt: old.amt, kind: old.kind, name: old.name, sub: old.sub, m: m0, d: old.d, pay: old.pay, memo: old.memo === '반복' ? '' : old.memo}
-    : {inc: false, amt: null, kind: null, name: null, sub: '', m: m0, d: presetDay || selDay(y, m0), pay: '', memo: '', rep: false};
+  const st = old ? {mode: kindMode(old.kind), amt: old.amt, kind: old.kind, name: old.name, sub: old.sub, m: m0, d: old.d, pay: old.pay, memo: old.memo === '반복' ? '' : old.memo}
+    : {mode: 0, amt: null, kind: null, name: null, sub: '', m: m0, d: presetDay || selDay(y, m0), pay: '', memo: '', rep: false};
   const favPay = PAY_OPTS.filter(p => !S.payOff.includes(p)).sort((a, z) => (U['p|' + z] || 0) - (U['p|' + a] || 0)).find(p => U['p|' + p]) || '';
   if (!old) st.pay = favPay;
   const pad = n => String(n).padStart(2, '0');
   const draw = () => {
-    const its = itemsFor(y, st.m, st.inc).slice().sort((a, z) => (U[z.kind + '|' + z.name] || 0) - (U[a.kind + '|' + a.name] || 0));
+    const its = itemsFor(y, st.m, st.mode).slice().sort((a, z) => (U[z.kind + '|' + z.name] || 0) - (U[a.kind + '|' + a.name] || 0));
     if (!st.name || !its.some(i => i.kind === st.kind && i.name === st.name)){ const f = its[0]; st.kind = f?.kind; st.name = f?.name; st.sub = ''; }
     const it = its.find(i => i.kind === st.kind && i.name === st.name), subs = (it?.subs || []).slice().sort((a, z) => (U['s|' + st.name + '|' + z] || 0) - (U['s|' + st.name + '|' + a] || 0));
     if (st.sub && !subs.includes(st.sub)) subs.unshift(st.sub);
     const amtV = st.amtTxt ?? (st.amt ? fmtWon(st.amt) : '');
     openEd(`<h4>${old ? '거래 고치기' : '거래 추가'} <button class="ex" id="edX">취소</button></h4><div style="height:10px"></div>
-      <div class="eseg" id="txKind"><button data-v="0"${st.inc ? '' : ' class="on"'}>지출</button><button data-v="1"${st.inc ? ' class="on"' : ''}>수입</button></div>
+      ${modeSeg('txKind', st.mode)}
       <div class="ewon"><input id="txAmt" inputmode="numeric" autocomplete="off" placeholder="금액 (예: 12000 또는 1.2만)" value="${esc(amtV)}"${old ? '' : ' autofocus'}><span>원</span></div>
       <div class="ehint" id="txHint"></div>
       <div class="elbl">항목</div><div class="echips" id="txItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('') || '<span class="note">항목이 없어요</span>'}</div>
       ${it && it.kind !== '수입' || subs.length ? `<div class="elbl">세부분류${it ? ' · ' + esc(it.name) : ''}</div><div class="echips" id="txSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}<button data-s="+" class="add">+ 추가</button></div>` : ''}
-      ${st.inc ? '' : payChips('txPayC', st.pay)}
+      ${st.mode ? '' : payChips('txPayC', st.pay)}
       <div class="erow2"><label>날짜<input type="date" id="txDate" min="${y}-01-01" max="${y}-12-31" value="${y}-${pad(st.m)}-${pad(st.d)}"></label></div>
       <input id="txMemo" class="ememo" maxlength="60" placeholder="메모 (예: 회사 근처 국밥)" value="${esc(st.memo)}">
       ${old ? '' : `<label class="echeck"><input type="checkbox" id="txRep"${st.rep ? ' checked' : ''}> 매달 반복 <span class="muted" id="txRepNote">(매달 ${st.d}일, ${st.m < 12 ? `${st.m}~12월` : '12월'})</span></label>`}
@@ -384,7 +387,7 @@ function editTx(id, presetDay){
     const keep = () => { st.amtTxt = inp.value; st.amt = parseWon(inp.value); st.memo = $('#txMemo').value.trim(); if ($('#txRep')) st.rep = $('#txRep').checked;
       const dv = $('#txDate').value.split('-'); if (dv.length === 3 && +dv[0] === y){ st.m = +dv[1]; st.d = +dv[2]; } };
     bindPay('txPayC', st);
-    $('#txKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; st.pay = st.inc ? '' : (st.pay || favPay); draw(); });
+    $('#txKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.mode = +b.dataset.v; st.name = null; st.pay = st.mode ? '' : (st.pay || favPay); draw(); });
     $('#txItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
     $('#txSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep();
       if (b.dataset.s === '+'){ const s = (prompt(`${st.name}의 세부분류 이름`) || '').trim().replace(/,/g, ' '); if (!s) return; st.sub = s; st.newSub = s; }
@@ -399,16 +402,16 @@ function editTx(id, presetDay){
     if (st.amt == null || Number.isNaN(st.amt) || st.amt <= 0) return toast('금액을 넣어 주세요');
     if (!st.name) return toast('항목을 골라 주세요');
     if (!st.m || !st.d || st.d > daysIn(y, st.m)) return toast('날짜를 확인해 주세요');
-    const ops = [], tx = {id: old ? old.id : newTxId(), d: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : st.pay, memo: st.memo, skip: false};
+    const ops = [], tx = {id: old ? old.id : newTxId(), d: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.mode ? '' : st.pay, memo: st.memo, skip: false};
     if (st.newSub && st.sub === st.newSub) for (let mm = st.m; mm <= 12; mm++){ const it = findBudget(Y, mm, st.kind, st.name, 0);
       if (it && !(it.subs || []).includes(st.sub)) ops.push({t: 'cat', y, m: mm, kind: st.kind, name: st.name, subs: [...(it.subs || []), st.sub], bud: it.bud ?? null}); }
-    if (st.rep){ const rep = {day: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : st.pay, memo: st.memo};
+    if (st.rep){ const rep = {day: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.mode ? '' : st.pay, memo: st.memo};
       tx.id = repId(rep); if (!tx.memo) tx.memo = '반복';
       for (let mm = st.m; mm <= 12; mm++){ const L = (Y.reps[mm] || []).filter(r => repId(r) !== tx.id); ops.push({t: 'reps', y, m: mm, reps: [...L, rep]}); } }
     if (old && st.m !== m0) ops.push({t: 'tx', y, m: m0, act: 'del', tx: {id: old.id}});
     ops.push({t: 'tx', y, m: st.m, act: 'set', tx});
     closeEd(); S.sel = {y, m: st.m, d: st.d}; if (st.m !== m0) S.month.budget = st.m;
-    if (!st.inc) S.saveNote = () => budNote(y, st.m, st.kind, st.name);
+    if (!st.mode) S.saveNote = () => budNote(y, st.m, st.kind, st.name);
     commit(ops);
   };
   draw();
@@ -427,27 +430,27 @@ function openReps(){
 }
 function editRep(ri, direct){
   const y = S.year, m = S.month.budget, Y = S.years[y], old = ri != null ? (Y.reps[m] || [])[ri] : null;
-  const st = old ? {...old, inc: old.kind === '수입'} : {inc: false, day: 1, kind: null, name: null, sub: '', amt: null, pay: '', memo: ''};
+  const st = old ? {...old, mode: kindMode(old.kind)} : {mode: 0, day: 1, kind: null, name: null, sub: '', amt: null, pay: '', memo: ''};
   const draw = () => {
-    const its = itemsFor(y, m, st.inc);
+    const its = itemsFor(y, m, st.mode);
     if (!its.some(i => i.kind === st.kind && i.name === st.name)){ st.kind = its[0]?.kind; st.name = its[0]?.name; st.sub = ''; }
     const it = its.find(i => i.kind === st.kind && i.name === st.name), subs = [...(it?.subs || [])]; if (st.sub && !subs.includes(st.sub)) subs.unshift(st.sub);
     const amtV = st.amtTxt ?? (st.amt != null ? fmtWon(st.amt) : '');
     const nRep = (Y.reps[m] || []).length;
     openEd(`<h4>${old ? '반복 거래 고치기' : '반복 거래 추가'} <button class="ex" id="edX">취소</button></h4>
       ${!old && nRep ? `<button class="elink" id="rpList">등록된 반복 거래 ${nRep}개 보기 ›</button>` : '<div style="height:10px"></div>'}
-      <div class="eseg" id="rpKind"><button data-v="0"${st.inc ? '' : ' class="on"'}>지출</button><button data-v="1"${st.inc ? ' class="on"' : ''}>수입</button></div>
+      ${modeSeg('rpKind', st.mode)}
       <div class="ewon"><input id="rpAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${esc(amtV)}"><span>원</span></div><div class="ehint"></div>
       <div class="elbl">항목</div><div class="echips" id="rpItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>
       ${subs.length ? `<div class="elbl">세부분류</div><div class="echips" id="rpSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}</div>` : ''}
-      ${st.inc ? '' : payChips('rpPayC', st.pay || '')}
+      ${st.mode ? '' : payChips('rpPayC', st.pay || '')}
       <div class="erow2"><label>매달 (일)<input id="rpDay" type="number" inputmode="numeric" min="1" max="31" value="${st.day}"></label></div>
       <input id="rpMemo" class="ememo" maxlength="60" placeholder="이름 (예: 넷플릭스, 적금)" value="${esc(st.memo || '')}">
       <button class="btn" id="edSave">저장</button>${old ? '<button class="btn ghost danger" id="rpDel">반복 그만하기</button>' : ''}`);
     bindWon($('#rpAmt'));
     const keep = () => { st.amtTxt = $('#rpAmt').value; st.amt = parseWon($('#rpAmt').value); st.day = Math.min(Math.max(+$('#rpDay').value || 1, 1), 31); st.memo = $('#rpMemo').value.trim(); };
     bindPay('rpPayC', st);
-    $('#rpKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; if (st.inc) st.pay = ''; draw(); });
+    $('#rpKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.mode = +b.dataset.v; st.name = null; if (st.mode) st.pay = ''; draw(); });
     $('#rpItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
     $('#rpSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.sub = st.sub === b.dataset.s ? '' : b.dataset.s; draw(); });
     $('#edX').onclick = direct ? closeEd : openReps;
@@ -458,7 +461,7 @@ function editRep(ri, direct){
         ops.push({t: 'reps', y, m: mm, reps: rep ? [...L, rep] : L}); }
       closeEd(); commit(ops); applyReps(); };
     $('#edSave').onclick = () => { keep(); if (st.amt == null || Number.isNaN(st.amt) || st.amt <= 0) return toast('금액을 넣어 주세요'); if (!st.name) return toast('항목을 골라 주세요');
-      save({day: st.day, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : (st.pay || ''), memo: st.memo}); };
+      save({day: st.day, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.mode ? '' : (st.pay || ''), memo: st.memo}); };
     if (old) $('#rpDel').onclick = () => { if (confirm('이 반복 거래를 그만할까요? 이미 들어간 거래는 그대로 있어요.')) save(null); };
   };
   draw();
@@ -474,7 +477,7 @@ function openCats(kinds){
   const months = Array.from({length: 13 - m}, (_, i) => m + i);
   const draw = () => {
     const sc = $('#ed').scrollTop;
-    openEd(`<h4>${catKinds.length === 1 ? '수입 항목' : catKinds.length === 2 ? '지출 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
+    openEd(`<h4>${catKinds.length === 2 ? '지출 항목' : catKinds.length === 1 ? catKinds[0] + ' 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
       <div class="esub">${m < 12 ? `${m}~12월` : '12월'}에 적용돼요 · 항목 이름을 누르면 바꾸거나 지울 수 있어요</div>
       ${catKinds.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>

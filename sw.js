@@ -1,5 +1,5 @@
 // 앱 화면만 캐시합니다. 구글 API 요청(가계부 데이터)은 캐시하지 않습니다.
-const SHELL = 'alv-shell-v27';
+const SHELL = 'alv-shell-v28';
 const FILES = ['./', './index.html', './app.js', './vendor/xlsx.full.min.js', './vendor/chart.umd.min.js', './manifest.webmanifest', './icon-180.png', './icon-512.png', './demo.xlsx', './demo2025.xlsx', './template.xlsx'];
 self.addEventListener('install', e => e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting())));
 self.addEventListener('activate', e => e.waitUntil(

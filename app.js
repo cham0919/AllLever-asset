@@ -756,7 +756,7 @@ function render(){
   if (!S.model) return emptyMonth(null, '');
   ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
-function go(tab){ endEdPage(); if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
@@ -844,7 +844,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v27';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v28';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -858,9 +858,7 @@ $('#sheet').addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g){ syncSheet(); sPage(g.dataset.go, g.dataset.go === 'main'); return; }
   const a = e.target.closest('[data-sa]'); if (!a) return;
   const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
-  startEdPage();
   ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
-  if (edPage && !$('#ed').innerHTML) endEdPage();
 });
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();
@@ -1453,29 +1451,31 @@ function swipeClose(el, canClose, close){
     if (drag && dy > 90) close(); drag = false; };
   el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
 }
+// 입력·편집 화면: 오른쪽에서 밀려 들어오는 전체 화면 (위 '‹ 뒤로', 왼쪽 끝에서 오른쪽으로 밀어도 뒤로)
 let edNoClose = false;
-swipeClose($('#ed'), () => !edNoClose, () => closeEd());
-// 설정에서 여는 편집 화면은 아래에서 올라오는 창 대신 설정 안의 한 페이지로 열어요.
-// 편집 코드는 모두 #ed 를 쓰므로, 페이지 모드 동안 설정 페이지(#edp)와 아래 창의 id를 바꿔 둡니다.
-let edPage = false;
-function startEdPage(){ if (edPage) return; edPage = true; const sh = $('#ed'), pg = $('#edp'); sh.id = 'edSheet'; pg.id = 'ed'; }
-function endEdPage(){ if (!edPage) return; edPage = false; const pg = $('#ed'), sh = $('#edSheet'); pg.innerHTML = ''; pg.id = 'edp'; sh.id = 'ed'; }
 function openEd(html, opt = {}){
-  if (edPage){
-    const el = $('#ed'); el.innerHTML = '<div class="shead"><button class="sback" id="edBack">‹ 뒤로</button><b></b><span></span></div>' + html;
-    $('#edBack').onclick = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
-    const h = el.querySelector('h4'); if (h) el.querySelector('.shead b').textContent = (h.childNodes[0]?.textContent || '').trim();
-    sPage('edit'); const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60); return;
-  }
   edNoClose = !!opt.noClose;
-  const el = $('#ed'); el.className = 'sheet ed on' + (opt.tall ? ' tall' : ''); el.innerHTML = '<div class="grab"></div>' + html;
-  $('#edScrim').classList.add('on'); $('#edScrim').onclick = opt.noClose ? null : closeEd;
-  const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60);
+  const el = $('#ed'), was = el.classList.contains('on');
+  el.className = 'sheet ed page on' + (opt.tall ? ' tall' : '') + (was ? ' swap' : '');
+  el.innerHTML = `<div class="phead"><button class="pback" id="edBack"${edNoClose ? ' hidden' : ''}>‹ 뒤로</button><b id="edTitle"></b><span></span></div>` + html;
+  const h = el.querySelector('h4'); if (h) $('#edTitle').textContent = (h.childNodes[0]?.textContent || '').trim();
+  $('#edBack').onclick = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
+  if (!was) el.scrollTop = 0;
+  const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 280);
 }
 function closeEd(){
-  if (edPage){ endEdPage(); if (S.tab === 'settings'){ syncSheet(); sPage('main', true); } return; }
-  $('#ed').classList.remove('on'); $('#edScrim').classList.remove('on');
+  $('#ed').classList.remove('on', 'swap');
+  if (S.tab === 'settings') syncSheet();
 }
+(() => {   // 화면 왼쪽 끝에서 오른쪽으로 밀면 뒤로
+  const el = $('#ed'); let x0 = null, y0 = 0, dx = 0, drag = false;
+  el.addEventListener('touchstart', e => { x0 = null; if (edNoClose || e.touches.length > 1 || e.touches[0].clientX > 28) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; drag = false; }, {passive: true});
+  el.addEventListener('touchmove', e => { if (x0 == null) return; dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
+    if (!drag){ if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){ x0 = null; return; } if (dx < 10) return; drag = true; el.style.transition = 'none'; }
+    el.style.transform = `translateX(${Math.max(0, dx)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
+  const end = () => { if (x0 == null) return; x0 = null; el.style.transition = ''; el.style.transform = ''; if (drag && dx > 90) $('#edBack').click(); drag = false; };
+  el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+})();
 function bindWon(inp, onChange){
   inp.addEventListener('input', () => {
     const raw = inp.value, n = parseWon(raw);

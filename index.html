@@ -422,10 +422,21 @@ body:not(.onboarding) #setBtn{display:none}
 .setpage .slist.pl{border-radius:16px;border:0;box-shadow:var(--shadow)}
 .setpage .slist.pl .srow{padding:0 16px}.setpage .slist.pl .srow + .srow:before{left:16px}
 .srow .chk{margin-left:auto;color:var(--accent);font-size:18px;font-weight:800;visibility:hidden}.srow.on .chk{visibility:visible}
-.edpage h4{display:none}
-.edpage .btn + .btn{margin-top:8px}
-.edpage .ebar{bottom:calc(env(safe-area-inset-bottom) + 62px);z-index:31}
-.edpage .ebar ~ *:last-child,.edpage:has(.ebar){padding-bottom:84px}
+/* 입력·편집 화면 (오른쪽에서 밀려 들어오는 전체 화면) */
+.sheet.ed.page{top:0;bottom:0;left:0;right:0;height:100%;max-height:none;border-radius:0;max-width:none;z-index:61;
+  transform:translateX(105%);transition:transform .3s cubic-bezier(.2,.8,.2,1);padding:0 16px calc(env(safe-area-inset-bottom) + 28px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet.ed.page.on{transform:none;box-shadow:-8px 0 30px rgba(0,0,0,.12)}
+.sheet.ed.page.tall{height:100%;max-height:none;padding-bottom:calc(env(safe-area-inset-bottom) + 96px)}
+.sheet.ed.page.swap > :not(.phead){animation:edSwap .22s ease}
+@keyframes edSwap{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sheet.ed.page{transition:none}.sheet.ed.page.swap > *{animation:none}}
+.sheet.ed.page > h4{display:none}
+.phead{position:sticky;top:0;z-index:3;background:var(--bg);display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  margin:0 -16px 10px;padding:calc(env(safe-area-inset-top) + 12px) 16px 10px;min-height:52px}
+.phead b{font-size:17px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:62vw}
+.pback{justify-self:start;color:var(--accent);font-size:16px;font-weight:600;padding:6px 2px}
+.ebar{z-index:62}
+.toast{z-index:90!important}
 </style>
 </head>
 <body>
@@ -490,7 +501,6 @@ body:not(.onboarding) #setBtn{display:none}
   <p class="note" style="margin:0 4px 10px">거래를 입력할 때 고를 수 있는 결제수단이에요. 체크한 것만 보여요.</p>
   <div class="slist pl" id="slPay"></div>
 </div>
-<div class="spage edpage" data-page="edit" id="edp"></div>
 <div class="spage" data-page="google">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>구글 계정 · 시트</b><span></span></div>
   <div class="card" style="padding:14px">

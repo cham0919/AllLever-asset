@@ -61,6 +61,44 @@ input,select{font:inherit;color:var(--ink)}
 .src button{color:var(--up);font-size:13px;font-weight:600;padding:4px 2px}
 .src a{color:var(--accent);font-size:13px;font-weight:600;text-decoration:none}
 [hidden]{display:none!important}
+/* 달력 가계부 */
+.bseg{display:flex;background:var(--chip);border-radius:12px;padding:3px;margin:0 0 12px}
+.bseg button{flex:1;padding:8px 0;border-radius:9px;font-size:14px;font-weight:700;color:var(--sub)}
+.bseg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.sum3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center}
+.sum3>div{font-size:12px;color:var(--sub)}.sum3 b{display:block;font-size:16px;margin-top:2px}
+.inc{color:var(--income)!important}.exp{color:var(--expense)!important}.sav{color:var(--saving)!important}
+.calcard{padding:10px 6px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.cal .w{font-size:11px;color:var(--sub);padding:2px 0 6px}.cal .w.sun{color:var(--expense)}.cal .w.sat{color:var(--income)}
+.cal .d{min-height:52px;border-radius:10px;padding:4px 0 2px;font-size:12.5px;font-weight:600;display:flex;flex-direction:column;align-items:center;gap:1px;overflow:hidden}
+.cal .d small{font-size:9.5px;font-weight:700;line-height:1.2;letter-spacing:-.03em;white-space:nowrap}
+.cal .d.sel{background:var(--accent-soft)}
+.cal .d.today span{background:var(--accent);color:#fff;border-radius:99px;padding:0 6px}
+.cal .d.fut{color:var(--faint)}
+.dayhead{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--sub);margin-bottom:4px}.dayhead b{color:var(--ink);font-size:15px}
+.tico{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;font-size:14px;font-weight:800;flex:none;background:var(--chip);color:var(--expense)}
+.tico.inc{color:var(--income)}
+.row .n small{display:block;color:var(--sub);font-size:12px;font-weight:500;margin-top:1px}
+.rep{font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-soft);border-radius:6px;padding:1px 5px;margin-left:5px;vertical-align:1px}
+.ltools{display:flex;gap:8px;margin:0 0 12px}
+.ltools button{flex:1;height:42px;border-radius:13px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px;font-weight:700}
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:25;width:56px;height:56px;border-radius:20px;background:var(--accent);color:#fff;font-size:30px;line-height:1;display:grid;place-items:center;box-shadow:0 6px 20px rgba(49,130,246,.4)}
+.elbl{font-size:12px;color:var(--sub);font-weight:700;margin:2px 2px 6px}
+.echips button.add{color:var(--accent);background:var(--accent-soft);box-shadow:none}
+.erow2{display:flex;gap:8px;margin-bottom:12px}
+.erow2 label{flex:1;min-width:0;background:var(--card);border-radius:14px;padding:8px 12px;box-shadow:var(--shadow);font-size:11px;color:var(--sub);display:flex;flex-direction:column;gap:2px}
+.erow2 input{border:0;background:none;font-size:15px;font-weight:600;color:var(--ink);padding:2px 0;outline:none;width:100%;min-width:0;font-family:inherit}
+.btn.danger{color:var(--expense)}
+.crow{padding:9px 0;border-bottom:1px solid var(--line)}.crow:last-of-type{border-bottom:0}
+.crow .n{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:14px;font-weight:700;margin-bottom:6px}
+.crow input{border:0;border-radius:10px;background:var(--chip);padding:8px 10px;font-size:14px;outline:none;font-family:inherit;color:var(--ink)}
+.crow .csub{width:100%}.crow .cbud{width:120px;text-align:right;font-weight:700}
+.bud{margin-bottom:12px}.bud:last-child{margin-bottom:0}
+.pbar{height:8px;border-radius:9px;background:var(--chip);overflow:hidden;margin:6px 0 4px}.pbar i{display:block;height:100%;border-radius:9px;background:var(--accent)}.pbar i.over{background:var(--expense)}
+.bmeta{display:flex;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--sub)}.bmeta b{color:var(--ink);font-size:14px}
+.ins{font-size:14px;line-height:1.6;margin:0;padding-left:18px}.ins li{margin-bottom:4px}
+
 /* 처음 시작 */
 body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.onboarding #title,body.onboarding #status{visibility:hidden}body.onboarding nav.tabs,body.onboarding #stepper{display:none!important}
 .ob{max-width:440px;margin:0 auto;padding:8px 16px 40px}
@@ -87,7 +125,7 @@ body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.
 .ebtnrow .btn{height:44px;border-radius:14px}
 .row.tap{cursor:pointer;border-radius:10px}
 .row.tap:active{background:var(--chip)}
-.row.empty .a{color:var(--faint);font-weight:500}
+.row.unfilled .a{color:var(--faint);font-weight:500}
 .row .pen{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--chip);color:var(--sub);flex:none}
 .row .pen svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 .memo.pend,.pend{color:var(--fixed)!important;font-weight:600}

@@ -1312,7 +1312,25 @@ function resolveConflicts(list){
 }
 
 /* 입력용 아래 시트 */
+// 아래 시트: 손가락으로 아래로 밀면 닫혀요 (맨 위까지 스크롤된 상태이거나 손잡이를 잡았을 때)
+function swipeClose(el, canClose, close){
+  let y0 = null, dy = 0, drag = false;
+  el.addEventListener('touchstart', e => { y0 = null;
+    if (!el.classList.contains('on') || !canClose() || e.touches.length > 1) return;
+    if (el.scrollTop > 0 && !e.target.closest('.grab,h4')) return;
+    y0 = e.touches[0].clientY; dy = 0; drag = false; }, {passive: true});
+  el.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0;
+    if (!drag){ if (dy < 10){ if (dy < -4) y0 = null; return; } drag = true; el.style.transition = 'none'; document.activeElement?.blur?.(); }
+    el.style.transform = `translateY(${Math.max(0, dy - 10)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
+  const end = () => { if (y0 == null) return; y0 = null; el.style.transition = ''; el.style.transform = '';
+    if (drag && dy > 90) close(); drag = false; };
+  el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+}
+let edNoClose = false;
+swipeClose($('#ed'), () => !edNoClose, () => closeEd());
+swipeClose($('#sheet'), () => true, () => closeSheet());
 function openEd(html, opt = {}){
+  edNoClose = !!opt.noClose;
   const el = $('#ed'); el.className = 'sheet ed on' + (opt.tall ? ' tall' : ''); el.innerHTML = '<div class="grab"></div>' + html;
   $('#edScrim').classList.add('on'); $('#edScrim').onclick = opt.noClose ? null : closeEd;
   const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 60);
@@ -1537,6 +1555,10 @@ const newTxId = () => 'T' + Date.now().toString(36) + Math.random().toString(36)
 const txOf = (m, y = S.year) => { [m, y] = wrapYM(m, y); return S.years?.[y]?.txMode ? (S.years[y].tx?.[m] || []).filter(t => !t.skip) : null; };
 const shortAmt = n => { const a = Math.abs(n); return a >= 1e5 ? Math.round(a / 1e4) + '만' : a >= 1e4 ? (+(a / 1e4).toFixed(1)) + '만' : a.toLocaleString('ko-KR'); };
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
+const PAY_OPTS = ['신용카드', '체크카드', '현금'];
+const payChips = (id, cur) => `<div class="elbl">결제수단</div><div class="echips" id="${id}">${[...PAY_OPTS, ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div>`;
+const bindPay = (id, st) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st.pay = st.pay === b.dataset.p ? '' : b.dataset.p;
+  document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x.dataset.p === st.pay)); });
 const groupKey = t => t.sub || t.name;
 const josa = (w, a, b) => { const c = String(w).charCodeAt(String(w).length - 1); return c >= 0xAC00 && c <= 0xD7A3 && (c - 0xAC00) % 28 ? a : b; };
 
@@ -1655,7 +1677,8 @@ function editTx(id, presetDay){
   const U = usage(y);
   const st = old ? {inc: old.kind === '수입', amt: old.amt, kind: old.kind, name: old.name, sub: old.sub, m: m0, d: old.d, pay: old.pay, memo: old.memo === '반복' ? '' : old.memo}
     : {inc: false, amt: null, kind: null, name: null, sub: '', m: m0, d: presetDay || selDay(y, m0), pay: '', memo: '', rep: false};
-  const pays = Object.keys(U).filter(k => k.startsWith('p|') && k.length > 2).sort((a, z) => U[z] - U[a]).map(k => k.slice(2)).slice(0, 6);
+  const favPay = PAY_OPTS.slice().sort((a, z) => (U['p|' + z] || 0) - (U['p|' + a] || 0)).find(p => U['p|' + p]) || '';
+  if (!old) st.pay = favPay;
   const pad = n => String(n).padStart(2, '0');
   const draw = () => {
     const its = itemsFor(y, st.m, st.inc).slice().sort((a, z) => (U[z.kind + '|' + z.name] || 0) - (U[a.kind + '|' + a.name] || 0));
@@ -1669,17 +1692,17 @@ function editTx(id, presetDay){
       <div class="ehint" id="txHint"></div>
       <div class="elbl">항목</div><div class="echips" id="txItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('') || '<span class="note">항목이 없어요</span>'}</div>
       ${it && it.kind !== '수입' || subs.length ? `<div class="elbl">세부분류${it ? ' · ' + esc(it.name) : ''}</div><div class="echips" id="txSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}<button data-s="+" class="add">+ 추가</button></div>` : ''}
-      <div class="erow2"><label>날짜<input type="date" id="txDate" min="${y}-01-01" max="${y}-12-31" value="${y}-${pad(st.m)}-${pad(st.d)}"></label>
-        <label>결제수단<input id="txPay" list="txPays" maxlength="20" placeholder="예: 신한카드" value="${esc(st.pay)}"></label></div>
-      <datalist id="txPays">${pays.map(p => `<option value="${esc(p)}">`).join('')}</datalist>
+      ${st.inc ? '' : payChips('txPayC', st.pay)}
+      <div class="erow2"><label>날짜<input type="date" id="txDate" min="${y}-01-01" max="${y}-12-31" value="${y}-${pad(st.m)}-${pad(st.d)}"></label></div>
       <input id="txMemo" class="ememo" maxlength="60" placeholder="메모 (예: 회사 근처 국밥)" value="${esc(st.memo)}">
       ${old ? '' : `<label class="echeck"><input type="checkbox" id="txRep"${st.rep ? ' checked' : ''}> 매달 반복 <span class="muted" id="txRepNote">(매달 ${st.d}일, ${st.m < 12 ? `${st.m}~12월` : '12월'})</span></label>`}
       <button class="btn" id="edSave">저장</button>${old ? '<button class="btn ghost danger" id="txDel">삭제</button>' : ''}`);
     const inp = $('#txAmt'), hint = v => $('#txHint').textContent = v == null ? '' : isNaN(v) ? '숫자만 넣어 주세요 (예: 1.2만)' : '= ' + fmtWon(v) + '원';
     bindWon(inp, hint); hint(parseWon(inp.value));
-    const keep = () => { st.amtTxt = inp.value; st.amt = parseWon(inp.value); st.pay = $('#txPay').value.trim(); st.memo = $('#txMemo').value.trim(); if ($('#txRep')) st.rep = $('#txRep').checked;
+    const keep = () => { st.amtTxt = inp.value; st.amt = parseWon(inp.value); st.memo = $('#txMemo').value.trim(); if ($('#txRep')) st.rep = $('#txRep').checked;
       const dv = $('#txDate').value.split('-'); if (dv.length === 3 && +dv[0] === y){ st.m = +dv[1]; st.d = +dv[2]; } };
-    $('#txKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; draw(); });
+    bindPay('txPayC', st);
+    $('#txKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; st.pay = st.inc ? '' : (st.pay || favPay); draw(); });
     $('#txItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
     $('#txSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep();
       if (b.dataset.s === '+'){ const s = (prompt(`${st.name}의 세부분류 이름`) || '').trim().replace(/,/g, ' '); if (!s) return; st.sub = s; st.newSub = s; }
@@ -1694,10 +1717,10 @@ function editTx(id, presetDay){
     if (st.amt == null || Number.isNaN(st.amt) || st.amt <= 0) return toast('금액을 넣어 주세요');
     if (!st.name) return toast('항목을 골라 주세요');
     if (!st.m || !st.d || st.d > daysIn(y, st.m)) return toast('날짜를 확인해 주세요');
-    const ops = [], tx = {id: old ? old.id : newTxId(), d: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.pay, memo: st.memo, skip: false};
+    const ops = [], tx = {id: old ? old.id : newTxId(), d: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : st.pay, memo: st.memo, skip: false};
     if (st.newSub && st.sub === st.newSub) for (let mm = st.m; mm <= 12; mm++){ const it = findBudget(Y, mm, st.kind, st.name, 0);
       if (it && !(it.subs || []).includes(st.sub)) ops.push({t: 'cat', y, m: mm, kind: st.kind, name: st.name, subs: [...(it.subs || []), st.sub], bud: it.bud ?? null}); }
-    if (st.rep){ const rep = {day: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.pay, memo: st.memo};
+    if (st.rep){ const rep = {day: st.d, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : st.pay, memo: st.memo};
       tx.id = repId(rep); if (!tx.memo) tx.memo = '반복';
       for (let mm = st.m; mm <= 12; mm++){ const L = (Y.reps[mm] || []).filter(r => repId(r) !== tx.id); ops.push({t: 'reps', y, m: mm, reps: [...L, rep]}); } }
     if (old && st.m !== m0) ops.push({t: 'tx', y, m: m0, act: 'del', tx: {id: old.id}});
@@ -1732,13 +1755,15 @@ function editRep(ri){
       <div class="ewon"><input id="rpAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${esc(amtV)}"><span>원</span></div><div class="ehint"></div>
       <div class="elbl">항목</div><div class="echips" id="rpItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>
       ${subs.length ? `<div class="elbl">세부분류</div><div class="echips" id="rpSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}</div>` : ''}
-      <div class="erow2"><label>매달<input id="rpDay" type="number" inputmode="numeric" min="1" max="31" value="${st.day}"></label><label>결제수단<input id="rpPay" maxlength="20" value="${esc(st.pay || '')}"></label></div>
+      ${st.inc ? '' : payChips('rpPayC', st.pay || '')}
+      <div class="erow2"><label>매달 (일)<input id="rpDay" type="number" inputmode="numeric" min="1" max="31" value="${st.day}"></label></div>
       <input id="rpMemo" class="ememo" maxlength="60" placeholder="이름 (예: 넷플릭스, 적금)" value="${esc(st.memo || '')}">
       ${m < 12 ? `<label class="echeck"><input type="checkbox" id="rpAfter" checked> ${m + 1}~12월에도 적용</label>` : ''}
       <button class="btn" id="edSave">저장</button>${old ? '<button class="btn ghost danger" id="rpDel">반복 그만하기</button>' : ''}`);
     bindWon($('#rpAmt'));
-    const keep = () => { st.amtTxt = $('#rpAmt').value; st.amt = parseWon($('#rpAmt').value); st.day = Math.min(Math.max(+$('#rpDay').value || 1, 1), 31); st.pay = $('#rpPay').value.trim(); st.memo = $('#rpMemo').value.trim(); };
-    $('#rpKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; draw(); });
+    const keep = () => { st.amtTxt = $('#rpAmt').value; st.amt = parseWon($('#rpAmt').value); st.day = Math.min(Math.max(+$('#rpDay').value || 1, 1), 31); st.memo = $('#rpMemo').value.trim(); };
+    bindPay('rpPayC', st);
+    $('#rpKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; if (st.inc) st.pay = ''; draw(); });
     $('#rpItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
     $('#rpSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.sub = st.sub === b.dataset.s ? '' : b.dataset.s; draw(); });
     $('#edX').onclick = openReps;
@@ -1748,7 +1773,7 @@ function editRep(ri){
         ops.push({t: 'reps', y, m: mm, reps: rep ? [...L, rep] : L}); }
       closeEd(); commit(ops); applyReps(); };
     $('#edSave').onclick = () => { keep(); if (st.amt == null || Number.isNaN(st.amt) || st.amt <= 0) return toast('금액을 넣어 주세요'); if (!st.name) return toast('항목을 골라 주세요');
-      save({day: st.day, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.pay, memo: st.memo}); };
+      save({day: st.day, kind: st.kind, name: st.name, sub: st.sub, amt: st.amt, pay: st.inc ? '' : (st.pay || ''), memo: st.memo}); };
     if (old) $('#rpDel').onclick = () => { if (confirm('이 반복 거래를 그만할까요? 이미 들어간 거래는 그대로 있어요.')) save(null); };
   };
   draw();

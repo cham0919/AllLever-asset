@@ -44,7 +44,7 @@ st["A5"] = "전년 12월 말 부채"; body(st["A5"], bold=True)
 body(st["B5"], WON, inp=True)
 st["C5"] = "← 1월 대출 상환액 계산용 (작년 12월 자산관리 시트의 부채 합계). 비워 두면 1월 상환액은 0"; st["C5"].font = f(False, 9, SUB)
 
-BUDGET = [("수입", "월급1"), ("수입", "월급2"), ("수입", "기타수입"),
+BUDGET = [("수입", "월급"), ("수입", "기타수입"),
           ("고정비", "주거비"), ("고정비", "용돈"), ("고정비", "관리비"), ("고정비", "통신"),
           ("변동비", "할부금"), ("변동비", "생활비"), ("변동비", "초과금"), ("변동비", "의료비"), ("변동비", "기타")]
 st["A6"] = "가계부 항목"; st["A6"].font = f(True, 12)
@@ -152,6 +152,9 @@ for m in range(1, 13):
         for j in range(len(REP_H)): body(ws.cell(r, 17 + j), WON if j == 4 else None, inp=True)
     dvk = DataValidation(type="list", formula1='"수입,고정비,변동비"', allow_blank=True)
     ws.add_data_validation(dvk); dvk.add(f"I{T0}:I{TX_END}"); dvk.add(f"R{T0}:R{T0 + 200}")
+    dvp = DataValidation(type="list", formula1='"신용카드,체크카드,현금"', allow_blank=True, showErrorMessage=True, errorStyle="information",
+                         error="신용카드·체크카드·현금 중에서 고르는 걸 권해요. 그대로 쓰려면 '예'를 누르세요.")
+    ws.add_data_validation(dvp); dvp.add(f"M{T0}:M{TX_END}"); dvp.add(f"V{T0}:V{T0 + 200}")
 
     dv = DataValidation(type="list", formula1='"수입,고정비,변동비"', allow_blank=True)
     ws.add_data_validation(dv); dv.add(f"A{T0}:A{T_END - 1}")

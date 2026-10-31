@@ -7,17 +7,22 @@
 //   GET  /auth/start?return=<앱 주소>&nonce=<앱이 만든 일회용 값>   구글 로그인 화면으로 보냄
 //   GET  /auth/callback                  구글이 돌려보내는 곳. 세션을 만들고 앱 주소#alv_sid=…&alv_nonce=… 로 돌려보냄
 //        (앱은 자기가 만든 nonce와 같을 때만 세션을 받아들여요. 남이 만든 로그인 링크로 세션이 심어지는 것을 막아요)
+//   아이폰·안드로이드 앱: /auth/start?return=<앱 주소>&nonce=…&cc=<code_challenge> 로 시작하면
+//        콜백은 세션 대신 일회용 코드를 <앱 주소>#alv_code=…&alv_nonce=… 로 돌려줘요 (60초, 한 번만).
+//   POST /auth/exchange  {code, verifier}  일회용 코드 + 앱만 아는 값 → 세션 (앱 주소를 가로챈 다른 앱은 쓸 수 없어요)
 //   POST /token     (Authorization: Bearer <세션>)  새 접근 토큰
 //   POST /logout    (Authorization: Bearer <세션>)  구글 권한 취소 + 세션 삭제
 //   GET  /health
 //
-// 환경 값 (wrangler.toml vars): GOOGLE_CLIENT_ID, ALLOWED_RETURN (쉼표로 구분한 허용 앱 주소 접두어)
+// 환경 값 (wrangler.toml vars): GOOGLE_CLIENT_ID, ALLOWED_RETURN (쉼표로 구분한 허용 앱 주소 접두어),
+//                              APP_RETURN (앱으로 돌아오는 주소, 정확히 일치), APP_ORIGINS (앱 화면의 출처, 쉼표로 구분)
 // 비밀 값 (wrangler secret):    GOOGLE_CLIENT_SECRET, ENC_KEY (base64 32바이트)
 // 테스트용 덮어쓰기 (선택):      GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, GOOGLE_REVOKE_URL
 
 const SCOPE = 'openid email https://www.googleapis.com/auth/drive.file';
 const STATE_TTL = 10 * 60 * 1000;            // 로그인 시작 후 10분 안에 돌아와야 함
 const SESSION_IDLE = 180 * 24 * 3600 * 1000; // 180일 동안 안 쓰면 세션 정리
+const CODE_TTL = 60 * 1000;                  // 앱용 일회용 코드는 60초 안에 바꿔야 함
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -31,10 +36,13 @@ const urls = env => ({
   revoke: env.GOOGLE_REVOKE_URL || 'https://oauth2.googleapis.com/revoke',
 });
 const allowedReturns = env => String(env.ALLOWED_RETURN || '').split(',').map(s => s.trim()).filter(Boolean);
+const list = v => String(v || '').split(',').map(s => s.trim()).filter(Boolean);
+const isApp = (env, u) => !!u && list(env.APP_RETURN).includes(u);   // 앱 주소는 정확히 같을 때만
 const returnOk = (env, u) => {
-  try { const x = new URL(u); return allowedReturns(env).some(p => (x.origin + x.pathname).startsWith(p)); } catch { return false; }
+  if (isApp(env, u)) return true;
+  try { const x = new URL(u); return /^https?:$/.test(x.protocol) && allowedReturns(env).some(p => (x.origin + x.pathname).startsWith(p)); } catch { return false; }
 };
-const originOk = (env, o) => !!o && allowedReturns(env).some(p => { try { return new URL(p).origin === o; } catch { return false; } });
+const originOk = (env, o) => !!o && (list(env.APP_ORIGINS).includes(o) || allowedReturns(env).some(p => { try { return new URL(p).origin === o; } catch { return false; } }));
 
 async function aesKey(env){
   const raw = unb64u(env.ENC_KEY || '');
@@ -69,11 +77,12 @@ function bearer(req){ const m = /^Bearer\s+([\w-]{20,})$/.exec(req.headers.get('
 const emailFromIdToken = idt => { try { return JSON.parse(dec.decode(unb64u(idt.split('.')[1]))).email || null; } catch { return null; } };
 
 async function authStart(req, env, url){
-  const ret = url.searchParams.get('return') || '', nonce = url.searchParams.get('nonce') || '';
+  const ret = url.searchParams.get('return') || '', nonce = url.searchParams.get('nonce') || '', cc = url.searchParams.get('cc') || '';
   if (!returnOk(env, ret)) return page('허용되지 않은 앱 주소예요.');
   if (!/^[\w-]{16,64}$/.test(nonce)) return page('앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');
+  if (isApp(env, ret) && !/^[\w-]{43}$/.test(cc)) return page('앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');   // 앱은 확인값 필수
   const state = rand(24), now = Date.now();
-  await env.DB.prepare('INSERT INTO auth_state (state, return_url, created, nonce) VALUES (?1, ?2, ?3, ?4)').bind(state, ret, now, nonce).run();
+  await env.DB.prepare('INSERT INTO auth_state (state, return_url, created, nonce, cc) VALUES (?1, ?2, ?3, ?4, ?5)').bind(state, ret, now, nonce, isApp(env, ret) ? cc : null).run();
   await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
   const q = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID, redirect_uri: url.origin + '/auth/callback', response_type: 'code',
@@ -85,10 +94,10 @@ async function authStart(req, env, url){
 
 async function authCallback(req, env, url){
   const state = url.searchParams.get('state') || '', code = url.searchParams.get('code');
-  const row = await env.DB.prepare('SELECT return_url, created, nonce FROM auth_state WHERE state = ?1').bind(state).first();
+  const row = await env.DB.prepare('SELECT return_url, created, nonce, cc FROM auth_state WHERE state = ?1').bind(state).first();
   if (row) await env.DB.prepare('DELETE FROM auth_state WHERE state = ?1').bind(state).run();
   if (!row || Date.now() - row.created > STATE_TTL) return page('로그인 요청이 만료됐어요.');
-  const back = (frag) => Response.redirect(row.return_url.split('#')[0] + '#' + new URLSearchParams({...frag, alv_nonce: row.nonce || ''}), 302);
+  const back = (frag) => new Response(null, {status: 302, headers: {Location: row.return_url.split('#')[0] + '#' + new URLSearchParams({...frag, alv_nonce: row.nonce || ''}), 'Cache-Control': 'no-store'}});
   if (!code) return back({alv_err: url.searchParams.get('error') || 'denied'});
   const r = await fetch(urls(env).token, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: new URLSearchParams({code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,
@@ -100,7 +109,29 @@ async function authCallback(req, env, url){
   const sid = rand(32), now = Date.now(), email = emailFromIdToken(t.id_token || '');
   await env.DB.prepare('INSERT INTO sessions (sid_hash, email, refresh_enc, created, last_used) VALUES (?1, ?2, ?3, ?4, ?4)')
     .bind(await sha256(sid), email, await seal(env, t.refresh_token), now).run();
+  if (row.cc){   // 앱: 세션 대신 일회용 코드
+    const code = rand(32);
+    await env.DB.prepare('INSERT INTO app_codes (code_hash, sid_enc, email, cc, created) VALUES (?1, ?2, ?3, ?4, ?5)')
+      .bind(await sha256(code), await seal(env, sid), email, row.cc, now).run();
+    return back({alv_code: code});
+  }
   return back({alv_sid: sid, alv_email: email || ''});
+}
+
+async function exchange(req, env){   // 앱: 일회용 코드 + verifier → 세션
+  const b = await req.json().catch(() => ({}));
+  const code = String(b.code || ''), verifier = String(b.verifier || '');
+  if (!/^[\w-]{20,}$/.test(code) || !/^[\w-]{43,128}$/.test(verifier)) return json({error: 'bad_request'}, 400);
+  const h = await sha256(code);
+  const row = await env.DB.prepare('SELECT sid_enc, email, cc, created FROM app_codes WHERE code_hash = ?1').bind(h).first();
+  if (row) await env.DB.prepare('DELETE FROM app_codes WHERE code_hash = ?1').bind(h).run();   // 맞든 틀리든 한 번만
+  if (!row || Date.now() - row.created > CODE_TTL) return json({error: 'expired'}, 400);
+  if (await sha256(verifier) !== row.cc){   // 앱 주소를 가로챈 쪽: 세션도 같이 지워요
+    const sid = await open(env, row.sid_enc);
+    await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(await sha256(sid)).run();
+    return json({error: 'mismatch'}, 400);
+  }
+  return json({sid: await open(env, row.sid_enc), email: row.email || ''});
 }
 
 async function token(req, env){
@@ -160,10 +191,11 @@ async function route(req, env){
     const url = new URL(req.url);
     if (req.method === 'OPTIONS') return cors(env, req, new Response(null, {status: 204}));
     try {
-      if (url.pathname.startsWith('/auth/') && await limited(env, req, 'auth')) return page('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429);
-      if ((url.pathname === '/token' || url.pathname === '/logout') && await limited(env, req, 'token')) return cors(env, req, json({error: 'rate_limited'}, 429));
+      if (url.pathname.startsWith('/auth/') && url.pathname !== '/auth/exchange' && await limited(env, req, 'auth')) return page('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429);
+      if (['/token', '/logout', '/auth/exchange'].includes(url.pathname) && await limited(env, req, 'token')) return cors(env, req, json({error: 'rate_limited'}, 429));
       if (req.method === 'GET' && url.pathname === '/auth/start') return await authStart(req, env, url);
       if (req.method === 'GET' && url.pathname === '/auth/callback') return await authCallback(req, env, url);
+      if (req.method === 'POST' && url.pathname === '/auth/exchange') return cors(env, req, await exchange(req, env));
       if (req.method === 'POST' && url.pathname === '/token') return cors(env, req, await token(req, env));
       if (req.method === 'POST' && url.pathname === '/logout') return cors(env, req, await logout(req, env));
       if (url.pathname === '/health') return json({ok: true});
@@ -178,4 +210,5 @@ async function cleanup(env){   // 매일: 오래 안 쓴 세션과 남은 로그
   const now = Date.now();
   await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(now - SESSION_IDLE).run();
   await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
+  await env.DB.prepare('DELETE FROM app_codes WHERE created < ?1').bind(now - CODE_TTL).run();
 }

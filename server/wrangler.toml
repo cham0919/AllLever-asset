@@ -7,6 +7,9 @@ workers_dev = true
 GOOGLE_CLIENT_ID = "919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com"
 # 로그인 후 돌아갈 수 있는 앱 주소 (쉼표로 구분)
 ALLOWED_RETURN = "https://cham0919.github.io/AllLever-asset/"
+# 아이폰·안드로이드 앱으로 돌아오는 주소 (정확히 일치)와 앱 화면의 출처 (아이폰 capacitor://localhost, 안드로이드 https://localhost)
+APP_RETURN = "com.alllever.asset://auth"
+APP_ORIGINS = "capacitor://localhost,https://localhost"
 
 [[d1_databases]]
 binding = "DB"

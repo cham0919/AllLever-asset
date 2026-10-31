@@ -6,7 +6,8 @@ const GOOGLE = {
   clientId: '919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com',        // OAuth 클라이언트 ID (웹 애플리케이션) … .apps.googleusercontent.com
   apiKey:   'AIzaSyA737jtGTgXBmwvRO-DuAgPvxDMVWN3CZQ',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
   appId:    '919106003112',        // Google Cloud 프로젝트 번호 (숫자)
-  authServer: 'https://alllever-asset-auth.alllever.workers.dev',      // 로그인 유지 서버 주소 (server/ 폴더, 예: https://alllever-asset-auth.xxx.workers.dev). 비우면 1시간 로그인 방식
+  authServer: 'https://alllever-asset-auth.alllever.workers.dev',
+  pickerPage: 'https://cham0919.github.io/AllLever-asset/picker.html',   // 앱(아이폰·안드로이드)에서 시트 선택 창을 여는 웹 페이지      // 로그인 유지 서버 주소 (server/ 폴더, 예: https://alllever-asset-auth.xxx.workers.dev). 비우면 1시간 로그인 방식
 };
 const G_SCOPE = 'https://www.googleapis.com/auth/drive.file email';
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
@@ -44,6 +45,7 @@ async function gToken(interactive, pending){
       else throw new Error('로그인 서버 응답 오류');
     }
     if (!interactive) return null;
+    if (NATIVE){ await nativeLogin(); return gToken(false); }   // 앱: 로그인 창을 띄웠다가 돌아오면 바로 이어서
     gLogin(pending || 'sync');
     return new Promise(() => {});   // 구글 로그인 화면으로 이동 중
   }
@@ -73,6 +75,55 @@ function gLogin(pending){
   const back = location.origin + location.pathname;
   location.href = gServer() + '/auth/start?return=' + encodeURIComponent(back) + '&nonce=' + nonce + (S.guser ? '&hint=' + encodeURIComponent(S.guser) : '');
 }
+/* ───────── 아이폰·안드로이드 앱: 시스템 로그인 창 ─────────
+   구글은 앱 내부 화면(WebView)에서의 로그인을 막아요. 그래서 앱에서는
+   아이폰: ASWebAuthenticationSession(앱에 넣은 WebAuth 플러그인), 안드로이드: Chrome Custom Tabs(@capacitor/browser)로
+   로그인 서버 주소를 열고, com.alllever.asset:// 주소로 돌아오면 그 주소를 받아요. */
+const APP_SCHEME = 'com.alllever.asset';
+const b64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+async function sha256b64u(text){
+  if (!crypto.subtle) throw new Error('이 기기에서는 안전한 로그인을 쓸 수 없어요');
+  return b64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))));
+}
+let nativeOpen = null;   // 진행 중인 창 (두 번 열리지 않게)
+async function nativeAuthSession(url, host){
+  if (nativeOpen) throw new Error('이미 창이 열려 있어요');
+  const ios = window.Capacitor.getPlatform() === 'ios';
+  nativeOpen = (async () => {
+    if (ios) return (await nativePlugin('WebAuth').start({url, scheme: APP_SCHEME})).url;
+    const App = nativePlugin('App'), Browser = nativePlugin('Browser');   // 안드로이드: 앱 주소로 돌아오거나 창을 닫을 때까지 기다려요
+    let subs = [];
+    try {
+      return await new Promise(async (ok, bad) => {
+        subs.push(await App.addListener('appUrlOpen', e => { if (String(e.url || '').startsWith(`${APP_SCHEME}://${host}`)) ok(e.url); }));
+        subs.push(await Browser.addListener('browserFinished', () => setTimeout(() => bad(Object.assign(new Error('로그인 창을 닫았어요'), {canceled: true})), 800)));
+        await Browser.open({url, presentationStyle: 'popover'});
+      });
+    } finally { subs.forEach(s => s.remove()); Browser.close().catch(() => {}); }
+  })();
+  try { return await nativeOpen; }
+  catch(e){ if (e.code === 'canceled' || e.canceled) throw Object.assign(new Error(host === 'auth' ? '로그인 창을 닫았어요' : '시트 선택 창을 닫았어요'), {canceled: true}); throw e; }
+  finally { nativeOpen = null; }
+}
+// 로그인: 앱만 아는 값(verifier)을 만들고 그 해시만 서버에 보내요. 돌아온 일회용 코드는 verifier가 있어야 세션으로 바꿀 수 있어서,
+// 다른 앱이 com.alllever.asset:// 주소를 가로채도 쓸 수 없어요 (PKCE).
+async function nativeLogin(){
+  const verifier = b64url(crypto.getRandomValues(new Uint8Array(32))), cc = await sha256b64u(verifier);
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(24)));
+  const q = new URLSearchParams({return: `${APP_SCHEME}://auth`, nonce, cc}); if (S.guser) q.set('hint', S.guser);
+  const back = await nativeAuthSession(gServer() + '/auth/start?' + q, 'auth');
+  const h = new URLSearchParams(String(back).split('#')[1] || '');
+  if (h.get('alv_nonce') !== nonce) throw new Error('이 기기에서 시작한 로그인이 아니에요. 다시 시도해 주세요');
+  if (h.has('alv_err')){ const e = h.get('alv_err');
+    throw new Error(e === 'access_denied' || e === 'denied' ? '구글 권한을 허용하지 않았어요' : e === 'scope' ? '구글 드라이브 권한에 체크해야 시트를 볼 수 있어요' : '구글 로그인을 마치지 못했어요 (' + e + ')'); }
+  let r, j;
+  try { r = await fetch(gServer() + '/auth/exchange', {method: 'POST', headers: {'Content-Type': 'application/json'}, cache: 'no-store', body: JSON.stringify({code: h.get('alv_code'), verifier})}); j = await r.json(); }
+  catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
+  if (!r.ok || !/^[\w-]{40,64}$/.test(j.sid || '')) throw new Error('구글 로그인을 마치지 못했어요. 다시 시도해 주세요');
+  LS.set('gsid', j.sid);
+  if (j.email){ S.guser = j.email; LS.set('guser', j.email); }
+}
+
 // 구글 로그인에서 돌아왔을 때: 주소의 #alv_sid=… 를 저장하고 주소창에서 지운 뒤, 하려던 동작을 이어서 해요.
 function gReturn(){
   const h = new URLSearchParams(location.hash.slice(1));
@@ -133,7 +184,7 @@ async function gPick(){
   } catch(e){ toast(e.message); }
 }
 function gChooser(files){
-  const el = $('#gChooser'), sa = isStandalone();
+  const el = $('#gChooser'), sa = isStandalone() && !NATIVE;
   const day = t => { const d = new Date(t); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} 수정`; };
   el.innerHTML = `<h5>연결할 시트 고르기</h5>
     ${files.length ? files.map(f => `<label><input type="checkbox" value="${esc(f.id)}"><span>${esc(f.name)}<small>${day(f.modifiedTime)}</small></span></label>`).join('')
@@ -155,6 +206,7 @@ function gChooser(files){
   };
 }
 async function gPicker(){
+  if (NATIVE) return nativePicker();
   try {
     const tok = await gToken(true, 'pick');
     await loadJs('https://apis.google.com/js/api.js');
@@ -171,6 +223,21 @@ async function gPicker(){
       }).build();
     picker.setVisible(true);
   } catch(e){ toast(e.message); }
+}
+// 앱: 구글 선택 창을 시스템 브라우저 창에서 열고(picker.html), 고른 시트의 id·이름만 돌려받아요.
+async function nativePicker(){
+  try {
+    const tok = await gToken(true, 'pick');
+    const back = await nativeAuthSession(GOOGLE.pickerPage + '#t=' + encodeURIComponent(tok), 'picked');
+    const h = new URLSearchParams(String(back).split('#')[1] || '');
+    if (!h.has('docs')) return;
+    let docs = []; try { docs = JSON.parse(h.get('docs')); } catch(e){}
+    docs = (Array.isArray(docs) ? docs : []).filter(d => d && /^[\w-]{10,200}$/.test(d.id) && [MIME_SHEET, MIME_XLSX].includes(d.mime))
+      .map(d => ({id: d.id, name: String(d.name || '').slice(0, 200), mime: d.mime}));
+    if (!docs.length) return toast('구글 시트를 골라 주세요');
+    $('#gChooser').hidden = true;
+    const n = gAdd(docs); if (n) syncGoogle(true); else toast('이미 연결된 시트예요');
+  } catch(e){ if (!e.canceled) toast(e.message); }
 }
 // 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
 function busy(t, sub = ''){   // 전체 화면 로딩창 (t 없으면 닫기)
@@ -235,7 +302,7 @@ function gRemove(i){
   syncSheet();
 }
 function gSignOut(){
-  if (!confirm('구글 계정 연결을 해제할까요? 연결한 시트 목록도 지워져요. (구글 드라이브의 파일은 그대로예요)')) return;
+  if (!confirm('구글 계정 연결을 해제할까요?\n\n· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.')) return;
   const sid = LS.get('gsid', null);
   if (sid && gServer()) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
   else try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}

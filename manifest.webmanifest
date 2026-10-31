@@ -1,6 +1,6 @@
 {
-  "name": "자산관리",
-  "short_name": "자산관리",
+  "name": "머니머슬 - 가계부, 자산관리",
+  "short_name": "머니머슬",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

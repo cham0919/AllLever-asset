@@ -162,7 +162,7 @@ async function gPicker(){
     const P = google.picker;
     const view = new P.DocsView(P.ViewId.SPREADSHEETS).setMode(P.DocsViewMode.LIST).setIncludeFolders(false);
     const picker = new P.PickerBuilder().setOAuthToken(tok).setDeveloperKey(GOOGLE.apiKey).setAppId(GOOGLE.appId)
-      .addView(view).enableFeature(P.Feature.MULTISELECT_ENABLED).setLocale('ko').setTitle('연도별 자산관리 시트를 고르세요')
+      .addView(view).enableFeature(P.Feature.MULTISELECT_ENABLED).setLocale('ko').setTitle('머니머슬에서 쓸 연도별 시트를 고르세요')
       .setCallback(async d => {
         if (d[P.Response.ACTION] !== P.Action.PICKED) return;
         const docs = d[P.Response.DOCUMENTS].map(x => ({id: x[P.Document.ID], name: x[P.Document.NAME], mime: x[P.Document.MIME_TYPE]}));

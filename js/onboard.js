@@ -42,7 +42,7 @@ function viewOnboard(){
     return;
   }
   el.innerHTML = `<section class="ob">
-    <div class="ob-hero"><div class="ob-logo">₩</div><h2>자산관리</h2>
+    <div class="ob-hero"><img class="ob-logo" src="icon-180.png" alt=""><h2>머니머슬</h2>
       <p class="ob-sub">가계부와 자산을 한곳에서 보고, 목표까지 얼마나 왔는지 확인해요.</p></div>
     <ul class="ob-list">
       <li><b>가계부</b><span>수입·지출·저축을 달마다 정리하고 예산과 비교해요.</span></li>
@@ -101,7 +101,7 @@ async function addLocalYear(){
 function exportYear(y){
   const M = S.years[y]; if (!M) return;
   const wb = XLSX.utils.book_new();
-  const st = [['기준 연도', y], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
+  const st = [['기준 연도', y], [], ['이 파일은 머니머슬 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(st), '설정');
   for (let m = 1; m <= 12; m++){
     const rows = [[`${m}월 가계부`], [], ['구분(1차)', '항목(2차)', '금액', '메모']];
@@ -140,7 +140,7 @@ function exportYear(y){
   for (const a of M.assets) ar.push([a.big, a.mid, a.small, ...a.v.map(v => v ?? null)]);
   ar.push(['▲ 항목 추가 시 이 행 위에 행 삽입']);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ar), '자산관리');
-  XLSX.writeFile(wb, `자산관리_${y}_백업.xlsx`);
+  XLSX.writeFile(wb, `머니머슬_${y}_백업.xlsx`);
 }
 function exportAll(){
   const ys = yearsList(); if (!ys.length) return toast('내보낼 데이터가 없어요');

@@ -159,11 +159,11 @@ function viewAnalysis(){
     return `<div class="ms ${got ? 'done' : ''}"><div class="ck">${got ? '✓' : ''}</div><div class="n">${money(v)}</div><div class="r">${right}</div></div>`;
   };
 
-  // FIRE: 금융자산(홈의 금융투자 + 현금) 전부 배당 → 세후 (배당률·세후 비율은 설정에서)
+  // FIRE: 금융자산(홈의 금융투자 + 현금) 전부 배당 → 배당소득세 15.4% 뗀 금액 (배당률은 설정에서)
   const G = HOME_GROUPS, inv = grpSum(G.invest, cur), cash = grpSum(G.cash, cur), fin = inv + cash;
   // 원금 선택: 금융자산(부동산 제외) 또는 순자산 전체(부동산 매각·부채 상환 후 남는 돈)
   const useNet = S.fireBase === 'net', principal = useNet ? Math.max(cur.net, 0) : fin;
-  const DR = g.divRate ?? 0.04, DN = g.divNet ?? 0.846;
+  const DR = g.divRate ?? 0.04, DN = DIV_NET;
   const divYear = principal * DR * DN, divMonth = divYear / 12, goalMonth = T * DR * DN / 12;
   const cover = inp.expense ? divMonth / inp.expense : null;
 
@@ -209,7 +209,7 @@ function viewAnalysis(){
     <div class="res" id="simRes"></div>
   </section>
 
-  <section class="card"><h3>FIRE · 배당 전환 시 <small>연 ${+(DR * 100).toFixed(2)}% · 세후 ${+(DN * 100).toFixed(1)}%</small></h3>
+  <section class="card"><h3>FIRE · 배당 전환 시 <small>연 ${+(DR * 100).toFixed(2)}% · 배당소득세 15.4% 차감</small></h3>
     <div class="seg" id="segFire" style="margin-bottom:14px"><button data-v="fin">금융자산</button><button data-v="net">순자산 전체</button></div>
     <div class="t" style="font-size:13px;color:var(--sub);font-weight:600">지금 ${useNet ? '순자산을 모두' : '금융자산을 모두'} 배당에 넣으면 매달</div>
     <div class="big2 num" style="color:var(--saving);margin-top:4px">${money(divMonth)}</div>

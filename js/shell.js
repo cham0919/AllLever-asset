@@ -74,15 +74,15 @@ function goalFields(){
   const g = S.goal;
   $('#gTarget').value = g.target / 1e8; $('#gRate').value = +(g.planRate * 100).toFixed(2); $('#gSave').value = g.planSave / 1e4;
   $('#gYear').value = g.planYear; $('#gBase').value = g.planBase == null ? '' : g.planBase / 1e4;
-  $('#gDiv').value = +((g.divRate ?? 0.04) * 100).toFixed(2); $('#gNet').value = +((g.divNet ?? 0.846) * 100).toFixed(1);
+  $('#gDiv').value = +((g.divRate ?? 0.04) * 100).toFixed(2);
   const save = () => {
     const n = id => { const v = $(id).value.trim(); return v === '' ? null : +v; };
     S.goal = {target: (n('#gTarget') || 10) * 1e8, planRate: (n('#gRate') ?? 6) / 100, planSave: (n('#gSave') ?? 2400) * 1e4,
               planYear: n('#gYear') || new Date().getFullYear(), planBase: n('#gBase') == null ? null : n('#gBase') * 1e4,
-              divRate: (n('#gDiv') ?? 4) / 100, divNet: (n('#gNet') ?? 84.6) / 100};
+              divRate: (n('#gDiv') ?? 4) / 100};
     LS.set('goal', S.goal); S.sim = null; if (S.tab === 'analysis') render();
   };
-  ['#gTarget','#gRate','#gSave','#gYear','#gBase','#gDiv','#gNet'].forEach(id => $(id).onchange = save);
+  ['#gTarget','#gRate','#gSave','#gYear','#gBase','#gDiv'].forEach(id => $(id).onchange = save);
 }
 function syncSheet(){
   goalFields();
@@ -108,7 +108,7 @@ function syncSheet(){
     if (off.length === PAY_OPTS.length) return toast('결제수단을 하나 이상 골라 두세요');
     S.payOff = off; LS.set('payOff', off); syncSheet(); });
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
-  $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
+  $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세금 15.4%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   appVersion().then(v => { $('#sVer').textContent = v; });
 }

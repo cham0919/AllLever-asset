@@ -289,7 +289,7 @@ function openBudEdit(){
       ${has('last') || has('pbud') ? `<div class="bqf"><span>빠르게 채우기</span>${has('last') ? '<button data-f="last">지난달 지출</button>' : ''}${ref.some(R => R.avgN >= 2) ? '<button data-f="avg">최근 3개월 평균</button>' : ''}${has('pbud') ? '<button data-f="pbud">지난달 예산 그대로</button>' : ''}</div>` : ''}
       ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기">빼기</button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
-        || '<p class="note" style="text-align:center;margin:18px 0">아직 예산을 정한 항목이 없어요. 위 버튼으로 채우거나 아래에서 항목을 추가하세요.</p>'}
+        || ''}
       ${off.length ? `<div class="elbl" style="margin-top:14px">+ 예산 항목 추가</div><div class="echips">${off.map(i => `<button class="badd-c" data-x="${items.indexOf(i)}">+ ${esc(i.name)}</button>`).join('')}</div>` : ''}
       <div class="ebar"><div class="t"></div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
     $('#ed').scrollTop = sc;
@@ -424,7 +424,7 @@ function openReps(){
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const L = Y.reps[m] || [];
   openEd(`<h4>반복 거래 <button class="ex" id="edX">닫기</button></h4>
-    ${KINDS.map(k => { const R = L.filter(r => r.kind === k); return R.length ? `<div class="ecard"><div class="etitle">${k}</div>${R.map(r => `<div class="row tap" data-ri="${L.indexOf(r)}"><div class="n">${esc(r.memo || r.sub || r.name)}<small>${esc(r.name)}${r.sub ? ' › ' + esc(r.sub) : ''} · 매달 ${r.day}일${r.pay ? ' · ' + esc(r.pay) : ''}</small></div><div class="a num">${r.amt == null ? '금액 없음' : fmtWon(r.amt)}</div></div>`).join('')}</div>` : ''; }).join('') || '<p class="note">아직 반복 거래가 없어요. 월급·관리비·통신비·적금처럼 매달 있는 거래를 등록해 두세요.</p>'}
+    ${KINDS.map(k => { const R = L.filter(r => r.kind === k); return R.length ? `<div class="ecard"><div class="etitle">${k}</div>${R.map(r => `<div class="row tap" data-ri="${L.indexOf(r)}"><div class="n">${esc(r.memo || r.sub || r.name)}<small>${esc(r.name)}${r.sub ? ' › ' + esc(r.sub) : ''} · 매달 ${r.day}일${r.pay ? ' · ' + esc(r.pay) : ''}</small></div><div class="a num">${r.amt == null ? '금액 없음' : fmtWon(r.amt)}</div></div>`).join('')}</div>` : ''; }).join('') || ''}
     <button class="btn" id="rpAdd">+ 반복 거래 추가</button>`, {tall: L.length > 4});
   $('#edX').onclick = closeEd; $('#rpAdd').onclick = () => editRep(null);
   $('#ed').querySelectorAll('[data-ri]').forEach(el => el.onclick = () => editRep(+el.dataset.ri));
@@ -483,7 +483,7 @@ function openCats(kinds){
         return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>
           <div class="echips sm">${e.subs.map((s, j) => `<button class="csub" data-j="${j}">${esc(s)} <b aria-label="삭제">×</b></button>`).join('')}<button class="add cadd">+ 세부분류</button></div></div>`; }).join('')}
         <button class="eadd" data-kind="${k}">+ ${k} 항목 추가</button></div>`; }).join('')}
-      <div class="ebar"><div class="t">세부분류는 시트에 저장돼요 · 예산은 예산 탭에서</div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
+      <div class="ebar"><div class="t"></div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
     $('#ed').scrollTop = sc;
     $('#ed').querySelectorAll('.crow').forEach(r => { const x = +r.dataset.k, e = ed[x], it = items[x];
       r.querySelectorAll('.csub').forEach(b => b.onclick = () => { e.subs.splice(+b.dataset.j, 1); draw(); });

@@ -28,7 +28,7 @@ const S = {
   meta: LS.get('meta', {}),
   month: { budget:null, asset:null },
   assetPick: LS.get('assetPick','__net'),
-  goal: Object.assign({target:1e9, planRate:0.06, planSave:2.4e7, planYear:new Date().getFullYear(), planBase:null, divRate:0.04, divNet:0.846}, LS.get('goal', {})),
+  goal: Object.assign({target:1e9, planRate:0.06, planSave:2.4e7, planYear:new Date().getFullYear(), planBase:null, divRate:0.04}, LS.get('goal', {})),
   sim: null,   // 시뮬레이터 값 (앱 안에서만, 저장 안 함)
   fireBase: LS.get('fireBase', 'fin'),   // FIRE 배당 원금: fin 금융자산 / net 순자산
 };
@@ -51,6 +51,7 @@ const pctPlain = (x, d=1) => (x*100).toFixed(d) + '%';
 const dir = n => n>0 ? 'up' : n<0 ? 'down' : 'muted';
 const axisWon = v => { const a=Math.abs(v); return a>=1e8 ? (+(v/1e8).toFixed(2)).toString()+'억' : a>=1e4 ? Math.round(v/1e4).toLocaleString()+'만' : v; };
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const DIV_NET = 1 - 0.154;   // 배당소득세 15.4%를 뗀 비율
 const PALETTE = ['#4A5FC1','#2A9D74','#F59E0B','#8B5CF6','#F04452','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
 
 /* ───────── 엑셀 파싱 (값은 앱에서 직접 계산) ───────── */

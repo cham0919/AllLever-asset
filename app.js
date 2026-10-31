@@ -1094,7 +1094,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];
     if (S.years[S.year].txMode) openItemTx(m, k); else editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
-  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'cats') openCats();
+  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats();
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
 
 /* ───────── 입력: 앱에서 고친 값을 구글 시트에 저장 ─────────
@@ -1615,7 +1615,7 @@ function viewCal(){
     <div class="dayhead"><b>${m}월 ${d0}일 ${WD[new Date(y, m - 1, d0).getDay()]}요일</b><span class="num">${dayT.length ? (dSum > 0 ? '+' : '') + fmtWon(dSum) + '원' : ''}</span></div>
     ${dayT.map(t => txRowHtml(t, ed)).join('') || `<p class="note" style="margin:6px 0">${ed ? '거래가 없어요. + 버튼으로 입력하세요.' : '거래가 없어요.'}</p>`}
   </section>
-  ${ed ? `<div class="ltools"><button data-act="reps">↻ 반복 거래 ${reps ? reps + '개' : '설정'}</button><button data-act="cats">분류 · 예산</button></div>
+  ${ed ? `<div class="ltools"><button data-act="addRep">+ 반복 거래 추가</button><button data-act="cats">분류 · 예산</button></div>
   <button class="fab" data-act="addTx" aria-label="거래 추가">+</button><div style="height:64px"></div>` : `<p class="note" style="text-align:center">${esc(editNote(y))}</p>`}`;
   $('#view').querySelectorAll('[data-day]').forEach(el => el.onclick = () => { S.sel = {y, m, d: +el.dataset.day}; render(); });
 }
@@ -1742,7 +1742,7 @@ function openReps(){
   $('#edX').onclick = closeEd; $('#rpAdd').onclick = () => editRep(null);
   $('#ed').querySelectorAll('[data-ri]').forEach(el => el.onclick = () => editRep(+el.dataset.ri));
 }
-function editRep(ri){
+function editRep(ri, direct){
   const y = S.year, m = S.month.budget, Y = S.years[y], old = ri != null ? (Y.reps[m] || [])[ri] : null;
   const st = old ? {...old, inc: old.kind === '수입'} : {inc: false, day: 1, kind: null, name: null, sub: '', amt: null, pay: '', memo: ''};
   const draw = () => {
@@ -1750,7 +1750,9 @@ function editRep(ri){
     if (!its.some(i => i.kind === st.kind && i.name === st.name)){ st.kind = its[0]?.kind; st.name = its[0]?.name; st.sub = ''; }
     const it = its.find(i => i.kind === st.kind && i.name === st.name), subs = [...(it?.subs || [])]; if (st.sub && !subs.includes(st.sub)) subs.unshift(st.sub);
     const amtV = st.amtTxt ?? (st.amt != null ? fmtWon(st.amt) : '');
-    openEd(`<h4>${old ? '반복 거래 고치기' : '반복 거래 추가'} <button class="ex" id="edX">취소</button></h4><div style="height:10px"></div>
+    const nRep = (Y.reps[m] || []).length;
+    openEd(`<h4>${old ? '반복 거래 고치기' : '반복 거래 추가'} <button class="ex" id="edX">취소</button></h4>
+      ${!old && nRep ? `<button class="elink" id="rpList">등록된 반복 거래 ${nRep}개 보기 ›</button>` : '<div style="height:10px"></div>'}
       <div class="eseg" id="rpKind"><button data-v="0"${st.inc ? '' : ' class="on"'}>지출</button><button data-v="1"${st.inc ? ' class="on"' : ''}>수입</button></div>
       <div class="ewon"><input id="rpAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${esc(amtV)}"><span>원</span></div><div class="ehint"></div>
       <div class="elbl">항목</div><div class="echips" id="rpItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>
@@ -1766,7 +1768,8 @@ function editRep(ri){
     $('#rpKind').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.inc = b.dataset.v === '1'; st.name = null; if (st.inc) st.pay = ''; draw(); });
     $('#rpItem').querySelectorAll('button').forEach(b => b.onclick = () => { keep(); const [k, ...n] = b.dataset.k.split('|'); st.kind = k; st.name = n.join('|'); st.sub = ''; draw(); });
     $('#rpSub')?.querySelectorAll('button').forEach(b => b.onclick = () => { keep(); st.sub = st.sub === b.dataset.s ? '' : b.dataset.s; draw(); });
-    $('#edX').onclick = openReps;
+    $('#edX').onclick = direct ? closeEd : openReps;
+    if ($('#rpList')) $('#rpList').onclick = openReps;
     const months = () => ($('#rpAfter')?.checked ? Array.from({length: 13 - m}, (_, i) => m + i) : [m]);
     const save = rep => { const oid = old ? repId(old) : null, ops = [];
       for (const mm of months()){ const L = (Y.reps[mm] || []).filter(r => repId(r) !== oid && (!rep || repId(r) !== repId(rep)));

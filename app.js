@@ -69,7 +69,7 @@ function parseWorkbook(buf){
     tx[m] = []; reps[m] = [];
     if (R){
       const h = R.findIndex(r => str(r[0]).startsWith('구분'));
-      const C = h >= 0 ? ledgerCols(R[h]) : null;
+      const C = h >= 0 ? ledgerCols(R, h) : null;
       if (h >= 0) for (let i=h+1; i<R.length; i++){
         const r = R[i], k = str(r[0]);
         if (k.startsWith('▲')) break;
@@ -79,8 +79,8 @@ function parseWorkbook(buf){
         items.push({kind:k, name: name || '(이름 없음)', amt: amt ?? 0, memo: str(r[3]), filled: amt!=null,
           subs: C.sub >= 0 ? splitSubs(r[C.sub]) : [], bud: C.bud >= 0 ? toNum(r[C.bud]) : null});
       }
-      if (C && C.tx >= 0){ txMode = true; tx[m] = readTx(R, h, C.tx, m).map(({row, ...t}) => t); }
-      if (C && C.rep >= 0) reps[m] = readReps(R, h, C.rep).map(({row, ...r}) => r);
+      if (C && C.tx >= 0){ txMode = true; tx[m] = readTx(R, C.txH, C.tx, m).map(({row, ...t}) => t); }
+      if (C && C.rep >= 0) reps[m] = readReps(R, C.repH, C.rep, C.repEnd).map(({row, ...r}) => r);
     }
     budget[m] = items;
   }
@@ -1194,6 +1194,14 @@ async function insertRow(fileId, title, rowNum, tok){   // rowNum(1부터) 위�
   await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({requests: [{insertDimension: {range: {sheetId: sid, dimension: 'ROWS', startIndex: rowNum - 1, endIndex: rowNum}, inheritFromBefore: true}}]})}, tok);
 }
+// rowNum(1부터) 위치의 c0~c1 열(0부터, c1 미포함)에만 n칸을 넣고 아래를 밀어요. fmtRow(1부터) 행의 서식·드롭다운을 새 칸에 복사.
+async function insertCells(fileId, title, rowNum, c0, c1, n, tok, fmtRow = rowNum - 1){
+  const sid = await sheetIdOf(fileId, title, tok); if (sid == null) throw new Error(`'${title}' 시트를 찾지 못했어요`);
+  const g = (r0, r1) => ({sheetId: sid, startRowIndex: r0, endRowIndex: r1, startColumnIndex: c0, endColumnIndex: c1});
+  const dst = g(rowNum - 1, rowNum - 1 + n), src = g(fmtRow - 1, fmtRow), requests = [{insertRange: {range: dst, shiftDimension: 'ROWS'}}];
+  if (fmtRow >= 1 && fmtRow < rowNum) for (const pasteType of ['PASTE_FORMAT', 'PASTE_DATA_VALIDATION']) requests.push({copyPaste: {source: src, destination: dst, pasteType}});
+  await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({requests})}, tok);
+}
 async function writeCells(fileId, data, tok, input = 'RAW'){
   if (!data.length) return;
   await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${fileId}/values:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -1215,17 +1223,17 @@ async function flushQueue(interactive){
         for (const m of op.months){
           const title = m + '월', [V] = await readRanges(op.fileId, [`${qs(title)}!A1:Z2200`], tok), L = locateBudget(V);
           const hit = L && L.rows.find(r => r.kind === op.kind && r.name === op.name); if (!hit) continue;
-          const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = ledgerCols(V[h]);
+          const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = ledgerCols(V, h);
           if (op.t === 'renB'){
             const data = [{range: `${qs(title)}!B${hit.row}`, values: [[op.to]]}];
-            if (C.tx >= 0){ const T = readTx(V, h, C.tx, m); for (const t of T) if (t.kind === op.kind && t.name === op.name) data.push({range: `${qs(title)}!${colL(C.tx + 2)}${t.row}`, values: [[op.to]]}); }
-            if (C.rep >= 0){ const P = readReps(V, h, C.rep); for (const r of P) if (r.kind === op.kind && r.name === op.name) data.push({range: `${qs(title)}!${colL(C.rep + 2)}${r.row}`, values: [[op.to]]}); }
+            if (C.tx >= 0){ const T = readTx(V, C.txH, C.tx, m); for (const t of T) if (t.kind === op.kind && t.name === op.name) data.push({range: `${qs(title)}!${colL(C.tx + 2)}${t.row}`, values: [[op.to]]}); }
+            if (C.rep >= 0){ const P = readReps(V, C.repH, C.rep, C.repEnd); for (const r of P) if (r.kind === op.kind && r.name === op.name) data.push({range: `${qs(title)}!${colL(C.rep + 2)}${r.row}`, values: [[op.to]]}); }
             await writeCells(op.fileId, data, tok);
           } else {
-            if (C.tx >= 0 && readTx(V, h, C.tx, m).some(t => !t.skip && t.kind === op.kind && t.name === op.name)) continue;   // 그새 거래가 생겼으면 남겨요
-            if (C.rep >= 0){ const P = readReps(V, h, C.rep), keep = P.filter(r => !(r.kind === op.kind && r.name === op.name));
-              if (keep.length !== P.length){ const n = Math.max(0, ...P.map(r => r.row - h - 1));
-                await writeCells(op.fileId, [{range: `${qs(title)}!${colL(C.rep)}${h + 2}:${colL(C.rep + REP_COLS - 1)}${h + 1 + n}`, values: Array.from({length: n}, (_, i) => keep[i] ? repRow(keep[i]) : Array(REP_COLS).fill(''))}], tok); } }
+            if (C.tx >= 0 && readTx(V, C.txH, C.tx, m).some(t => !t.skip && t.kind === op.kind && t.name === op.name)) continue;   // 그새 거래가 생겼으면 남겨요
+            if (C.rep >= 0){ const P = readReps(V, C.repH, C.rep, C.repEnd), keep = P.filter(r => !(r.kind === op.kind && r.name === op.name));
+              if (keep.length !== P.length){ const n = Math.max(0, ...P.map(r => r.row - C.repH - 1));
+                await writeCells(op.fileId, [{range: `${qs(title)}!${colL(C.rep)}${C.repH + 2}:${colL(C.rep + REP_COLS - 1)}${C.repH + 1 + n}`, values: Array.from({length: n}, (_, i) => keep[i] ? repRow(keep[i]) : Array(REP_COLS).fill(''))}], tok); } }
             const sid = await sheetIdOf(op.fileId, title, tok);   // 왼쪽 표(A~F)만 한 칸 위로 (오른쪽 거래 내역은 그대로)
             await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${op.fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
               body: JSON.stringify({requests: [{deleteRange: {range: {sheetId: sid, startRowIndex: hit.row - 1, endRowIndex: hit.row, startColumnIndex: 0, endColumnIndex: 6}, shiftDimension: 'ROWS'}}]})}, tok);
@@ -1236,10 +1244,11 @@ async function flushQueue(interactive){
           const title = m + '월', [V] = await readRanges(op.fileId, [`${qs(title)}!A1:X400`], tok), L = locateBudget(V);
           if (!L || !L.marker) throw new Error(`${title} 시트에서 '▲' 행을 찾지 못했어요`);
           if (L.rows.some(r => r.kind === op.kind && r.name === op.name)) continue;
-          await insertRow(op.fileId, title, L.marker, tok);
+          const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = ledgerCols(V, h);
+          if (C.tx >= 0) await insertCells(op.fileId, title, L.marker, 0, 6, 1, tok);   // 새 양식: 왼쪽 표(A~F)에만 칸 넣기
+          else await insertRow(op.fileId, title, L.marker, tok);
           await writeCells(op.fileId, [{range: `${qs(title)}!A${L.marker}:B${L.marker}`, values: [[op.kind, op.name]]}], tok);
-          const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = ledgerCols(V[h]);
-          if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = h + 2, r = L.marker;   // 거래 합계 수식
+          if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = C.txH + 2, r = L.marker;   // 거래 합계 수식
             await writeCells(op.fileId, [{range: `${qs(title)}!C${r}`, values: [[`=SUMIFS($${c(4)}$${r0}:$${c(4)}$2100,$${c(1)}$${r0}:$${c(1)}$2100,A${r},$${c(2)}$${r0}:$${c(2)}$2100,B${r})`]]}], tok, 'USER_ENTERED'); }
         }
       } else {
@@ -1258,9 +1267,9 @@ async function flushQueue(interactive){
     for (const ops of Object.values(byMon)){
       const fileId = ops[0].fileId, title = ops[0].m + '월';
       const [V] = await readRanges(fileId, [`${qs(title)}!A1:Z2200`], tok);
-      const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = h >= 0 ? ledgerCols(V[h]) : null;
+      const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = h >= 0 ? ledgerCols(V, h) : null;
       if (!C || C.tx < 0 || C.rep < 0 || C.sub < 0){ ops.forEach(o => o.err = `${title} 시트에 거래 내역 칸이 없어요 (새 양식 시트가 필요해요)`); continue; }
-      const curTx = readTx(V, h, C.tx, ops[0].m), curRep = readReps(V, h, C.rep), L = locateBudget(V);
+      const curTx = readTx(V, C.txH, C.tx, ops[0].m), curRep = readReps(V, C.repH, C.rep, C.repEnd), L = locateBudget(V);
       let tx = curTx.map(({row, ...t}) => t), reps = null; const data = [];
       for (const op of ops){
         if (op.t === 'tx'){ const i = tx.findIndex(t => t.id === op.tx.id);
@@ -1270,12 +1279,17 @@ async function flushQueue(interactive){
           if (!hit){ op.err = '시트에서 항목을 찾지 못했어요'; continue; }
           data.push({range: `${qs(title)}!${colL(C.sub)}${hit.row}:${colL(C.sub + 1)}${hit.row}`, values: [[op.subs.join(', '), op.bud ?? '']]}); }
       }
-      const block = (c, w, rows, used) => { const n = Math.max(rows.length, used); if (!n) return null;
-        return {range: `${qs(title)}!${colL(c)}${h + 2}:${colL(c + w - 1)}${h + 1 + n}`, values: Array.from({length: n}, (_, i) => rows[i] || Array(w).fill(''))}; };
-      const usedTx = Math.max(0, ...curTx.map(t => t.row - h - 1)), usedRep = Math.max(0, ...curRep.map(r => r.row - h - 1));
+      const block = (c, hh, w, rows, used) => { const n = Math.max(rows.length, used); if (!n) return null;
+        return {range: `${qs(title)}!${colL(c)}${hh + 2}:${colL(c + w - 1)}${hh + 1 + n}`, values: Array.from({length: n}, (_, i) => rows[i] || Array(w).fill(''))}; };
+      const usedTx = Math.max(0, ...curTx.map(t => t.row - C.txH - 1)), usedRep = Math.max(0, ...curRep.map(r => r.row - C.repH - 1));
+      if (reps && reps.length > repCap(C)){   // 반복 거래 칸이 모자라면 오른쪽 블록에만 줄을 넣어 거래 내역을 아래로 밀어요
+        const k = reps.length - repCap(C);
+        await insertCells(fileId, title, C.repH + 2 + repCap(C), C.rep, C.rep + TX_COLS, k, tok, C.repH + 2);
+        C.txH += k; C.repEnd += k;
+      }
       tx.sort((a, z) => a.d - z.d);
-      if (ops.some(o => o.t === 'tx')){ const b = block(C.tx, TX_COLS, tx.map(txRow), usedTx); if (b) data.push(b); }
-      if (reps){ const b = block(C.rep, REP_COLS, reps.map(repRow), usedRep); if (b) data.push(b); }
+      if (ops.some(o => o.t === 'tx')){ const b = block(C.tx, C.txH, TX_COLS, tx.map(txRow), usedTx); if (b) data.push(b); }
+      if (reps){ const b = block(C.rep, C.repH, REP_COLS, reps.map(repRow), Math.min(usedRep, repCap(C))); if (b) data.push(b); }
       await writeCells(fileId, data, tok);
       const Yl = S.years?.[ops[0].y];   // 다른 기기·시트에서 넣은 거래도 화면에 바로 반영
       if (Yl?.txMode && ops.some(o => o.t === 'tx')){ Yl.tx[ops[0].m] = tx.map(t => ({...t})); if (reps) Yl.reps[ops[0].m] = reps.map(r => ({...r})); recalcMonth(Yl, ops[0].m); LS.set('years', S.years); }
@@ -1538,12 +1552,21 @@ function dayOf(v){
   if (typeof v === 'number') return v > 31 ? new Date(Math.round((v - 25569) * 864e5)).getUTCDate() : Math.round(v);
   const mm = /(\d{1,2})\D*$/.exec(String(v).trim()); return mm ? +mm[1] : null;
 }
-function ledgerCols(H){   // 머리글 행 → {sub, bud, tx, rep} 열 번호(없으면 -1)
-  H = (H || []).map(str); const r = {sub: -1, bud: -1, tx: -1, rep: -1};
-  H.forEach((h, j) => { if (j < 7 && h === '세부분류') r.sub = j; if (j < 7 && h === '월 예산') r.bud = j;
-    if (h === '일' && j >= 6){ if (H[j + 7] === 'ID' && r.tx < 0) r.tx = j; else if (r.rep < 0 && H[j + 7] !== 'ID') r.rep = j; } });
+// 시트 배치 찾기: 구분별 표 머리글(h) → 세부분류·월 예산 열, 거래 내역·반복 거래는 각자 머리글 행을 찾아요.
+// 옛 양식은 세 표가 한 머리글 행에 나란히, 새 양식은 오른쪽에 반복 거래(위) · 거래 내역(아래)이 세로로 있어요.
+function ledgerCols(V, h){
+  const r = {sub: -1, bud: -1, tx: -1, txH: -1, rep: -1, repH: -1, repEnd: undefined};
+  const H0 = (V[h] || []).map(str);
+  H0.forEach((x, j) => { if (j < 7 && x === '세부분류') r.sub = j; if (j < 7 && x === '월 예산') r.bud = j; });
+  for (let i = 0; i < V.length && (r.tx < 0 || r.rep < 0); i++){
+    const H = (V[i] || []).map(str);
+    H.forEach((x, j) => { if (x !== '일' || j < 6 || H[j + 1] !== '구분' || H[j + 2] !== '항목') return;
+      if (H[j + 7] === 'ID'){ if (r.tx < 0){ r.tx = j; r.txH = i; } } else if (r.rep < 0){ r.rep = j; r.repH = i; } });
+  }
+  if (r.tx >= 0 && r.rep === r.tx && r.txH > r.repH) r.repEnd = r.txH - 1;   // 세로 배치: 반복 거래는 거래 내역 제목 행 전까지
   return r;
 }
+const repCap = C => C.repEnd == null ? Infinity : C.repEnd - C.repH - 2;   // 반복 거래 칸 수 (거래 내역 위 빈 줄 하나는 남김)
 function readTx(V, h, c, m){
   const out = [];
   for (let i = h + 1; i < V.length; i++){ const r = V[i] || [], g = k => r[c + k];
@@ -1554,9 +1577,9 @@ function readTx(V, h, c, m){
   }
   return out;
 }
-function readReps(V, h, c){
+function readReps(V, h, c, end = V.length){
   const out = [];
-  for (let i = h + 1; i < V.length; i++){ const r = V[i] || [], g = k => r[c + k];
+  for (let i = h + 1; i < Math.min(end, V.length); i++){ const r = V[i] || [], g = k => r[c + k];
     const kind = str(g(1)), name = str(g(2)); if (!KINDS.includes(kind) || !name) continue;
     out.push({day: Math.min(Math.max(dayOf(g(0)) || 1, 1), 31), kind, name, sub: str(g(3)), amt: toNum(g(4)), pay: str(g(5)), memo: str(g(6)), row: i + 1});
   }
@@ -1991,14 +2014,31 @@ function exportYear(y){
     if (!M.txMode){
       for (const i of M.budget[m] || []) rows.push([i.kind, i.name, i.filled ? i.amt : null, i.memo || null]);
       rows.push(['▲ 항목 추가 시 이 행 위에 행 삽입']);
-    } else {   // 새 양식: 세부분류·예산 + 거래 내역(H~) + 반복 거래(Q~)
-      rows[2] = ['구분(1차)', '항목(2차)', '금액', '메모', '세부분류', '월 예산', null, '일', '구분', '항목', '세부분류', '금액', '결제수단', '메모', 'ID', null, '일', '구분', '항목', '세부분류', '금액', '결제수단', '메모'];
+    } else {   // 새 양식: 왼쪽 요약·달력·구분별 표, 오른쪽 반복 거래(위)·거래 내역(아래) — 값만 (수식 없음)
       const its = M.budget[m] || [], T = (M.tx[m] || []).slice().sort((a, z) => a.d - z.d), P = M.reps[m] || [];
-      const n = Math.max(its.length + 1, T.length, P.length);
-      for (let i = 0; i < n; i++){
-        const it = its[i], main = it ? [it.kind, it.name, it.amt, it.memo || null, (it.subs || []).join(', ') || null, it.bud ?? null] : i === its.length ? ['▲ 항목 추가 시 이 행 위에 행 삽입', null, null, null, null, null] : Array(6).fill(null);
-        rows.push([...main, null, ...(T[i] ? txRow(T[i]) : Array(TX_COLS).fill(null)), null, ...(P[i] ? repRow(P[i]) : Array(REP_COLS).fill(null))]);
-      }
+      const put = (r, c, v) => { while (rows.length <= r) rows.push([]); const R = rows[r]; while (R.length < c) R.push(null); R[c] = v; };
+      rows.length = 0; put(0, 0, `${y}년 ${m}월 가계부`);
+      const b = bMonth(m, y), live = T.filter(t => !t.skip), bud = its.filter(i => i.kind !== '수입').reduce((a, i) => a + (i.bud || 0), 0);
+      put(3, 0, '요약');
+      [['총 수입', b.income], ['고정비', b.fixed], ['변동비', b.variable], ['총 지출', b.expense], ['일반 저축', b.cash], ['대출상환 저축', b.repay], ['저축 합계', b.saving]]
+        .forEach(([k, v], j) => { put(4, j, k); put(5, j, v); });
+      [['저축률', b.rate], ['지출 예산', bud || null], ['예산 남은 금액', bud ? bud - b.expense : null]].forEach(([k, v], j) => { put(6, j, k); put(7, j, v); });
+      put(9, 0, '달력 · 날짜별 지출'); WD.forEach((w, k) => put(10, k, w));
+      const off = new Date(y, m - 1, 1).getDay(), nd = daysIn(y, m);
+      for (let d = 1; d <= nd; d++){ const i = off + d - 1, w = Math.floor(i / 7), k = i % 7;
+        const v = live.filter(t => t.d === d && t.kind !== '수입').reduce((a, t) => a + t.amt, 0);
+        put(11 + w * 2, k, d); put(12 + w * 2, k, v || null); }
+      const T0 = 26; put(T0 - 2, 0, '항목별 합계');
+      ['구분(1차)', '항목(2차)', '금액', '메모', '세부분류', '월 예산'].forEach((h, j) => put(T0 - 1, j, h));
+      its.forEach((it, i) => [it.kind, it.name, it.amt, it.memo || null, (it.subs || []).join(', ') || null, it.bud ?? null].forEach((v, j) => put(T0 + i, j, v)));
+      put(T0 + its.length, 0, '▲ 항목 추가 시 이 행 위에 행 삽입');
+      const RC = 8, RH = 3, cap = Math.max(20, P.length), TH = RH + cap + 3;
+      put(RH - 1, RC, '반복 거래 · 매달 이 날짜에 거래 내역으로 자동 입력');
+      ['일', '구분', '항목', '세부분류', '금액', '결제수단', '메모'].forEach((h, j) => put(RH, RC + j, h));
+      P.forEach((r, i) => repRow(r).forEach((v, j) => put(RH + 1 + i, RC + j, v === '' ? null : v)));
+      put(TH - 1, RC, '거래 내역 · 앱에서 입력하면 아래로 쌓여요 (ID는 앱이 써요)');
+      ['일', '구분', '항목', '세부분류', '금액', '결제수단', '메모', 'ID'].forEach((h, j) => put(TH, RC + j, h));
+      T.forEach((t, i) => txRow(t).forEach((v, j) => put(TH + 1 + i, RC + j, v === '' ? null : v)));
     }
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), `${m}월`);
   }

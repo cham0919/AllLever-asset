@@ -69,7 +69,7 @@ for r in range(8 + len(ASSETS), AS_END + 1):
     for j in range(3): body(st.cell(r, 5 + j), inp=True)
 
 st["I6"] = "사용 방법"; st["I6"].font = f(True, 12)
-guide = ["1) 매달 'N월' 시트 오른쪽 '거래 내역'에 날짜(일)·구분·항목·금액을 적으면 항목 금액이 자동 합산되고 합계·저축·그래프가 계산됩니다.",
+guide = ["1) 매달 'N월' 시트 오른쪽 '거래 내역'에 날짜(일)·구분·항목·금액을 적으면 왼쪽 요약·달력(날짜별 지출)·구분별 금액이 자동으로 계산됩니다.",
          "   세부분류·월 예산·반복 거래도 달마다 그 시트에 있어요. 앱에서 바꾸면 이후 달에도 함께 적용할 수 있어요.",
          "2) 가계부 항목 추가: 해당 월 시트의 '▲ 이 행 위에 삽입' 행 위에 행을 넣고 구분/항목/금액 입력.",
          "   항목 삭제: 그 행을 통째로 삭제. 구분은 반드시 수입·고정비·변동비 중 하나.",
@@ -91,21 +91,41 @@ EX = {  # 예시 값 (1~3월)
 }
 HDR = 8; A0 = HDR + 1; A_END = A0 + len(ASSETS)   # 자산관리: 1~7행 제목 + 1월 대비 요약
 S0 = A_END + 2; DEBT_ROW = S0 + 4                  # 요약 블록 머리글 / 부채 합계 행
-T0 = 15                      # 표 첫 행
-T_END = T0 + len(BUDGET)     # 마커 행 (범위에 포함 → 위에 삽입 시 범위 자동 확장)
-TX_END = 2000; TX_FMT = 120; REP_FMT = 20
+# ── 월 시트 배치 ──
+# 왼쪽(A~G) 위→아래: 요약(4~8행) · 달력(10~23행) · 항목별 표(26행 머리글)
+# 오른쪽(I~P) 위→아래: 반복 거래(4행 머리글, 20줄) · 거래 내역(27행 머리글)
+CAL_T = 10; CAL_H = 11; CAL0 = 12            # 달력 제목 / 요일 / 첫 주
+T0 = 27                                      # 항목별 표 첫 행 (머리글 26행)
+T_END = T0 + len(BUDGET)                     # 마커 행 (범위에 포함 → 위에 삽입 시 범위 자동 확장)
+RC = 9                                       # 오른쪽 블록 시작 열 (I)
+REP_H0 = 4; REP_CAP = 20                     # 반복 거래 머리글 행 / 칸 수
+TX_H0 = REP_H0 + REP_CAP + 3                 # 거래 내역 머리글 행 (27)
+TX0 = TX_H0 + 1; TX_END = 2000; TX_FMT = 150
 TX_H = ["일", "구분", "항목", "세부분류", "금액", "결제수단", "메모", "ID"]
 REP_H = ["일", "구분", "항목", "세부분류", "금액", "결제수단", "메모"]
+cl = lambda k: L(RC + k)                     # 오른쪽 블록 k번째 열 글자
+TXR = lambda k: f"${cl(k)}${TX0}:${cl(k)}${TX_END}"   # 거래 내역 k열 범위
 SUBS = {"생활비": "식비, 카페, 장보기, 교통, 쇼핑, 생활용품, 경조사", "주거비": "월세, 대출이자", "통신": "휴대폰, 인터넷",
         "의료비": "병원, 약국", "기타": "여행, 선물, 교육", "기타수입": "이자, 환급, 중고판매"}
-dv_kind = DataValidation(type="list", formula1='"수입,고정비,변동비"', allow_blank=True)
+CALAMT = '#,##0;-#,##0;""'
+WEEK = ["일", "월", "화", "수", "목", "금", "토"]
+SUN = "DC2626"; SAT = "2563EB"; CALBG = "F9FAFB"; TODAY = "DBEAFE"
 for m in range(1, 13):
     ws = wb.create_sheet(f"{m}월")
     title(ws, None)
     ws["A1"] = f'=설정!$B$4&"년 {m}월 가계부"'; ws["A1"].font = f(True, 16)
-    ws["A2"] = "금액은 오른쪽 '거래 내역'(H열~)의 합계로 자동 계산돼요. 저축 합계 = 일반 저축(수입 − 지출) + 대출상환 저축(자산관리 시트 부채 감소분, 자동)"; ws["A2"].font = f(False, 9, SUB)
-    rngA = f"$A${T0}:$A${T_END}"; rngC = f"$C${T0}:$C${T_END}"
-    head(ws["A4"]); ws["A4"] = "요약"; head(ws["B4"]); ws["B4"] = "금액"
+    ws["A2"] = "오른쪽 '거래 내역'에 적으면 요약·달력·구분별 금액이 자동으로 계산돼요. 저축 합계 = 일반 저축(수입 − 지출) + 대출상환 저축(자산관리 시트 부채 감소분)"; ws["A2"].font = f(False, 9, SUB)
+    rngA = f"$A${T0}:$A${T_END}"; rngC = f"$C${T0}:$C${T_END}"; rngF = f"$F${T0}:$F${T_END}"
+
+    # ── 달력 보조값 (숨김 서식): 연도 · 날짜 수 · 1일 요일 칸 ──
+    ws.cell(CAL_T, 1, "달력 · 날짜별 지출").font = f(True, 12)
+    ws.cell(CAL_T, 3, "수입은 빼고 지출만 더해요").font = f(False, 9, SUB)
+    for col, fm in ((5, "=설정!$B$4"), (6, f"=DAY(EOMONTH(DATE($E${CAL_T},{m},1),0))"), (7, f"=WEEKDAY(DATE($E${CAL_T},{m},1))-1")):
+        c = ws.cell(CAL_T, col, fm); c.number_format = ";;;"; c.font = f(False, 8, SUB)
+    YR, ND, OFF = f"$E${CAL_T}", f"$F${CAL_T}", f"$G${CAL_T}"
+
+    # ── 요약 (4~8행) ──
+    ws["A4"] = "요약"; ws["A4"].font = f(True, 12)
     cur = f"자산관리!{L(3 + m)}"; prv = f"자산관리!{L(2 + m)}"
     cur_has = f"COUNT({cur}${A0}:{L(3 + m)}${A_END})>0"
     if m == 1:   # 전월 = 작년 12월 → 설정 시트 입력값
@@ -113,73 +133,91 @@ for m in range(1, 13):
     else:
         prev_has, prev_debt = f"COUNT({prv}${A0}:{L(2 + m)}${A_END})>0", f"{prv}${DEBT_ROW}"
     REPAY = f"=IF(AND({cur_has},{prev_has}),MAX(0,{prev_debt}-{cur}${DEBT_ROW}),0)"
-    rows = [("총 수입", f'=SUMIF({rngA},"수입",{rngC})', WON, True),
-            ("총 지출", "=B7+B8", WON, True),
-            ("  고정비", f'=SUMIF({rngA},"고정비",{rngC})', WON, False),
-            ("  변동비", f'=SUMIF({rngA},"변동비",{rngC})', WON, False),
-            ("저축 합계", "=B10+B11", WON, True),
-            ("  일반 저축 (수입−지출)", "=B5-B6", WON, False),
-            ("  대출상환 저축 (부채 감소)", REPAY, WON, False),
-            ("저축률", "=IF(B5=0,0,B9/B5)", PCT, False)]
-    for i, (lab, fm, fmt, b) in enumerate(rows):
-        r = 5 + i
-        body(ws.cell(r, 1, lab), bold=b); body(ws.cell(r, 2, fm), fmt, bold=b, color=ACC if r == 9 else INK)
-    # 원형그래프용 (저축이 음수면 0으로 표시)
-    ws["D4"] = "그래프 데이터"; ws["D4"].font = f(True, 9, SUB)
-    for i, (lab, fm) in enumerate([("고정비", "=B7"), ("변동비", "=B8"), ("일반저축", "=MAX(B10,0)")]):
-        ws.cell(5 + i, 4, lab).font = f(False, 9, SUB)
-        c = ws.cell(5 + i, 5, fm); c.font = f(False, 9, SUB); c.number_format = WON
+    TODAYN = f"IF(AND(YEAR(TODAY())={YR},MONTH(TODAY())={m}),DAY(TODAY()),IF(DATE({YR},{m},1)>TODAY(),0,{ND}))"
+    SUMS = [  # (라벨, 수식, 서식, 색)
+        [("총 수입", f'=SUMIF({rngA},"수입",{rngC})', WON, INK), ("고정비", f'=SUMIF({rngA},"고정비",{rngC})', WON, INK),
+         ("변동비", f'=SUMIF({rngA},"변동비",{rngC})', WON, INK), ("총 지출", "=B6+C6", WON, INK),
+         ("일반 저축", "=A6-D6", WON, INK), ("대출상환 저축", REPAY, WON, INK), ("저축 합계", "=E6+F6", WON, ACC)],
+        [("저축률", "=IF(A6=0,0,G6/A6)", PCT, ACC), ("지출 예산", f'=SUMIF({rngA},"<>수입",{rngF})', WON, INK),
+         ("예산 남은 금액", '=IF(B8=0,"",B8-D6)', WON, INK), ("하루 평균 지출", f"=IF({TODAYN}=0,0,D6/{TODAYN})", WON, INK)],
+    ]
+    for k, line in enumerate(SUMS):
+        r = 5 + k * 2
+        for j, (lab, fm, fmt, color) in enumerate(line):
+            c = ws.cell(r, 1 + j, lab); c.font = f(False, 9, SUB); c.fill = PatternFill("solid", fgColor=HEAD); c.border = BOX
+            c.alignment = Alignment(horizontal="center")
+            v = ws.cell(r + 1, 1 + j, fm); body(v, fmt, bold=True, color=color); v.alignment = Alignment(horizontal="right")
 
+    # ── 달력 (요일 머리글 + 6주 × [날짜, 지출]) ──
+    for k, w in enumerate(WEEK):
+        c = ws.cell(CAL_H, 1 + k, w); head(c); c.font = f(True, 10, SUN if k == 0 else SAT if k == 6 else INK)
+    for w in range(6):
+        dr, ar = CAL0 + w * 2, CAL0 + w * 2 + 1
+        for k in range(7):
+            n = w * 7 + k + 1; col = L(1 + k)
+            d = ws.cell(dr, 1 + k, f'=IF(AND({n}-{OFF}>=1,{n}-{OFF}<={ND}),{n}-{OFF},"")')
+            d.font = f(False, 9, SUN if k == 0 else SAT if k == 6 else SUB); d.fill = PatternFill("solid", fgColor=CALBG)
+            d.alignment = Alignment(horizontal="left", vertical="top"); d.border = Border(top=thin, left=thin, right=thin)
+            a = ws.cell(ar, 1 + k, f'=IF({col}{dr}="","",SUMIFS({TXR(4)},{TXR(0)},{col}{dr})-SUMIFS({TXR(4)},{TXR(0)},{col}{dr},{TXR(1)},"수입"))')
+            a.font = f(True, 10); a.number_format = CALAMT; a.alignment = Alignment(horizontal="right", vertical="center")
+            a.border = Border(bottom=thin, left=thin, right=thin)
+        ws.row_dimensions[ar].height = 22
+        for rr in (dr, ar):   # 오늘 칸 강조
+            ws.conditional_formatting.add(f"A{rr}:G{rr}", FormulaRule(formula=[f'AND(A${dr}<>"",DATE({YR},{m},A${dr})=TODAY())'],
+                                                                      fill=PatternFill("solid", fgColor=TODAY, bgColor=TODAY)))
+
+    # ── 구분별 표 ──
+    ws.cell(T0 - 2, 1, "항목별 합계").font = f(True, 12)
+    ws.cell(T0 - 2, 3, "금액은 거래 내역 합계 · 세부분류는 쉼표로 구분").font = f(False, 9, SUB)
     for i, h in enumerate(["구분(1차)", "항목(2차)", "금액", "메모", "세부분류", "월 예산"]): head(ws.cell(T0 - 1, 1 + i, h))
-    ws.cell(T0 - 2, 5, "세부분류는 쉼표로 구분 · 이 달 기준").font = f(False, 9, SUB)
     for i, (k, n) in enumerate(BUDGET):
         r = T0 + i
         body(ws.cell(r, 1, k), inp=True); body(ws.cell(r, 2, n), inp=True)
-        body(ws.cell(r, 3, f"=SUMIFS($L${T0}:$L${TX_END},$I${T0}:$I${TX_END},A{r},$J${T0}:$J${TX_END},B{r})"), WON)
+        body(ws.cell(r, 3, f"=SUMIFS({TXR(4)},{TXR(1)},A{r},{TXR(2)},B{r})"), WON)
         body(ws.cell(r, 4), inp=True); body(ws.cell(r, 5, SUBS.get(n)), inp=True); body(ws.cell(r, 6), WON, inp=True)
     mk = ws.cell(T_END, 1, "▲ 항목 추가 시 이 행 위에 행 삽입")
     mk.font = f(False, 9, SUB)
     ws.merge_cells(start_row=T_END, start_column=1, end_row=T_END, end_column=6)
-    # 거래 내역 (H~O) · 반복 거래 (Q~W): 이 달 시트에 함께 둬요
-    ws.cell(T0 - 2, 8, "거래 내역 · 앱에서 입력하면 아래로 쌓여요 (ID는 앱이 써요)").font = f(True, 11)
-    for i, h in enumerate(TX_H): head(ws.cell(T0 - 1, 8 + i, h))
-    for r in range(T0, T0 + TX_FMT):
-        for j in range(len(TX_H)): body(ws.cell(r, 8 + j), WON if j == 4 else None, inp=j < 7)
-        ws.cell(r, 15).font = f(False, 8, "9CA3AF")
-    ws.cell(T0 - 2, 17, "반복 거래 · 매달 이 날짜에 거래 내역으로 자동 입력").font = f(True, 11)
-    for i, h in enumerate(REP_H): head(ws.cell(T0 - 1, 17 + i, h))
-    for r in range(T0, T0 + REP_FMT):
-        for j in range(len(REP_H)): body(ws.cell(r, 17 + j), WON if j == 4 else None, inp=True)
+
+    # ── 오른쪽: 반복 거래 (위) · 거래 내역 (아래) ──
+    ws.cell(REP_H0 - 1, RC, "반복 거래 · 매달 이 날짜에 거래 내역으로 자동 입력").font = f(True, 12)
+    for i, h in enumerate(REP_H): head(ws.cell(REP_H0, RC + i, h))
+    for r in range(REP_H0 + 1, REP_H0 + 1 + REP_CAP):
+        for j in range(len(REP_H)): body(ws.cell(r, RC + j), WON if j == 4 else None, inp=True)
+    ws.cell(TX_H0 - 1, RC, "거래 내역 · 앱에서 입력하면 아래로 쌓여요 (ID는 앱이 써요)").font = f(True, 12)
+    for i, h in enumerate(TX_H): head(ws.cell(TX_H0, RC + i, h))
+    for r in range(TX0, TX0 + TX_FMT):
+        for j in range(len(TX_H)): body(ws.cell(r, RC + j), WON if j == 4 else None, inp=j < 7)
+        ws.cell(r, RC + 7).font = f(False, 8, "9CA3AF")
+    REPR = lambda k: f"{cl(k)}{REP_H0 + 1}:{cl(k)}{REP_H0 + REP_CAP}"
     dvk = DataValidation(type="list", formula1='"수입,고정비,변동비"', allow_blank=True)
-    ws.add_data_validation(dvk); dvk.add(f"I{T0}:I{TX_END}"); dvk.add(f"R{T0}:R{T0 + 200}")
+    ws.add_data_validation(dvk); dvk.add(f"{cl(1)}{TX0}:{cl(1)}{TX_END}"); dvk.add(REPR(1)); dvk.add(f"A{T0}:A{T_END - 1}")
     dvp = DataValidation(type="list", formula1='"신용카드,체크카드,현금"', allow_blank=True, showErrorMessage=True, errorStyle="information",
                          error="신용카드·체크카드·현금 중에서 고르는 걸 권해요. 그대로 쓰려면 '예'를 누르세요.")
-    ws.add_data_validation(dvp); dvp.add(f"M{T0}:M{TX_END}"); dvp.add(f"V{T0}:V{T0 + 200}")
-
-    dv = DataValidation(type="list", formula1='"수입,고정비,변동비"', allow_blank=True)
-    ws.add_data_validation(dv); dv.add(f"A{T0}:A{T_END - 1}")
+    ws.add_data_validation(dvp); dvp.add(f"{cl(5)}{TX0}:{cl(5)}{TX_END}"); dvp.add(REPR(5))
     dv2 = DataValidation(type="list", formula1=f"=설정!$B$8:$B${BUD_END}", allow_blank=True,
                          showErrorMessage=True, errorStyle="information",
                          error="설정 시트 목록에 없는 항목입니다. 그대로 사용하려면 '예'를 누르세요.")
     ws.add_data_validation(dv2); dv2.add(f"B{T0}:B{T_END - 1}")
 
-    pie = PieChart(); pie.title = f"{m}월 수입 배분 (지출·저축)"
-    pie.add_data(Reference(ws, min_col=5, min_row=5, max_row=7), titles_from_data=False)
-    pie.set_categories(Reference(ws, min_col=4, min_row=5, max_row=7))
-    pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True; pie.dataLabels.showCatName = True
-    pie.height = 8; pie.width = 11
-    ws.add_chart(pie, "Y4")
-    ws["D9"] = "일반 저축"; ws["E9"] = "=MAX(B10,0)"; ws["D10"] = "대출상환 저축"; ws["E10"] = "=B11"
-    for rr in (9, 10):
-        ws.cell(rr, 4).font = f(False, 9, SUB); ws.cell(rr, 5).font = f(False, 9, SUB); ws.cell(rr, 5).number_format = WON
-    pie2 = PieChart(); pie2.title = f"{m}월 저축 구성"
-    pie2.add_data(Reference(ws, min_col=5, min_row=9, max_row=10), titles_from_data=False)
-    pie2.set_categories(Reference(ws, min_col=4, min_row=9, max_row=10))
-    pie2.dataLabels = DataLabelList(); pie2.dataLabels.showPercent = True; pie2.dataLabels.showCatName = True
-    pie2.height = 8; pie2.width = 11
-    ws.add_chart(pie2, "Y21")
-    for col, w in zip("ABCDEFGHIJKLMNOPQRSTUVW", [18, 16, 14, 18, 26, 12, 3, 6, 9, 12, 10, 12, 12, 18, 10, 3, 6, 9, 12, 10, 12, 12, 18]): ws.column_dimensions[col].width = w
-    ws.freeze_panes = "A4"
+    # ── 그래프 (오른쪽 끝) + 그래프용 값 ──
+    GX = RC + 10   # S열
+    ws.cell(4, GX + 8, "그래프 데이터").font = f(True, 9, SUB)
+    for i, (lab, fm) in enumerate([("고정비", "=B6"), ("변동비", "=C6"), ("일반저축", "=MAX(E6,0)"), (None, None),
+                                   ("일반 저축", "=MAX(E6,0)"), ("대출상환 저축", "=F6")]):
+        if not lab: continue
+        ws.cell(5 + i, GX + 8, lab).font = f(False, 9, SUB)
+        c = ws.cell(5 + i, GX + 9, fm); c.font = f(False, 9, SUB); c.number_format = WON
+    for (r0, r1, ttl, anchor) in ((5, 7, f"{m}월 수입 배분 (지출·저축)", 3), (9, 10, f"{m}월 저축 구성", 20)):
+        pie = PieChart(); pie.title = ttl
+        pie.add_data(Reference(ws, min_col=GX + 9, min_row=r0, max_row=r1), titles_from_data=False)
+        pie.set_categories(Reference(ws, min_col=GX + 8, min_row=r0, max_row=r1))
+        pie.dataLabels = DataLabelList(); pie.dataLabels.showPercent = True; pie.dataLabels.showCatName = True
+        pie.height = 8; pie.width = 11
+        ws.add_chart(pie, f"{L(GX)}{anchor}")
+    widths = [13, 13, 13, 13, 18, 13, 13, 3, 6, 9, 12, 10, 12, 12, 18, 10, 3]
+    for i, w in enumerate(widths): ws.column_dimensions[L(1 + i)].width = w
+    ws.freeze_panes = "A3"
 
 # ───────────────── 월별추이 ─────────────────
 ys = wb.create_sheet("월별추이", 13)
@@ -189,7 +227,7 @@ ys["A2"] = "각 월 시트에서 자동으로 가져옵니다 (입력 불필요)
 H = ["월", "총 수입", "총 지출", "고정비", "변동비", "일반 저축", "대출상환 저축", "저축 합계", "저축률",
      "누적 일반 저축", "누적 대출상환", "누적 저축 합계"]
 for i, h in enumerate(H): head(ys.cell(4, 1 + i, h))
-SRC = ["$B$5", "$B$6", "$B$7", "$B$8", "$B$10", "$B$11", "$B$9"]   # 수입, 지출, 고정, 변동, 일반, 상환, 합계
+SRC = ["$A$6", "$D$6", "$B$6", "$C$6", "$E$6", "$F$6", "$G$6"]   # 수입, 지출, 고정, 변동, 일반, 상환, 합계
 for m in range(1, 13):
     r = 4 + m; sh = f"'{m}월'!"
     body(ys.cell(r, 1, f"{m}월"))
@@ -285,8 +323,8 @@ SUM_ROWS = [  # (라벨, 수식 생성 함수, 서식, 굵게)
     ("총자산 증감률", lambda c, p, m: "" if p is None else f'=IF(OR({c}{S0+7}="",{p}{S0+3}=0),"",{c}{S0+7}/{p}{S0+3})', PCT, False),
     ("전월 대비 순자산 증감", lambda c, p, m: "" if p is None else f'=IF(OR(COUNT({c}${A0}:{c}${A_END})=0,COUNT({p}${A0}:{p}${A_END})=0),"",{c}{S0+5}-{p}{S0+5})', WON, True),
     ("순자산 증감률 (수익률)", lambda c, p, m: "" if p is None else f'=IF(OR({c}{S0+9}="",{p}{S0+5}=0),"",{c}{S0+9}/{p}{S0+5})', PCT, True),
-    ("이번 달 일반 저축 (가계부)", lambda c, p, m: f"='{m}월'!$B$10", WON, False),
-    ("이번 달 대출상환 저축", lambda c, p, m: f"='{m}월'!$B$11", WON, False),
+    ("이번 달 일반 저축 (가계부)", lambda c, p, m: f"='{m}월'!$E$6", WON, False),
+    ("이번 달 대출상환 저축", lambda c, p, m: f"='{m}월'!$F$6", WON, False),
     ("이번 달 저축 합계", lambda c, p, m: f"={c}{S0+11}+{c}{S0+12}", WON, True),
     ("저축 외 자산 변동 (투자손익 등)", lambda c, p, m: "" if p is None else f'=IF({c}{S0+9}="","",{c}{S0+9}-{c}{S0+13})', WON, False),
     ("저축 제외 수익률", lambda c, p, m: "" if p is None else f'=IF(OR({c}{S0+14}="",{p}{S0+5}=0),"",{c}{S0+14}/{p}{S0+5})', PCT, False),

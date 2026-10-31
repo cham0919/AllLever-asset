@@ -1251,7 +1251,7 @@ async function flushQueue(interactive){
                 await writeCells(op.fileId, [{range: `${qs(title)}!${colL(C.rep)}${C.repH + 2}:${colL(C.rep + REP_COLS - 1)}${C.repH + 1 + n}`, values: Array.from({length: n}, (_, i) => keep[i] ? repRow(keep[i]) : Array(REP_COLS).fill(''))}], tok); } }
             const sid = await sheetIdOf(op.fileId, title, tok);   // 왼쪽 표(A~F)만 한 칸 위로 (오른쪽 거래 내역은 그대로)
             await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${op.fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
-              body: JSON.stringify({requests: [{deleteRange: {range: {sheetId: sid, startRowIndex: hit.row - 1, endRowIndex: hit.row, startColumnIndex: 0, endColumnIndex: 6}, shiftDimension: 'ROWS'}}]})}, tok);
+              body: JSON.stringify({requests: [{deleteRange: {range: {sheetId: sid, startRowIndex: hit.row - 1, endRowIndex: hit.row, startColumnIndex: 0, endColumnIndex: C.tx >= 0 ? leftW(C) : 6}, shiftDimension: 'ROWS'}}]})}, tok);
           }
         }
       } else if (op.t === 'addB'){
@@ -1260,7 +1260,7 @@ async function flushQueue(interactive){
           if (!L || !L.marker) throw new Error(`${title} 시트에서 '▲' 행을 찾지 못했어요`);
           if (L.rows.some(r => r.kind === op.kind && r.name === op.name)) continue;
           const h = V.findIndex(r => str((r || [])[0]).startsWith('구분')), C = ledgerCols(V, h);
-          if (C.tx >= 0) await insertCells(op.fileId, title, L.marker, 0, 6, 1, tok);   // 새 양식: 왼쪽 표(A~F)에만 칸 넣기
+          if (C.tx >= 0) await insertCells(op.fileId, title, L.marker, 0, leftW(C), 1, tok);   // 새 양식: 왼쪽 표에만 칸 넣기
           else await insertRow(op.fileId, title, L.marker, tok);
           await writeCells(op.fileId, [{range: `${qs(title)}!A${L.marker}:B${L.marker}`, values: [[op.kind, op.name]]}], tok);
           if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = C.txH + 2, r = L.marker;   // 거래 합계 수식
@@ -1292,7 +1292,8 @@ async function flushQueue(interactive){
         else if (op.t === 'reps') reps = op.reps;
         else { const hit = L.rows.filter(r => r.kind === op.kind && r.name === op.name)[0];
           if (!hit){ op.err = '시트에서 항목을 찾지 못했어요'; continue; }
-          data.push({range: `${qs(title)}!${colL(C.sub)}${hit.row}:${colL(C.sub + 1)}${hit.row}`, values: [[op.subs.join(', '), op.bud ?? '']]}); }
+          data.push({range: `${qs(title)}!${colL(C.sub)}${hit.row}`, values: [[op.subs.join(', ')]]});
+          if (C.bud >= 0) data.push({range: `${qs(title)}!${colL(C.bud)}${hit.row}`, values: [[op.bud ?? '']]}); }
       }
       const block = (c, hh, w, rows, used) => { const n = Math.max(rows.length, used); if (!n) return null;
         return {range: `${qs(title)}!${colL(c)}${hh + 2}:${colL(c + w - 1)}${hh + 1 + n}`, values: Array.from({length: n}, (_, i) => rows[i] || Array(w).fill(''))}; };
@@ -1572,7 +1573,7 @@ function dayOf(v){
 function ledgerCols(V, h){
   const r = {sub: -1, bud: -1, tx: -1, txH: -1, rep: -1, repH: -1, repEnd: undefined};
   const H0 = (V[h] || []).map(str);
-  H0.forEach((x, j) => { if (j < 7 && x === '세부분류') r.sub = j; if (j < 7 && x === '월 예산') r.bud = j; });
+  H0.forEach((x, j) => { if (j < 8 && x === '세부분류' && r.sub < 0) r.sub = j; if (j < 8 && x === '월 예산') r.bud = j; });
   for (let i = 0; i < V.length && (r.tx < 0 || r.rep < 0); i++){
     const H = (V[i] || []).map(str);
     H.forEach((x, j) => { if (x !== '일' || j < 6 || H[j + 1] !== '구분' || H[j + 2] !== '항목') return;
@@ -1581,6 +1582,7 @@ function ledgerCols(V, h){
   if (r.tx >= 0 && r.rep === r.tx && r.txH > r.repH) r.repEnd = r.txH - 1;   // 세로 배치: 반복 거래는 거래 내역 제목 행 전까지
   return r;
 }
+const leftW = C => Math.min(Math.max(6, C.sub + 1, C.bud + 1), C.tx);   // 왼쪽 표 너비 (숨긴 세부분류 열 포함, 거래 내역 앞까지)
 const repCap = C => C.repEnd == null ? Infinity : C.repEnd - C.repH - 2;   // 반복 거래 칸 수 (거래 내역 위 빈 줄 하나는 남김)
 function readTx(V, h, c, m){
   const out = [];
@@ -2044,8 +2046,8 @@ function exportYear(y){
         const v = live.filter(t => t.d === d && t.kind !== '수입').reduce((a, t) => a + t.amt, 0);
         put(11 + w * 2, k, d); put(12 + w * 2, k, v || null); }
       const T0 = 42; put(T0 - 2, 0, '항목별 합계');
-      ['구분(1차)', '항목(2차)', '금액', '메모', '세부분류', '월 예산'].forEach((h, j) => put(T0 - 1, j, h));
-      its.forEach((it, i) => [it.kind, it.name, it.amt, it.memo || null, (it.subs || []).join(', ') || null, it.bud ?? null].forEach((v, j) => put(T0 + i, j, v)));
+      ['구분(1차)', '항목(2차)', '금액', '메모', '월 예산'].forEach((h, j) => put(T0 - 1, j, h)); put(T0 - 1, 7, '세부분류');
+      its.forEach((it, i) => { [it.kind, it.name, it.amt, it.memo || null, it.bud ?? null].forEach((v, j) => put(T0 + i, j, v)); put(T0 + i, 7, (it.subs || []).join(', ') || null); });
       put(T0 + its.length, 0, '▲ 항목 추가 시 이 행 위에 행 삽입');
       const RC = 8, RH = 3, cap = Math.max(20, P.length), TH = RH + cap + 3;
       put(RH - 1, RC, '반복 거래 · 매달 이 날짜에 거래 내역으로 자동 입력');

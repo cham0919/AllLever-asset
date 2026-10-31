@@ -70,7 +70,7 @@ for r in range(8 + len(ASSETS), AS_END + 1):
 
 st["I6"] = "사용 방법"; st["I6"].font = f(True, 12)
 guide = ["1) 매달 'N월' 시트 오른쪽 '거래 내역'에 날짜(일)·구분·항목·금액을 적으면 왼쪽 요약·달력(날짜별 지출)·구분별 금액이 자동으로 계산됩니다.",
-         "   세부분류·월 예산·반복 거래도 달마다 그 시트에 있어요. 앱에서 바꾸면 이후 달에도 함께 적용할 수 있어요.",
+         "   월 예산·반복 거래도 달마다 그 시트에 있어요. 세부분류 목록은 숨긴 H열에 있어요(앱에서 관리).",
          "2) 가계부 항목 추가: 해당 월 시트의 '▲ 이 행 위에 삽입' 행 위에 행을 넣고 구분/항목/금액 입력.",
          "   항목 삭제: 그 행을 통째로 삭제. 구분은 반드시 수입·고정비·변동비 중 하나.",
          "3) 자산 항목 추가/삭제도 '자산관리' 시트의 '▲ 이 행 위에 삽입' 행 기준으로 동일하게 합니다.",
@@ -116,7 +116,7 @@ for m in range(1, 13):
     title(ws, None)
     ws["A1"] = f'=설정!$B$4&"년 {m}월 가계부"'; ws["A1"].font = f(True, 16)
     ws["A2"] = "오른쪽 '거래 내역'에 적으면 요약·달력·구분별 금액이 자동으로 계산돼요. 저축 합계 = 일반 저축(수입 − 지출) + 대출상환 저축(자산관리 시트 부채 감소분)"; ws["A2"].font = f(False, 9, SUB)
-    rngA = f"$A${T0}:$A${T_END}"; rngC = f"$C${T0}:$C${T_END}"; rngF = f"$F${T0}:$F${T_END}"
+    rngA = f"$A${T0}:$A${T_END}"; rngC = f"$C${T0}:$C${T_END}"; rngF = f"$E${T0}:$E${T_END}"
 
     # ── 달력 보조값 (숨김 서식): 연도 · 날짜 수 · 1일 요일 칸 ──
     ws.cell(CAL_T, 1, "달력 · 날짜별 지출").font = f(True, 12)
@@ -169,16 +169,17 @@ for m in range(1, 13):
 
     # ── 구분별 표 ──
     ws.cell(T0 - 2, 1, "항목별 합계").font = f(True, 12)
-    ws.cell(T0 - 2, 3, "금액은 거래 내역 합계 · 세부분류는 쉼표로 구분").font = f(False, 9, SUB)
-    for i, h in enumerate(["구분(1차)", "항목(2차)", "금액", "메모", "세부분류", "월 예산"]): head(ws.cell(T0 - 1, 1 + i, h))
+    ws.cell(T0 - 2, 3, "금액은 거래 내역 합계 · 월 예산은 직접 입력").font = f(False, 9, SUB)
+    for i, h in enumerate(["구분(1차)", "항목(2차)", "금액", "메모", "월 예산"]): head(ws.cell(T0 - 1, 1 + i, h))
+    head(ws.cell(T0 - 1, 8, "세부분류"))   # H열 (숨김): 앱의 세부분류 목록, 쉼표로 구분
     for i, (k, n) in enumerate(BUDGET):
         r = T0 + i
         body(ws.cell(r, 1, k), inp=True); body(ws.cell(r, 2, n), inp=True)
         body(ws.cell(r, 3, f"=SUMIFS({TXR(4)},{TXR(1)},A{r},{TXR(2)},B{r})"), WON)
-        body(ws.cell(r, 4), inp=True); body(ws.cell(r, 5, SUBS.get(n)), inp=True); body(ws.cell(r, 6), WON, inp=True)
+        body(ws.cell(r, 4), inp=True); body(ws.cell(r, 5), WON, inp=True); body(ws.cell(r, 8, SUBS.get(n)), inp=True)
     mk = ws.cell(T_END, 1, "▲ 항목 추가 시 이 행 위에 행 삽입")
     mk.font = f(False, 9, SUB)
-    ws.merge_cells(start_row=T_END, start_column=1, end_row=T_END, end_column=6)
+    ws.merge_cells(start_row=T_END, start_column=1, end_row=T_END, end_column=5)
 
     # ── 오른쪽: 반복 거래 (위) · 거래 내역 (아래) ──
     ws.cell(REP_H0 - 1, RC, "반복 거래 · 매달 이 날짜에 거래 내역으로 자동 입력").font = f(True, 12)
@@ -215,6 +216,7 @@ for m in range(1, 13):
     ws.add_chart(pie, f"A{CHART_ROW}")
     widths = [13, 13, 13, 13, 18, 13, 13, 3, 6, 9, 12, 10, 12, 12, 18, 10, 3]
     for i, w in enumerate(widths): ws.column_dimensions[L(1 + i)].width = w
+    ws.column_dimensions["H"].hidden = True   # 세부분류 목록 (앱이 읽고 써요)
     ws.freeze_panes = "A3"
 
 # ───────────────── 월별추이 ─────────────────

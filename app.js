@@ -844,7 +844,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v30';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v31';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -1749,9 +1749,9 @@ function applyReps(){
 S.bview = LS.get('bview', 'cal'); S.rview = LS.get('rview', 'm');
 if (['stat', 'sum', 'year'].includes(S.bview)){ S.rview = S.bview === 'year' ? 'y' : 'm'; S.bview = 'rep'; LS.set('bview', 'rep'); LS.set('rview', S.rview); }   // 예전 보기 이름 정리
 const effView = () => S.model?.txMode && ['cal', 'bud', 'rep'].includes(S.bview) ? S.bview : 'rep';
-const rsegHtml = () => `<div class="rseg"><button data-rv="m"${S.rview !== 'y' ? ' class="on"' : ''}>${S.month.budget}월</button><button data-rv="y"${S.rview === 'y' ? ' class="on"' : ''}>${S.year}년 전체</button></div>`;
+const rsegHtml = () => `<div class="rseg"><button data-rv="m"${S.rview !== 'y' ? ' class="on"' : ''}>월</button><button data-rv="y"${S.rview === 'y' ? ' class="on"' : ''}>연간</button></div>`;
 document.addEventListener('click', e => { const b = e.target.closest('[data-rv]'); if (!b) return; S.rview = b.dataset.rv; LS.set('rview', S.rview); render(); });
-const bsegHtml = () => S.model?.txMode ? `<div class="bseg">${[['cal', '달력'], ['bud', '예산'], ['rep', '리포트']].map(([v, l]) => `<button data-bv="${v}"${effView() === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>` : '';
+const bsegHtml = () => S.model?.txMode ? `<div class="bseg">${[['cal', '달력'], ['bud', '예산'], ['rep', '레포트']].map(([v, l]) => `<button data-bv="${v}"${effView() === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>` : '';
 document.addEventListener('click', e => { const b = e.target.closest('[data-bv]'); if (!b) return; S.bview = b.dataset.bv; LS.set('bview', S.bview); render(); });
 
 function selDay(y, m){

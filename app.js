@@ -8,7 +8,7 @@ const LS = {
   del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
 };
 const S = {
-  tab: (t => ['home','budget','trend','asset','analysis'].includes(t) ? t : 'home')(LS.get('tab','home')),
+  tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis'].includes(t) ? t : 'home')(LS.get('tab','home')),
   theme: LS.get('theme','system'),
   unit: LS.get('unit','short'),
   gfiles: LS.get('gfiles', []),          // 구글 연결 시트 [{id, name, year, mime}]
@@ -456,14 +456,15 @@ function viewBudget(){
   if (TX && S.bview === 'cal') return viewCal();
   if (TX && S.bview === 'stat') return viewStat();
   if (TX && S.bview === 'bud') return viewBud();
+  if (S.bview === 'year') return viewTrend();
   const m = S.month.budget, b = bMonth(m), pb = bMonth(m-1);
-  if (!b.has){ emptyMonth(m, '가계부'); if (TX) $('#view').innerHTML = bsegHtml() + `<div class="empty"><b>${m}월 거래가 없어요</b>달력에서 거래를 입력하면 항목별로 합산돼요.</div>`; return; }
+  if (!b.has){ emptyMonth(m, '가계부'); $('#view').innerHTML = bsegHtml() + (TX ? `<div class="empty"><b>${m}월 거래가 없어요</b>달력에서 거래를 입력하면 항목별로 합산돼요.</div>` : $('#view').innerHTML); return; }
   const ed = canEdit();
   const dExp = pb.has ? b.expense - pb.expense : null;
   const dSav = pb.has ? b.saving - pb.saving : null;
   const exItems = b.items.filter(i=>i.kind!=='수입' && i.amt>0).sort((x,y)=>y.amt-x.amt);
   const flowTot = Math.max(b.income, b.expense, 1);
-  let html = `${TX ? bsegHtml() : ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
+  let html = `${bsegHtml()}${!TX && ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
   <section class="card hero">
     <div class="label">${m}월 저축 합계 <span class="muted">· 일반 + 대출상환</span></div>
     <div class="big num ${b.saving<0?'up':''}">${money(b.saving)}</div>
@@ -520,13 +521,13 @@ function viewBudget(){
 /* ───────── 화면: 월별추이 ───────── */
 function viewTrend(){
   const ms = Array.from({length:12},(_,i)=>bMonth(i+1)), on = ms.filter(x=>x.has);
-  if (!on.length) return emptyMonth(null, '가계부');
+  if (!on.length){ emptyMonth(null, '가계부'); $('#view').innerHTML = bsegHtml() + $('#view').innerHTML; return; }
   const tot = k => on.reduce((a,x)=>a+x[k],0);
   const inc = tot('income'), exp = tot('expense'), sav = tot('saving'), cash = tot('cash'), rep = tot('repay');
   const nul = (x,k) => x.has ? x[k] : null;
   const cum = k => { let c = 0; return ms.map(x => { if (!x.has) return null; c += x[k]; return c; }); };
   const share = v => sav ? pctPlain(v/sav, 0) : '-';
-  $('#view').innerHTML = `
+  $('#view').innerHTML = bsegHtml() + `
   <section class="card hero">
     <div class="label">${S.model.year}년 누적 저축 합계 <span class="muted">· ${on.length}개월</span></div>
     <div class="big num">${money(sav)}</div>
@@ -574,7 +575,7 @@ function viewTrend(){
       {label:'고정비', data:ms.map(x=>nul(x,'fixed')), backgroundColor:css('--fixed'), borderRadius:3, maxBarThickness:22},
       {label:'변동비', data:ms.map(x=>nul(x,'variable')), backgroundColor:css('--expense'), borderRadius:3, maxBarThickness:22}]},
     options:{plugins:{legend:leg, tooltip:tipIdx}, scales:{x:{...scaleX, stacked:true}, y:scaleWon({stacked:true})}}});
-  document.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => { const m=+tr.dataset.m; if (!bMonth(m).has) return; S.month.budget = m; go('budget'); });
+  document.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => { const m=+tr.dataset.m; if (!bMonth(m).has) return; S.month.budget = m; S.bview = 'sum'; LS.set('bview', 'sum'); go('budget'); });
 }
 
 /* ───────── 화면: 자산 ───────── */
@@ -697,7 +698,8 @@ function emptyMonth(m, what){
 }
 
 /* ───────── 라우팅 ───────── */
-const TITLES = {home:'홈', budget:'가계부', trend:'월별추이', asset:'자산', analysis:'분석'};
+const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'분석'};
+const isYearView = () => S.tab === 'budget' && S.bview === 'year';   // 가계부 › 연간 (예전 월별추이)
 function render(){
   killCharts();
   document.body.classList.remove('onboarding');
@@ -710,7 +712,7 @@ function render(){
     const now = new Date();
     if (S.month[key]==null) S.month[key] = key === 'budget' && S.model.txMode && canEdit() && S.year === now.getFullYear() ? now.getMonth() + 1 : lastWith(fn);
     $('#selY').innerHTML = yearsList().map(y => `<option value="${y}"${y===S.year?' selected':''}>${y}년</option>`).join('');
-    const trend = S.tab==='trend';
+    const trend = isYearView();
     $('#selMWrap').style.display = trend ? 'none' : '';
     if (!trend) $('#selM').innerHTML = Array.from({length:12}, (_,i) => i+1).map(m =>
       `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월${key==='budget' || fn(m).has?'':' · 미입력'}</option>`).join('');
@@ -719,7 +721,7 @@ function render(){
   }
   updateStatus();
   if (!S.model) return emptyMonth(null, '');
-  ({home:viewHome, budget:viewBudget, trend:viewTrend, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
+  ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
 function go(tab){ S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => go(b.dataset.tab));
@@ -734,13 +736,13 @@ function setYear(y){
   S.year = y; S.model = S.years[y]; LS.set('year', y);
 }
 function canShift(n){
-  if (S.tab==='trend') return adjYear(n) != null;
+  if (isYearView()) return adjYear(n) != null;
   const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
   return (m >= 1 && m <= 12) || adjYear(n) != null;
 }
 function shift(n){
   if (!S.model || !canShift(n)) return;
-  if (S.tab==='trend'){ setYear(adjYear(n)); return render(); }
+  if (isYearView()){ setYear(adjYear(n)); return render(); }
   const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
   if (m < 1 || m > 12){ setYear(adjYear(n)); S.month[key] = m < 1 ? 12 : 1; }   // 연도 넘어가기
   else S.month[key] = m;
@@ -800,7 +802,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = '버전 ' + APP_VER;
 }
-const APP_VER = 'v22';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v23';   // sw.js 캐시 이름과 같이 올려요
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   $('#sheet').scrollTop = 0;
@@ -1665,7 +1667,9 @@ function applyReps(){
 
 /* 가계부 탭 위쪽: 달력 / 통계 / 요약 */
 S.bview = LS.get('bview', 'cal');
-const bsegHtml = () => `<div class="bseg">${[['cal', '달력'], ['bud', '예산'], ['stat', '통계'], ['sum', '요약']].map(([v, l]) => `<button data-bv="${v}"${S.bview === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`;
+const bsegHtml = () => { const TX = S.model?.txMode, segs = TX ? [['cal', '달력'], ['bud', '예산'], ['stat', '통계'], ['sum', '요약'], ['year', '연간']] : [['sum', '요약'], ['year', '연간']];
+  const cur = segs.some(([v]) => v === S.bview) ? S.bview : 'sum';   // 옛 양식 해: 달력·예산·통계 → 요약
+  return `<div class="bseg">${segs.map(([v, l]) => `<button data-bv="${v}"${cur === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`; };
 document.addEventListener('click', e => { const b = e.target.closest('[data-bv]'); if (!b) return; S.bview = b.dataset.bv; LS.set('bview', S.bview); render(); });
 
 function selDay(y, m){

@@ -178,15 +178,19 @@ function busy(t, sub = ''){   // 전체 화면 로딩창 (t 없으면 닫기)
   if (!t){ el.classList.remove('on'); return; }
   $('#busyT').textContent = t; $('#busyS').textContent = sub; el.classList.add('on');
 }
-// 새 시트를 넣을 드라이브 폴더 '자산관리': 앱이 전에 만든 폴더가 있으면 그대로 쓰고, 없으면 내 드라이브 맨 위에 만들어요.
+// 새 시트를 넣을 드라이브 폴더 '머니머슬': 앱이 전에 만든 폴더가 있으면 그대로 쓰고, 없으면 내 드라이브 맨 위에 만들어요.
+// 예전 이름('자산관리')으로 만든 폴더는 찾아서 '머니머슬'로 이름만 바꿔요 (안의 시트는 그대로).
 // (drive.file 권한이라 앱이 만든 폴더만 보여요. 직접 만든 같은 이름 폴더와는 따로 생길 수 있어요)
-const FOLDER = '자산관리', MIME_FOLDER = 'application/vnd.google-apps.folder';
+const FOLDER = '머니머슬', FOLDER_OLD = '자산관리', MIME_FOLDER = 'application/vnd.google-apps.folder';
 async function gFolder(tok){
-  const ok = async id => { try { const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,trashed`, {cache: 'no-store'}, tok)).json(); return j.id && !j.trashed; } catch(e){ return false; } };
-  const saved = LS.get('gfolder', null); if (saved && await ok(saved)) return saved;
-  const q = `mimeType='${MIME_FOLDER}' and name='${FOLDER}' and trashed=false`;
-  const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, fields: 'files(id)', orderBy: 'createdTime', pageSize: '1'}), {cache: 'no-store'}, tok)).json();
-  let id = j.files?.[0]?.id;
+  const info = async id => { try { const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,trashed`, {cache: 'no-store'}, tok)).json(); return j.id && !j.trashed ? j : null; } catch(e){ return null; } };
+  const find = async name => (await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q: `mimeType='${MIME_FOLDER}' and name='${name}' and trashed=false`, fields: 'files(id,name)', orderBy: 'createdTime', pageSize: '1'}), {cache: 'no-store'}, tok)).json()).files?.[0] || null;
+  const saved = LS.get('gfolder', null);
+  let f = (saved && await info(saved)) || await find(FOLDER) || await find(FOLDER_OLD);
+  if (f && f.name === FOLDER_OLD){   // 예전 이름이면 새 이름으로
+    try { await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}?fields=id`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: FOLDER})}, tok); } catch(e){}
+  }
+  let id = f?.id;
   if (!id) id = (await (await gFetch('https://www.googleapis.com/drive/v3/files?fields=id', {method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({name: FOLDER, mimeType: MIME_FOLDER})}, tok)).json()).id;
   if (!id) throw new Error('드라이브에 폴더를 만들지 못했어요');
@@ -207,7 +211,7 @@ async function gCreate(year){
   if (used.has(y)) return toast(`${y}년 시트는 이미 연결돼 있어요`);
   try {
     const tok = await gToken(true, 'create:' + y); if (!S.guser) await gWhoAmI(tok);
-    busy('생성 중입니다', `구글 드라이브 '자산관리' 폴더에 ${y}년 시트를 만들고 있어요`);
+    busy('생성 중입니다', `구글 드라이브 '${FOLDER}' 폴더에 ${y}년 시트를 만들고 있어요`);
     const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
     let folder = null; try { folder = await gFolder(tok); } catch(e){}   // 폴더를 못 만들면 내 드라이브 맨 위에라도 만들어요
     const meta = {name: `가계부_${y}`, mimeType: MIME_SHEET, ...(folder ? {parents: [folder]} : {})};

@@ -16,7 +16,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <style>
-@media (prefers-color-scheme: dark){html:not([data-theme="light"]){background:#0E1013}}
+@media (prefers-color-scheme: dark){html:not([data-theme="light"]){background:#15171B}body{background:#0E1013}}
 :root{
   --bg:#F5F6F8; --card:#FFFFFF; --ink:#191F28; --sub:#6B7684; --faint:#AEB5BF; --line:#EEF0F3;
   --chip:#F2F4F6; --accent:#3182F6; --accent-soft:#E8F3FF;
@@ -32,7 +32,9 @@
   --btn2:#2E333B; --warn:#FBBF24; --warn-soft:#3A2E14; --warn-ink:#FCD38A; --bad-soft:#3A1A1F; --bad-ink:#FF9AA4; --good-soft:#123326; --good-ink:#7FE0B6;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;background:var(--bg);color:var(--ink)}
+/* 바탕: 페이지 내용은 body(--bg). html(가장 바깥 바탕)은 하단 바 색 — 아이폰 홈 화면 앱에서 화면 아래 틈이 생겨도 하단 바와 같은 색으로 보여요 */
+html{margin:0;background:var(--navfill);color:var(--ink)}
+body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh}
 body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
   font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
@@ -414,9 +416,7 @@ body:not(.onboarding) #setBtn{display:none}
 .pback{justify-self:start;color:var(--accent);font-size:16px;font-weight:600;padding:6px 2px}
 .ebar{z-index:62}
 .toast{z-index:90!important}
-nav.tabs::after{content:"";position:absolute;left:0;right:0;top:100%;height:120px;background:var(--navfill)}
 :root{--navfill:#FFFFFF}:root[data-theme="dark"]{--navfill:#15171B}
-@media (display-mode: standalone){html{background:linear-gradient(to bottom,var(--bg) 50%,var(--navfill) 50%)}}
 .gmark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#fff;margin-right:4px;flex:none}.gmark svg{width:18px;height:18px}
 .ymlabel{min-width:132px;text-align:center;font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
 .stepper button{width:44px;height:40px}

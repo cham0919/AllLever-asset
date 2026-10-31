@@ -800,7 +800,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = '버전 ' + APP_VER;
 }
-const APP_VER = 'v21';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v22';   // sw.js 캐시 이름과 같이 올려요
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   $('#sheet').scrollTop = 0;
@@ -1128,7 +1128,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];
     if (S.years[S.year].txMode) openItemTx(m, k); else editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
-  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats(); else if (a === 'budEdit') openBudEdit(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
+  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats(); else if (a === 'budEdit') openBudEdit(); else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
 
 /* ───────── 입력: 앱에서 고친 값을 구글 시트에 저장 ─────────
@@ -1765,50 +1765,114 @@ function viewBud(){
     else if (x.fixed) l = x.st === 'done' ? '이번 달 냈어요' : `남은 ${money(i.bud - i.amt)}`;
     else { const d = i.amt - x.exp; l = bs.cur ? (Math.abs(d) < 1e4 ? '적정선에 맞게 쓰는 중' : d > 0 ? `적정선보다 ${money(d)} 더 씀` : `적정선보다 ${money(-d)} 덜 씀`) : `${Math.round(rr * 100)}% 사용`;
       rt = `남은 ${money(i.bud - i.amt)}${bs.cur && bs.left ? ` · 하루 ${money((i.bud - i.amt) / bs.left)}` : ''}`; }
-    return `<button class="bit" data-bi="${idx}"><div class="r1"><span class="nm">${esc(i.name)} <span class="btag t-${x.st}">${TAG[x.st]}</span></span><span class="am num"><b>${money(i.amt)}</b> / ${money(i.bud)}</span></div>
+    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit" data-bi="${idx}"><div class="r1"><span class="nm">${esc(i.name)} <span class="btag t-${x.st}">${TAG[x.st]}</span></span><span class="am num"><b>${money(i.amt)}</b> / ${money(i.bud)}</span></div>
       <div class="btrack sm"><i class="${x.st === 'done' ? 'bf-done' : bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur && !x.fixed ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
-      <div class="bsub"><span>${l}</span><span>${rt}</span></div></button>`; };
+      <div class="bsub"><span>${l}</span><span>${rt}</span></div></button></div>`; };
   const grp = k => { const R = bs.rows.filter(x => x.it.kind === k); return R.length ? `<div class="bkind">${k}</div>` + R.sort((a, z) => z.it.bud - a.it.bud).map(rowHtml).join('') : ''; };
-  html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${grp('변동비')}${grp('고정비')}</section>`;
+  const nAdd = budAddable(y, m).length;
+  html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${grp('변동비')}${grp('고정비')}
+    ${ed ? `${nAdd ? `<button class="badd" data-act="budAdd">+ 예산 항목 추가 <small>${nAdd}개 더 있어요</small></button>` : ''}<p class="bhint">왼쪽으로 밀면 그 항목 예산을 지워요</p>` : ''}</section>`;
   $('#view').innerHTML = html;
-  $('#view').querySelectorAll('[data-bi]').forEach(el => el.onclick = () => openItemTx(m, +el.dataset.bi));
+  $('#view').querySelectorAll('.swrap').forEach(w => { const el = w.querySelector('[data-bi]'), it = (S.model.budget[m] || [])[+el.dataset.bi];
+    el.onclick = () => openItemTx(m, +el.dataset.bi);
+    if (ed) swipeDel(w, () => budDrop(y, m, it)); else w.querySelector('.sdel').remove(); });
 }
+// 예산 참고값: 지난달 지출 · 최근 3개월 평균 · 지난달 예산 · 반복 거래
+function budRef(y, m, i){
+  const prevIt = k => { const [pm, py] = wrapYM(m - k, y), P = S.years[py]; if (!P?.txMode) return null; const f = findBudget(P, pm, i.kind, i.name, 0); return f && bMonth(pm, py).has ? f : null; };
+  const lm = prevIt(1), av = [1, 2, 3].map(prevIt).filter(Boolean);
+  const reps = (S.years[y]?.reps?.[m] || []).filter(r => r.kind === i.kind && r.name === i.name && r.amt > 0), repAmt = reps.reduce((a, r) => a + r.amt, 0);
+  return {last: lm ? lm.amt : null, avg: av.length ? av.reduce((a, f) => a + f.amt, 0) / av.length : null, avgN: av.length, pbud: lm?.bud ?? null, repAmt, repDays: reps.map(r => r.day)};
+}
+const budUp = v => v > 0 ? Math.ceil(v / 1e4) * 1e4 : null;
+const budSuggest = (i, R) => i.kind === '고정비' && R.repAmt ? R.repAmt : budUp(R.avgN >= 2 ? R.avg : R.last) || R.pbud || null;
+const budHint = (i, R) => [R.repAmt && i.kind === '고정비' ? `반복 · 매달 ${R.repDays.join('·')}일 ${shortAmt(R.repAmt)}` : '', R.last != null ? `지난달 ${shortAmt(R.last)}` : '', R.avgN >= 2 ? `${R.avgN}개월 평균 ${shortAmt(R.avg)}` : ''].filter(Boolean).join(' · ') || '지난 기록 없음';
+const budAddable = (y, m) => (S.years[y]?.budget?.[m] || []).filter(i => EXP_KINDS.includes(i.kind) && !(i.bud > 0));
+function budOps(y, m, i, v){   // 이번 달~12월에 같은 예산
+  const ops = [];
+  for (let mm = m; mm <= 12; mm++){ const f = findBudget(S.years[y], mm, i.kind, i.name, 0); if (f && (f.bud ?? null) !== v) ops.push({t: 'cat', y, m: mm, kind: i.kind, name: i.name, subs: [...(f.subs || [])], bud: v}); }
+  return ops;
+}
+function budDrop(y, m, i){ const ops = budOps(y, m, i, null); if (!ops.length) return render(); commit(ops, true); toast(`${i.name} 예산을 지웠어요 · '+ 예산 항목 추가'로 다시 넣을 수 있어요`); }
+
+// 손가락으로 왼쪽으로 밀면 삭제: 조금 밀면 '삭제' 버튼, 절반 넘게 밀면 바로 삭제
+function swipeDel(wrap, onDel){
+  const row = wrap.querySelector('.sdel').nextElementSibling, BTN = 84;
+  let x0 = null, y0 = 0, dx = 0, mode = null, open = false, moved = false;
+  const set = (x, anim) => { row.style.transition = anim ? '' : 'none'; row.style.transform = x ? `translateX(${x}px)` : ''; if (x) wrap.classList.add('sw'); else if (anim) setTimeout(() => { if (!open && x0 == null) wrap.classList.remove('sw'); }, 220); else wrap.classList.remove('sw'); };
+  const close = () => { open = false; set(0, true); };
+  row.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse' && e.button) return; x0 = e.clientX; y0 = e.clientY; dx = open ? -BTN : 0; mode = null; moved = false; });
+  row.addEventListener('pointermove', e => { if (x0 == null) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!mode){ if (Math.abs(mx) < 8 && Math.abs(my) < 8) return; mode = Math.abs(mx) > Math.abs(my) ? 'h' : 'v'; if (mode === 'h'){ moved = true; try { row.setPointerCapture(e.pointerId); } catch(_){} } }
+    if (mode !== 'h') return;
+    dx = Math.min(0, (open ? -BTN : 0) + mx); set(dx); });
+  const end = () => { if (x0 == null) return; x0 = null;
+    if (mode === 'h'){ const W = wrap.clientWidth;
+      if (dx < -W * 0.5){ set(-W, true); wrap.classList.add('gone'); setTimeout(onDel, 200); }
+      else if (dx < -40){ open = true; set(-BTN, true); } else close(); }
+    mode = null; };
+  row.addEventListener('pointerup', end); row.addEventListener('pointercancel', end);
+  row.addEventListener('click', e => { if (moved || open){ e.stopImmediatePropagation(); e.preventDefault(); if (!moved) close(); moved = false; } }, true);
+  wrap.querySelector('.sdel').onclick = () => { wrap.classList.add('gone'); set(-wrap.clientWidth, true); setTimeout(onDel, 200); };
+}
+
+// 예산 항목 하나 추가 (예산 탭 '+ 예산 항목 추가')
+function openBudAdd(){
+  const y = S.year, m = S.month.budget; if (!canEdit(y)) return toast(editNote(y));
+  const L = budAddable(y, m); if (!L.length) return toast('모든 지출 항목에 예산이 있어요');
+  let sel = null;
+  const draw = () => {
+    const R = sel ? budRef(y, m, sel) : null, sug = sel ? budSuggest(sel, R) : null;
+    openEd(`<h4>예산 항목 추가 <button class="ex" id="edX">취소</button></h4><div class="esub">${m < 12 ? `${m}~12월` : '12월'}에 적용돼요</div>
+      ${['고정비', '변동비'].map(k => { const I = L.filter(i => i.kind === k); return I.length ? `<div class="elbl">${k}</div><div class="echips">${I.map(i => `<button data-n="${esc(i.name)}" data-k="${k}"${i === sel ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>` : ''; }).join('')}
+      ${sel ? `<div class="elbl">${esc(sel.name)} 한 달 예산</div><div class="ewon"><input id="baAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${sug ? fmtWon(sug) : ''}" autofocus><span>원</span></div>
+        <div class="ehint">${esc(budHint(sel, R))}</div><button class="btn" id="edSave">추가</button>` : '<p class="note">예산을 정할 항목을 골라 주세요</p>'}`);
+    $('#edX').onclick = closeEd;
+    $('#ed').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { sel = L.find(i => i.kind === b.dataset.k && i.name === b.dataset.n); draw(); });
+    if (sel){ bindWon($('#baAmt'));
+      $('#edSave').onclick = () => { const v = parseWon($('#baAmt').value); if (!(v > 0)) return toast('금액을 넣어 주세요');
+        closeEd(); commit(budOps(y, m, sel, v), true); toast(`${sel.name} 예산 ${money(v)}을 추가했어요`); }; }
+  };
+  draw();
+}
+
+// 예산 편집: 예산이 있는 항목만 보여주고, 밀어서 빼고, 아래에서 다시 추가
 function openBudEdit(){
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const items = (Y.budget[m] || []).filter(i => EXP_KINDS.includes(i.kind));
-  const prevIt = (k, i) => { const [pm, py] = wrapYM(m - k, y), P = S.years[py]; if (!P?.txMode) return null; const f = findBudget(P, pm, i.kind, i.name, 0); return f && bMonth(pm, py).has ? f : null; };
-  const up = v => v > 0 ? Math.ceil(v / 1e4) * 1e4 : null;
-  const ref = items.map(i => {
-    const lm = prevIt(1, i), av = [1, 2, 3].map(k => prevIt(k, i)).filter(Boolean);
-    const reps = (Y.reps[m] || []).filter(r => r.kind === i.kind && r.name === i.name && r.amt > 0), repAmt = reps.reduce((a, r) => a + r.amt, 0);
-    return {last: lm ? lm.amt : null, avg: av.length ? av.reduce((a, f) => a + f.amt, 0) / av.length : null, avgN: av.length, pbud: lm?.bud ?? null, repAmt, repDays: reps.map(r => r.day)};
-  });
-  const ed = items.map((i, x) => ({v: i.bud > 0 ? i.bud : i.kind === '고정비' && ref[x].repAmt ? ref[x].repAmt : null, rep: !(i.bud > 0) && i.kind === '고정비' && !!ref[x].repAmt}));
+  const ref = items.map(i => budRef(y, m, i));
+  const ed = items.map((i, x) => { const rep = !(i.bud > 0) && i.kind === '고정비' && !!ref[x].repAmt, v = i.bud > 0 ? i.bud : rep ? ref[x].repAmt : null; return {v, rep, on: v > 0}; });
   const prevSpent = (() => { const [pm, py] = wrapYM(m - 1, y); return S.years[py]?.txMode && bMonth(pm, py).has ? bMonth(pm, py).expense : null; })();
   const fill = how => { items.forEach((i, x) => { const R = ref[x];
-      const v = how === 'last' ? up(R.last) : how === 'avg' ? up(R.avg) : R.pbud;
-      if (i.kind === '고정비' && R.repAmt && how !== 'pbud') ed[x] = {v: R.repAmt, rep: true}; else if (v != null || how === 'pbud') ed[x] = {v: v || null, rep: false}; }); draw(); };
+      if (i.kind === '고정비' && R.repAmt && how !== 'pbud'){ ed[x] = {v: R.repAmt, rep: true, on: true}; return; }
+      const v = how === 'last' ? budUp(R.last) : how === 'avg' ? budUp(R.avg) : R.pbud;
+      if (v > 0) ed[x] = {v, rep: false, on: true}; else if (how === 'pbud') ed[x] = {v: null, rep: false, on: false}; }); draw(); };
+  const total = () => ed.reduce((a, e) => a + (e.on && e.v > 0 ? e.v : 0), 0);
+  let focusX = null;
   const draw = () => {
-    const sc = $('#ed').scrollTop, tot = ed.reduce((a, e) => a + (e.v > 0 ? e.v : 0), 0);
-    const hint = (i, R) => [R.repAmt && i.kind === '고정비' ? `반복 · 매달 ${R.repDays.join('·')}일 ${shortAmt(R.repAmt)}` : '', R.last != null ? `지난달 ${shortAmt(R.last)}` : '', R.avgN >= 2 ? `${R.avgN}개월 평균 ${shortAmt(R.avg)}` : ''].filter(Boolean).join(' · ') || '지난 기록 없음';
+    const sc = $('#ed').scrollTop, tot = total(), off = items.filter((_, x) => !ed[x].on);
     const has = k => ref.some(R => (k === 'pbud' ? R.pbud : R[k]) != null);
     openEd(`<h4>${m}월 예산 <button class="ex" id="edX">닫기</button></h4>
       <div class="btot"><div class="lab">지출 예산 합계 (항목 합계로 자동)</div><div class="v num" id="bdTot">${tot ? money(tot) : '0원'}</div>${prevSpent != null ? `<small>지난달 실제 지출 ${money(prevSpent)}</small>` : ''}</div>
       ${has('last') || has('pbud') ? `<div class="bqf"><span>빠르게 채우기</span>${has('last') ? '<button data-f="last">지난달 지출</button>' : ''}${ref.some(R => R.avgN >= 2) ? '<button data-f="avg">최근 3개월 평균</button>' : ''}${has('pbud') ? '<button data-f="pbud">지난달 예산 그대로</button>' : ''}</div>` : ''}
-      ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}${k === '고정비' ? ' <span class="muted" style="font-weight:500">· 반복 거래 금액이 기본값</span>' : ''}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
-        return `<div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(hint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="예산 없음" value="${e.v ? fmtWon(e.v) : ''}"></div>`; }).join('') : ''; }).join('')}
-      <p class="note">저장하면 ${m < 12 ? `${m}월부터 12월까지` : '12월에'} 같은 예산이 적용돼요. 비워 두면 그 항목은 예산 없이 관리해요.</p>
+      ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}${k === '고정비' ? ' <span class="muted" style="font-weight:500">· 반복 거래 금액이 기본값</span>' : ''}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
+        return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기">빼기</button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
+        || '<p class="note" style="text-align:center;margin:18px 0">아직 예산을 정한 항목이 없어요. 위 버튼으로 채우거나 아래에서 항목을 추가하세요.</p>'}
+      ${off.length ? `<div class="elbl" style="margin-top:14px">+ 예산 항목 추가</div><div class="echips">${off.map(i => `<button class="badd-c" data-x="${items.indexOf(i)}">+ ${esc(i.name)}</button>`).join('')}</div>` : ''}
+      <p class="note">왼쪽으로 밀면 예산에서 빠져요. 저장하면 ${m < 12 ? `${m}월부터 12월까지` : '12월에'} 같은 예산이 적용돼요.</p>
       <div class="ebar"><div class="t">시트의 '월 예산' 칸에 저장돼요</div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
     $('#ed').scrollTop = sc;
-    $('#ed').querySelectorAll('.bin').forEach(inp => bindWon(inp, v => { const x = +inp.dataset.x; ed[x] = {v: Number.isNaN(v) ? NaN : v, rep: false}; inp.classList.remove('rep');
-      const t = ed.reduce((a, e) => a + (e.v > 0 ? e.v : 0), 0); $('#bdTot').textContent = t ? money(t) : '0원'; }));
+    const upd = () => { const t = total(); $('#bdTot').textContent = t ? money(t) : '0원'; };
+    $('#ed').querySelectorAll('.bin').forEach(inp => bindWon(inp, v => { const x = +inp.dataset.x; ed[x] = {v: Number.isNaN(v) ? NaN : v, rep: false, on: true}; inp.classList.remove('rep'); upd(); }));
+    $('#ed').querySelectorAll('.ber-w').forEach(w => { const x = +w.querySelector('.bin').dataset.x; swipeDel(w, () => { ed[x] = {v: null, rep: false, on: false}; draw(); }); });
+    $('#ed').querySelectorAll('.badd-c').forEach(b => b.onclick = () => { const x = +b.dataset.x; ed[x] = {v: budSuggest(items[x], ref[x]), rep: false, on: true}; focusX = x; draw(); });
+    if (focusX != null){ const f = $('#ed').querySelector(`.bin[data-x="${focusX}"]`); focusX = null; if (f){ f.scrollIntoView({block: 'center'}); f.focus(); } }
     $('#ed').querySelectorAll('[data-f]').forEach(b => b.onclick = () => fill(b.dataset.f));
     $('#edX').onclick = closeEd;
     $('#edSave').onclick = () => {
-      if (ed.some(e => Number.isNaN(e.v))) return toast('예산은 숫자로 넣어 주세요');
-      const ops = [];
-      items.forEach((i, x) => { const v = ed[x].v > 0 ? ed[x].v : null;
-        for (let mm = m; mm <= 12; mm++){ const f = findBudget(Y, mm, i.kind, i.name, 0); if (f && (f.bud ?? null) !== v) ops.push({t: 'cat', y, m: mm, kind: i.kind, name: i.name, subs: [...(f.subs || [])], bud: v}); } });
+      if (ed.some(e => e.on && Number.isNaN(e.v))) return toast('예산은 숫자로 넣어 주세요');
+      const ops = items.flatMap((i, x) => budOps(y, m, i, ed[x].on && ed[x].v > 0 ? ed[x].v : null));
       closeEd(); if (!ops.length) return toast('바뀐 내용이 없어요');
       S.bview = 'bud'; LS.set('bview', 'bud'); commit(ops);
     };

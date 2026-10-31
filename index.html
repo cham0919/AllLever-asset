@@ -39,7 +39,8 @@ input,select{font:inherit;color:var(--ink)}
 .num{font-variant-numeric:tabular-nums}
 
 /* top bar */
-.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(safe-area-inset-top) + 10px) 16px 8px}
+.top{position:sticky;top:0;z-index:20;background:var(--bg);padding:calc(env(safe-area-inset-top) + 16px) 16px 8px}
+body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top);background:var(--bg);z-index:45;pointer-events:none}
 .top-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .top h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0}
 .icon-btn{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:var(--card);box-shadow:var(--shadow)}
@@ -362,8 +363,17 @@ nav.tabs button.on{color:var(--ink)}
 .bnob button,.bedit{flex:none;background:var(--accent-soft);color:var(--accent);font-weight:700;border-radius:10px;padding:6px 10px;font-size:12.5px}
 .bedit{background:none;padding:2px 0;font-size:13px}
 .bkind{font-size:11.5px;color:var(--sub);font-weight:700;margin:10px 0 0}
-.bit{display:block;width:100%;text-align:left;padding:10px 0;border-top:1px solid var(--line)}
-.bkind + .bit{border-top:0;padding-top:6px}
+.bit{display:block;width:100%;text-align:left;padding:10px 0;background:var(--card)}
+.swrap{position:relative;overflow:hidden;border-top:1px solid var(--line);transition:max-height .2s,opacity .2s;max-height:200px}
+.bkind + .swrap{border-top:0}.bkind + .swrap .bit{padding-top:6px}
+.swrap > :not(.sdel){position:relative;z-index:1;touch-action:pan-y;transition:transform .2s cubic-bezier(.2,.8,.2,1);user-select:none;-webkit-user-select:none}
+.swrap .sdel{position:absolute;top:0;right:0;bottom:0;width:84px;background:var(--expense);color:#fff;font-weight:700;font-size:14px;visibility:hidden}
+.swrap.sw .sdel{visibility:visible}
+.swrap.gone{max-height:0;opacity:0;border-color:transparent}
+.ber-w{border-top:0;border-radius:14px;margin-bottom:6px}.ber-w .ber{margin:0}
+.badd{display:block;width:100%;margin-top:10px;padding:12px;border-radius:12px;border:1.5px dashed var(--line);color:var(--accent);font-weight:700;font-size:14px}
+.badd small{color:var(--sub);font-weight:500;margin-left:4px}
+.bhint{text-align:center;font-size:11.5px;color:var(--faint);margin:8px 0 0}
 .bit .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .bit .nm{font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:6px}
 .bit .am{font-size:13px;color:var(--sub)}.bit .am b{color:var(--ink);font-size:14px}

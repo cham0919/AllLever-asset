@@ -846,7 +846,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v34';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v35';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -1844,7 +1844,6 @@ function viewBud(){
     <div class="btrack"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%" data-l="적정선"></b>` : ''}</div>
     <div class="bmeta2"><span>${bs.unbAmt ? '예산 항목에서 ' : ''}쓴 돈 ${money(bs.spent)}</span><span>${bs.cur ? `남은 날 ${bs.left}일 (오늘 포함)` : bs.ended ? '지난 달' : '아직 시작 전'}</span></div>
     <div class="bg3 num">${g3.map(([k, v, c]) => `<div>${k}<b${c ? ` class="${c}"` : ''}>${v}</b></div>`).join('')}</div>${alert}</section>`;
-  if (bs.unbAmt) html += `<section class="card bnob"><span>예산 없는 항목에서 <b>${money(bs.unbAmt)}</b> 썼어요<small>${bs.unb.map(i => esc(i.name)).join(' · ')}</small></span>${ed ? '<button data-act="budEdit">예산 정하기</button>' : ''}</section>`;
   const TAG = {ok: '여유', fit: '적정', warn: '주의', over: '초과', done: '완료', plan: '예정'};
   const rowHtml = x => { const i = x.it, rr = i.amt / i.bud, idx = (S.model.budget[m] || []).indexOf(i);
     let l = '', rt = '';

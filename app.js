@@ -833,7 +833,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = '버전 ' + APP_VER;
 }
-const APP_VER = 'v24';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v25';   // sw.js 캐시 이름과 같이 올려요
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   $('#sheet').scrollTop = 0;
@@ -1794,7 +1794,7 @@ function viewBud(){
     : [['예산', money(bs.total)], ['쓴 돈', money(bs.spent)], [rem >= 0 ? '남은 돈' : '초과', money(Math.abs(rem)), rem < 0 ? 'up' : '']];
   html += `<section class="card bhero"><div class="lab">${bs.cur ? '이번 달' : `${m}월`} 예산 ${money(bs.total)} 중</div>
     <div class="big num">${rem >= 0 ? `${money(rem)} 남았어요` : `${money(-rem)} 넘었어요`}<em>${Math.round(r * 100)}% 사용</em></div>
-    <div class="btrack"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%" data-l="오늘 적정선"></b>` : ''}</div>
+    <div class="btrack"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%" data-l="적정선"></b>` : ''}</div>
     <div class="bmeta2"><span>${bs.unbAmt ? '예산 항목에서 ' : ''}쓴 돈 ${money(bs.spent)}</span><span>${bs.cur ? `남은 날 ${bs.left}일 (오늘 포함)` : bs.ended ? '지난 달' : '아직 시작 전'}</span></div>
     <div class="bg3 num">${g3.map(([k, v, c]) => `<div>${k}<b${c ? ` class="${c}"` : ''}>${v}</b></div>`).join('')}</div>${alert}</section>`;
   if (bs.unbAmt) html += `<section class="card bnob"><span>예산 없는 항목에서 <b>${money(bs.unbAmt)}</b> 썼어요<small>${bs.unb.map(i => esc(i.name)).join(' · ')}</small></span>${ed ? '<button data-act="budEdit">예산 정하기</button>' : ''}</section>`;
@@ -1812,7 +1812,7 @@ function viewBud(){
   const grp = k => { const R = bs.rows.filter(x => x.it.kind === k); return R.length ? `<div class="bkind">${k}</div>` + R.sort((a, z) => z.it.bud - a.it.bud).map(rowHtml).join('') : ''; };
   const nAdd = budAddable(y, m).length;
   html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${grp('변동비')}${grp('고정비')}
-    ${ed ? `${nAdd ? `<button class="badd" data-act="budAdd">+ 예산 항목 추가 <small>${nAdd}개 더 있어요</small></button>` : ''}<p class="bhint">왼쪽으로 밀면 그 항목 예산을 지워요</p>` : ''}</section>`;
+    ${ed && nAdd ? '<button class="badd" data-act="budAdd">+ 예산 항목 추가</button>' : ''}</section>`;
   $('#view').innerHTML = html;
   $('#view').querySelectorAll('.swrap').forEach(w => { const el = w.querySelector('[data-bi]'), it = (S.model.budget[m] || [])[+el.dataset.bi];
     el.onclick = () => openItemTx(m, +el.dataset.bi);
@@ -1865,10 +1865,10 @@ function openBudAdd(){
   let sel = null;
   const draw = () => {
     const R = sel ? budRef(y, m, sel) : null, sug = sel ? budSuggest(sel, R) : null;
-    openEd(`<h4>예산 항목 추가 <button class="ex" id="edX">취소</button></h4><div class="esub">${m < 12 ? `${m}~12월` : '12월'}에 적용돼요</div>
+    openEd(`<h4>예산 항목 추가 <button class="ex" id="edX">취소</button></h4><div style="height:6px"></div>
       ${['고정비', '변동비'].map(k => { const I = L.filter(i => i.kind === k); return I.length ? `<div class="elbl">${k}</div><div class="echips">${I.map(i => `<button data-n="${esc(i.name)}" data-k="${k}"${i === sel ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>` : ''; }).join('')}
       ${sel ? `<div class="elbl">${esc(sel.name)} 한 달 예산</div><div class="ewon"><input id="baAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${sug ? fmtWon(sug) : ''}" autofocus><span>원</span></div>
-        <div class="ehint">${esc(budHint(sel, R))}</div><button class="btn" id="edSave">추가</button>` : '<p class="note">예산을 정할 항목을 골라 주세요</p>'}`);
+        <div class="ehint">${esc(budHint(sel, R))}</div><button class="btn" id="edSave">추가</button>` : ''}`);
     $('#edX').onclick = closeEd;
     $('#ed').querySelectorAll('[data-n]').forEach(b => b.onclick = () => { sel = L.find(i => i.kind === b.dataset.k && i.name === b.dataset.n); draw(); });
     if (sel){ bindWon($('#baAmt'));

@@ -63,8 +63,8 @@ const mq = window.matchMedia('(prefers-color-scheme: dark)');
 function applyTheme(){
   const t = S.theme==='system' ? (mq.matches?'dark':'light') : S.theme;
   document.documentElement.dataset.theme = t;
-  document.querySelector('meta[name=theme-color]').content = t==='dark' ? '#0E1013' : '#F5F6F8';
-  document.documentElement.style.backgroundColor = t==='dark' ? '#15171B' : '#FFFFFF'; document.documentElement.style.colorScheme = t;
+  document.querySelector('meta[name=theme-color]').content = t==='dark' ? '#0E1013' : '#F1F1EE';
+  document.documentElement.style.backgroundColor = t==='dark' ? '#15171B' : '#F9F9F6'; document.documentElement.style.colorScheme = t;
 }
 mq.addEventListener?.('change', () => { if (S.theme==='system'){ applyTheme(); render(); } });
 

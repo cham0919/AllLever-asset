@@ -51,7 +51,7 @@ const pctPlain = (x, d=1) => (x*100).toFixed(d) + '%';
 const dir = n => n>0 ? 'up' : n<0 ? 'down' : 'muted';
 const axisWon = v => { const a=Math.abs(v); return a>=1e8 ? (+(v/1e8).toFixed(2)).toString()+'억' : a>=1e4 ? Math.round(v/1e4).toLocaleString()+'만' : v; };
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const PALETTE = ['#3182F6','#22B07D','#F59E0B','#8B5CF6','#F04452','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
+const PALETTE = ['#4A5FC1','#2A9D74','#F59E0B','#8B5CF6','#F04452','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
 
 /* ───────── 엑셀 파싱 (값은 앱에서 직접 계산) ───────── */
 const KINDS = ['수입','고정비','변동비','저축'], BIGS = ['유동자산','비유동자산','부채'];

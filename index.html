@@ -8,26 +8,28 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="자산관리">
-<meta name="theme-color" content="#F5F6F8">
+<meta name="theme-color" content="#F1F1EE">
 <script src="theme-boot.js"></script>
 <meta name="robots" content="noindex, nofollow">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://accounts.google.com https://apis.google.com https://docs.google.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://accounts.google.com https://docs.google.com https://www.gstatic.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://www.googleapis.com https://sheets.googleapis.com https://accounts.google.com https://alllever-asset-auth.alllever.workers.dev; frame-src https://docs.google.com https://drive.google.com https://accounts.google.com https://content.googleapis.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="referrer" content="strict-origin-when-cross-origin">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preload" href="fonts/PretendardVariable.subset.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+@font-face{font-family:"Pretendard Variable";font-weight:45 920;font-style:normal;font-display:swap;src:url(fonts/PretendardVariable.subset.woff2) format("woff2-variations"),url(fonts/PretendardVariable.subset.woff2) format("woff2")}
 @media (prefers-color-scheme: dark){html:not([data-theme="light"]){background:#15171B}body{background:#0E1013}}
 :root{
-  --bg:#F5F6F8; --card:#FFFFFF; --ink:#191F28; --sub:#6B7684; --faint:#AEB5BF; --line:#EEF0F3;
-  --chip:#F2F4F6; --accent:#3182F6; --accent-soft:#E8F3FF;
-  --up:#F04452; --down:#3182F6; --income:#3182F6; --expense:#F04452; --saving:#22B07D; --repay:#7C5CFC; --fixed:#FB923C;
-  --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
-  --btn2:#E1E5EA; --warn:#F59E0B; --warn-soft:#FFF4E0; --warn-ink:#B76E00; --bad-soft:#FFEBEE; --bad-ink:#C62835; --good-soft:#E6F7EF; --good-ink:#137A52;
+  --bg:#F1F1EE; --card:#F9F9F6; --ink:#1E2027; --sub:#6E7178; --faint:#AFB1B5; --line:#E8E8E3;
+  --chip:#EBEBE6; --accent:#4A5FC1; --accent-soft:#E6E9F7; --accent-sh:rgba(74,95,193,.32);
+  --up:#E5484D; --down:#4A5FC1; --income:#4A5FC1; --expense:#E5484D; --saving:#2A9D74; --repay:#7C5CFC; --fixed:#F08A3C;
+  --shadow:0 1px 2px rgba(40,40,30,.04),0 4px 16px rgba(40,40,30,.04);
+  --btn2:#DFDFD9; --warn:#F59E0B; --warn-soft:#FFF4E0; --warn-ink:#B76E00; --bad-soft:#FFEBEE; --bad-ink:#C62835; --good-soft:#E6F7EF; --good-ink:#137A52;
 }
 :root[data-theme="dark"]{
   --bg:#0E1013; --card:#1A1D22; --ink:#ECEEF1; --sub:#9AA2AD; --faint:#5E6670; --line:#262A31;
-  --chip:#23272E; --accent:#4C94FF; --accent-soft:#1B2B44;
-  --up:#FF5C6A; --down:#4C94FF; --income:#4C94FF; --expense:#FF5C6A; --saving:#2FC48D; --repay:#9B86FF; --fixed:#FDA15A;
+  --chip:#23272E; --accent:#7D8EE8; --accent-soft:#232A47; --accent-sh:rgba(0,0,0,.4);
+  --up:#FF6B6F; --down:#7D8EE8; --income:#7D8EE8; --expense:#FF6B6F; --saving:#2FC48D; --repay:#9B86FF; --fixed:#FDA15A;
   --shadow:none;
   --btn2:#2E333B; --warn:#FBBF24; --warn-soft:#3A2E14; --warn-ink:#FCD38A; --bad-soft:#3A1A1F; --bad-ink:#FF9AA4; --good-soft:#123326; --good-ink:#7FE0B6;
 }
@@ -35,7 +37,7 @@
 /* 바탕: 페이지 내용은 body(--bg). html(가장 바깥 바탕)은 하단 바 색 — 아이폰 홈 화면 앱에서 화면 아래 틈이 생겨도 하단 바와 같은 색으로 보여요 */
 html{margin:0;background:var(--navfill);color:var(--ink)}
 body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh}
-body{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR",system-ui,sans-serif;
+body{font-family:"Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;font-feature-settings:"tnum";
   font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 input,select{font:inherit;color:var(--ink)}
@@ -86,7 +88,7 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .ltools{display:flex;gap:8px;margin:0 0 12px}
 .elink{display:block;color:var(--accent);font-weight:700;font-size:13.5px;padding:6px 0 12px}
 .ltools button{flex:1;height:42px;border-radius:13px;background:var(--card);box-shadow:var(--shadow);font-size:13.5px;font-weight:700}
-.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:25;width:56px;height:56px;border-radius:20px;background:var(--accent);color:#fff;font-size:30px;line-height:1;display:grid;place-items:center;box-shadow:0 6px 20px rgba(49,130,246,.4)}
+.fab{position:fixed;right:18px;bottom:calc(env(safe-area-inset-bottom) + 84px);z-index:25;width:56px;height:56px;border-radius:20px;background:var(--accent);color:#fff;font-size:30px;line-height:1;display:grid;place-items:center;box-shadow:0 6px 20px var(--accent-sh)}
 .elbl{font-size:12px;color:var(--sub);font-weight:700;margin:2px 2px 6px}
 .echips button.add{color:var(--accent);background:var(--accent-soft);box-shadow:none}
 .erow2{display:flex;gap:8px;margin-bottom:12px}
@@ -416,7 +418,7 @@ body:not(.onboarding) #setBtn{display:none}
 .pback{justify-self:start;color:var(--accent);font-size:16px;font-weight:600;padding:6px 2px}
 .ebar{z-index:62}
 .toast{z-index:90!important}
-:root{--navfill:#FFFFFF}:root[data-theme="dark"]{--navfill:#15171B}
+:root{--navfill:#F9F9F6}:root[data-theme="dark"]{--navfill:#15171B}
 .gmark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#fff;margin-right:4px;flex:none}.gmark svg{width:18px;height:18px}
 .ymlabel{min-width:132px;text-align:center;font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
 .stepper button{width:44px;height:40px}

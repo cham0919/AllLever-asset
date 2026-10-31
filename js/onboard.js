@@ -45,7 +45,7 @@ function viewOnboard(){
     <div class="ob-hero"><div class="ob-logo">₩</div><h2>자산관리</h2>
       <p class="ob-sub">가계부와 자산을 한곳에서 보고, 목표까지 얼마나 왔는지 확인해요.</p></div>
     <ul class="ob-list">
-      <li><b>가계부</b><span>수입·지출과 저축률을 달마다 정리해요. 대출 원금 상환도 저축으로 계산해요.</span></li>
+      <li><b>가계부</b><span>수입·지출·저축을 달마다 정리하고 예산과 비교해요.</span></li>
       <li><b>자산</b><span>계좌별 잔액으로 순자산과 변화를 그래프로 보여줘요.</span></li>
       <li><b>목표</b><span>지금 속도라면 목표에 언제 닿는지, 계획보다 빠른지 알려줘요.</span></li>
     </ul>

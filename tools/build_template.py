@@ -54,9 +54,9 @@ for r in range(8 + len(BUDGET), BUD_END + 1):
     body(st.cell(r, 1), inp=True); body(st.cell(r, 2), inp=True)
 
 ASSETS = [("유동자산", "저축", "입출금통장"), ("유동자산", "저축", "예적금"), ("유동자산", "저축", "비상금"),
-          ("유동자산", "투자", "주식계좌1"), ("유동자산", "투자", "주식계좌2"), ("유동자산", "코인", "코인"),
-          ("비유동자산", "부동산", "집"), ("비유동자산", "퇴직금", "퇴직연금1"), ("비유동자산", "퇴직금", "퇴직연금2"),
-          ("비유동자산", "청약", "청약1"), ("비유동자산", "청약", "청약2"),
+          ("유동자산", "투자", "주식계좌"), ("유동자산", "코인", "코인"),
+          ("비유동자산", "부동산", "집"), ("비유동자산", "퇴직금", "퇴직연금"),
+          ("비유동자산", "청약", "청약"),
           ("부채", "대출", "주택담보대출"), ("부채", "대출", "신용대출"), ("부채", "대출", "기타대출")]
 st["E6"] = "자산 분류"; st["E6"].font = f(True, 12)
 for i, h in enumerate(["대분류", "중분류", "소분류"]): head(st.cell(7, 5 + i, h))
@@ -99,7 +99,7 @@ T_END = T0 + len(BUDGET)                     # 마커 행 (범위에 포함 → 
 RC = 9                                       # 오른쪽 블록 시작 열 (I)
 REP_H0 = 4; REP_CAP = 20                     # 반복 거래 머리글 행 / 칸 수
 TX_H0 = REP_H0 + REP_CAP + 3                 # 거래 내역 머리글 행 (27)
-TX0 = TX_H0 + 1; TX_END = 2000; TX_FMT = 150
+TX0 = TX_H0 + 1; TX_FMT = 100; TX_END = TX0 + TX_FMT   # 거래 내역 100줄 + 마지막 '▲' 행 (범위에 포함 → 위에 행을 넣으면 수식 범위도 늘어나요)
 TX_H = ["일", "구분", "항목", "세부분류", "금액", "결제수단", "메모", "ID"]
 REP_H = ["일", "구분", "항목", "세부분류", "금액", "결제수단", "메모"]
 cl = lambda k: L(RC + k)                     # 오른쪽 블록 k번째 열 글자
@@ -179,15 +179,16 @@ for m in range(1, 13):
         for j in range(len(REP_H)): body(ws.cell(r, RC + j), WON if j == 4 else None, inp=True)
     ws.cell(TX_H0 - 1, RC, "거래 내역 · 앱에서 입력하면 아래로 쌓여요 (ID는 앱이 써요)").font = f(True, 12)
     for i, h in enumerate(TX_H): head(ws.cell(TX_H0, RC + i, h))
+    mk2 = ws.cell(TX_END, RC, "▲ 거래가 더 필요하면 이 행 위에 행 삽입 (앱은 자동으로 늘려요)"); mk2.font = f(False, 9, SUB)
     for r in range(TX0, TX0 + TX_FMT):
         for j in range(len(TX_H)): body(ws.cell(r, RC + j), WON if j == 4 else None, inp=j < 7)
         ws.cell(r, RC + 7).font = f(False, 8, "9CA3AF")
     REPR = lambda k: f"{cl(k)}{REP_H0 + 1}:{cl(k)}{REP_H0 + REP_CAP}"
     dvk = DataValidation(type="list", formula1='"수입,고정비,변동비,저축"', allow_blank=True)
-    ws.add_data_validation(dvk); dvk.add(f"{cl(1)}{TX0}:{cl(1)}{TX_END}"); dvk.add(REPR(1)); dvk.add(f"A{T0}:A{T_END - 1}")
+    ws.add_data_validation(dvk); dvk.add(f"{cl(1)}{TX0}:{cl(1)}{TX_END - 1}"); dvk.add(REPR(1)); dvk.add(f"A{T0}:A{T_END - 1}")
     dvp = DataValidation(type="list", formula1='"신용카드,체크카드,현금"', allow_blank=True, showErrorMessage=True, errorStyle="information",
                          error="신용카드·체크카드·현금 중에서 고르는 걸 권해요. 그대로 쓰려면 '예'를 누르세요.")
-    ws.add_data_validation(dvp); dvp.add(f"{cl(5)}{TX0}:{cl(5)}{TX_END}"); dvp.add(REPR(5))
+    ws.add_data_validation(dvp); dvp.add(f"{cl(5)}{TX0}:{cl(5)}{TX_END - 1}"); dvp.add(REPR(5))
     dv2 = DataValidation(type="list", formula1=f"=설정!$B$8:$B${BUD_END}", allow_blank=True,
                          showErrorMessage=True, errorStyle="information",
                          error="설정 시트 목록에 없는 항목입니다. 그대로 사용하려면 '예'를 누르세요.")
@@ -273,14 +274,6 @@ aw["A2"] = "매월 말 기준 잔액을 노란 칸에 입력하세요. 부채는
 MC = 4  # 1월 = D열
 assert A0 == HDR + 1
 for i, h in enumerate(["대분류", "중분류", "소분류"] + [f"{m}월" for m in range(1, 13)]): head(aw.cell(HDR, 1 + i, h))
-base = {"현금": 15000000, "복지포인트": 500000, "예비현금": 5000000, "참주식": 80000000, "정윤주식": 30000000,
-        "비트코인": 10000000, "아파트": 650000000, "참퇴직금": 40000000, "정윤퇴직금": 25000000,
-        "참청약": 12000000, "정윤청약": 8000000, "주택담보대출": 300000000, "신용대출": 0, "사내대출": 20000000}
-drift = {"현금": [0, 2500000, 4800000], "복지포인트": [0, -200000, 100000], "예비현금": [0, 0, 0],
-         "참주식": [0, 2600000, -1400000], "정윤주식": [0, 900000, 400000], "비트코인": [0, -1200000, 1800000],
-         "아파트": [0, 0, 5000000], "참퇴직금": [0, 350000, 700000], "정윤퇴직금": [0, 275000, 550000],
-         "참청약": [0, 100000, 200000], "정윤청약": [0, 100000, 200000],
-         "주택담보대출": [0, -650000, -1300000], "신용대출": [0, 0, 0], "사내대출": [0, -500000, -1000000]}
 for i, (a, b, c) in enumerate(ASSETS):
     r = A0 + i
     for j, v in enumerate((a, b, c)): body(aw.cell(r, 1 + j, v), inp=True)

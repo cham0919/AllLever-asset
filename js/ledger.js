@@ -23,13 +23,16 @@ function ledgerCols(V, h){
       if (H[j + 7] === 'ID'){ if (r.tx < 0){ r.tx = j; r.txH = i; } } else if (r.rep < 0){ r.rep = j; r.repH = i; } });
   }
   if (r.tx >= 0 && r.rep === r.tx && r.txH > r.repH) r.repEnd = r.txH - 1;   // 세로 배치: 반복 거래는 거래 내역 제목 행 전까지
+  if (r.tx >= 0) for (let i = r.txH + 1; i < V.length; i++) if (str((V[i] || [])[r.tx]).startsWith('▲')){ r.txEnd = i; break; }   // 거래 내역 끝 '▲' 행 (없으면 끝없이)
   return r;
 }
 const leftW = C => Math.min(Math.max(6, C.sub + 1, C.bud + 1), C.tx);   // 왼쪽 표 너비 (숨긴 세부분류 열 포함, 거래 내역 앞까지)
+const txCap = C => C.txEnd == null ? Infinity : C.txEnd - C.txH - 1;   // 거래 내역 칸 수
 const repCap = C => C.repEnd == null ? Infinity : C.repEnd - C.repH - 2;   // 반복 거래 칸 수 (거래 내역 위 빈 줄 하나는 남김)
 function readTx(V, h, c, m){
   const out = [];
   for (let i = h + 1; i < V.length; i++){ const r = V[i] || [], g = k => r[c + k];
+    if (str(g(0)).startsWith('▲')) break;   // 거래 내역 끝 표시 행
     const kind = str(g(1)), name = str(g(2)), amt = toNum(g(4)), id = str(g(7));
     if (!kind && !name && amt == null && !id) continue;
     if (!KINDS.includes(kind) || !name) continue;

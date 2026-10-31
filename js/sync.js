@@ -158,8 +158,8 @@ async function flushQueue(interactive){
           if (C.tx >= 0) await insertCells(op.fileId, title, L.marker, 0, leftW(C), 1, tok);   // 새 양식: 왼쪽 표에만 칸 넣기
           else await insertRow(op.fileId, title, L.marker, tok);
           await writeCells(op.fileId, [{range: `${qs(title)}!A${L.marker}:B${L.marker}`, values: [[op.kind, op.name]]}], tok);
-          if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = C.txH + 2, r = L.marker;   // 거래 합계 수식
-            await writeCells(op.fileId, [{range: `${qs(title)}!C${r}`, values: [[`=SUMIFS($${c(4)}$${r0}:$${c(4)}$2100,$${c(1)}$${r0}:$${c(1)}$2100,A${r},$${c(2)}$${r0}:$${c(2)}$2100,B${r})`]]}], tok, 'USER_ENTERED'); }
+          if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = C.txH + 2, r1 = C.txEnd != null ? C.txEnd + 1 : 2100, r = L.marker;   // 거래 합계 수식 (거래 내역 끝 '▲' 행까지)
+            await writeCells(op.fileId, [{range: `${qs(title)}!C${r}`, values: [[`=SUMIFS($${c(4)}$${r0}:$${c(4)}$${r1},$${c(1)}$${r0}:$${c(1)}$${r1},A${r},$${c(2)}$${r0}:$${c(2)}$${r1},B${r})`]]}], tok, 'USER_ENTERED'); }
         }
       } else {
         const [V] = await readRanges(op.fileId, [`'자산관리'!A1:Z300`], tok), L = locateAsset(V);
@@ -196,10 +196,15 @@ async function flushQueue(interactive){
       if (reps && reps.length > repCap(C)){   // 반복 거래 칸이 모자라면 오른쪽 블록에만 줄을 넣어 거래 내역을 아래로 밀어요
         const k = reps.length - repCap(C);
         await insertCells(fileId, title, C.repH + 2 + repCap(C), C.rep, C.rep + TX_COLS, k, tok, C.repH + 2);
-        C.txH += k; C.repEnd += k;
+        C.txH += k; C.repEnd += k; if (C.txEnd != null) C.txEnd += k;
       }
       tx.sort((a, z) => a.d - z.d);
-      if (ops.some(o => o.t === 'tx')){ const b = block(C.tx, C.txH, TX_COLS, tx.map(txRow), usedTx); if (b) data.push(b); }
+      if (ops.some(o => o.t === 'tx') && tx.length > txCap(C)){   // 거래 내역 칸이 모자라면 '▲' 행 위에 줄을 넣어요 (시트 수식 범위도 같이 늘어나요)
+        const k = tx.length - txCap(C) + 20;
+        await insertCells(fileId, title, C.txEnd + 1, C.tx, C.tx + TX_COLS, k, tok, C.txEnd);
+        C.txEnd += k;
+      }
+      if (ops.some(o => o.t === 'tx')){ const b = block(C.tx, C.txH, TX_COLS, tx.map(txRow), Math.min(usedTx, txCap(C))); if (b) data.push(b); }
       if (reps){ const b = block(C.rep, C.repH, REP_COLS, reps.map(repRow), Math.min(usedRep, repCap(C))); if (b) data.push(b); }
       await writeCells(fileId, data, tok);
       const Yl = S.years?.[ops[0].y];   // 다른 기기·시트에서 넣은 거래도 화면에 바로 반영

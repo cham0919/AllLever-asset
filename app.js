@@ -227,9 +227,39 @@ function cagr(pts, fn){
   const n = monthsBetween(st, cur), v0 = fn(st);
   return {rate: Math.pow(v1 / v0, 12 / n) - 1, n, from: st, total: v1 / v0 - 1};
 }
+// 홈 위쪽: 이번 달 가계부 (매일 보는 것) — 올해 파일이 있으면 이번 달, 없으면 보고 있는 해의 마지막 기록 달
+function homeLedgerPos(){
+  const now = new Date(), cy = now.getFullYear();
+  if (S.years?.[cy]) return {y: cy, m: now.getMonth() + 1, cur: true};
+  const y = S.year; if (!y) return null; let m = 12; while (m > 1 && !bMonth(m, y).has) m--; return {y, m, cur: false};
+}
+function homeLedger(){
+  const P = homeLedgerPos(); if (!P) return '';
+  const Y = S.years[P.y], b = bMonth(P.m, P.y), TX = Y?.txMode, ed = canEdit(P.y) && TX;
+  const now = new Date(), today = P.cur ? (Y.tx?.[P.m] || []).filter(t => !t.skip && t.d === now.getDate() && t.kind !== '수입').reduce((a, t) => a + t.amt, 0) : 0;
+  const bs = TX ? budState(P.y, P.m) : null, rem = bs ? bs.total - bs.spent : 0, r = bs?.total ? bs.spent / bs.total : 0;
+  return `<section class="card hledger" data-act="homeLedger" role="button" tabindex="0">
+    <div class="hl-top"><span class="label">${P.cur ? '이번 달' : `${P.y}년 ${P.m}월`} 가계부</span><span class="go">›</span></div>
+    ${bs?.total ? `<div class="big num">${rem >= 0 ? `${money(rem)} <em>남았어요</em>` : `${money(-rem)} <em class="up">넘었어요</em>`}</div>
+      <div class="btrack sm"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%"></b>` : ''}</div>
+      <div class="hl-row"><span>예산 ${money(bs.total)} 중 ${Math.round(r * 100)}%</span><span>${bs.cur && bs.left ? `하루 <b>${money(bs.daily)}</b> 쓸 수 있어요` : ''}</span></div>`
+    : `<div class="big num">${money(b.expense)} <em>썼어요</em></div><div class="hl-row"><span>수입 ${money(b.income)} · 일반 저축 ${money(b.cash)}</span>${ed ? '<button class="hl-link" data-act="homeBud">예산 정하기 ›</button>' : ''}</div>`}
+    ${P.cur && TX ? `<div class="hl-today"><span>오늘</span><b class="num">${today ? money(today) + ' 썼어요' : '아직 지출이 없어요'}</b></div>` : ''}
+  </section>`;
+}
+// 홈: 목표 진척 한 줄
+function homeGoal(pts){
+  if (pts.length < 2) return '';
+  const g = S.goal, cur = pts.at(-1), T = g.target, done = Math.min(1, Math.max(0, cur.net / T));
+  const inp = analysisInputs(pts), proj = project(cur.net, inp.rate, inp.save, T), hit = proj.months != null ? ymIdx(cur.y, cur.m) + proj.months : null;
+  return `<section class="card hgoal" data-act="homeGoal" role="button" tabindex="0"><div class="hl-top"><span class="label">목표 ${T / 1e8}억까지</span><span class="go">›</span></div>
+    <div class="hg-row"><b class="num">${pctPlain(done, 1)}</b><span>${hit != null ? `지금 속도면 ${ymText(hit)} 달성` : '지금 속도로는 60년 이상'}</span></div>
+    <div class="prog"><i style="width:${done * 100}%"></i></div></section>`;
+}
 function viewHome(){
-  const pts = assetPoints();
-  if (!pts.length){ $('#view').innerHTML = `<div class="empty"><b>자산 데이터가 없어요</b>엑셀 '자산관리' 시트에 입력하면 홈에 표시돼요.</div>`; return; }
+  const pts = assetPoints(), led = homeLedger(), P = homeLedgerPos();
+  const fab = P && S.years[P.y]?.txMode && P.cur && canEdit(P.y) ? '<button class="fab" data-act="homeAddTx" aria-label="거래 추가">+</button>' : '';
+  if (!pts.length){ $('#view').innerHTML = led + `<div class="empty"><b>자산 데이터가 없어요</b>자산 탭에서 월말 잔액을 입력하면 순자산과 목표가 홈에 표시돼요.</div>` + fab; return; }
   const cur = pts.at(-1), G = HOME_GROUPS;
   const inv = grpSum(G.invest, cur), est = grpSum(G.estate, cur), cash = grpSum(G.cash, cur);
   const list = S.years[cur.y].assets;
@@ -242,7 +272,7 @@ function viewHome(){
                         : `<div class="f"><span>연평균 증가</span><span>-</span></div>`;
   const tot = Math.max(cur.total, 1);
   const prevX = pts.length > 1 ? pts.at(-2) : null;
-  $('#view').innerHTML = `
+  $('#view').innerHTML = led + `
   <section class="card hero">
     <div class="label">${cur.y}년 ${cur.m}월 말 순자산</div>
     <div class="big num">${money(cur.net)}</div>
@@ -250,7 +280,7 @@ function viewHome(){
     <div class="sub" style="font-size:12px;margin-top:14px">총자산 구성</div>
     <div class="flow" style="margin-top:6px"><i style="width:${inv/tot*100}%;background:var(--accent)"></i><i style="width:${est/tot*100}%;background:var(--fixed)"></i><i style="width:${cash/tot*100}%;background:var(--saving)"></i>${looseSum?`<i style="width:${looseSum/tot*100}%;background:var(--faint)"></i>`:''}</div>
     <div class="flow-lg"><span>금융투자 ${pctPlain(inv/tot,0)}</span><span>부동산 ${pctPlain(est/tot,0)}</span><span>현금 ${pctPlain(cash/tot,0)}</span></div>
-  </section>
+  </section>${homeGoal(pts)}
   ${loose.length ? `<div class="warn"><b>분류되지 않은 자산 ${loose.length}개</b> · ${loose.map(a => esc(a.small)).join(', ')} (${money(looseSum)})<br>중분류가 투자·퇴직금·코인·저축·청약·부동산이 아니라 홈의 금융투자·부동산·현금 어디에도 들어가지 않아요.</div>` : ''}
   <div class="home-grid">
     <div class="hc"><div class="t">총자산</div><div class="v num">${money(cur.total)}</div>${foot(rTotal)}</div>
@@ -263,7 +293,7 @@ function viewHome(){
       <div class="f"><span>현재 현금</span><b class="num">${money(cash)}</b></div></div>
   </div>
   <p class="note" style="margin:0 4px 12px">${span ? `연평균 증가율: ${span.from.y}년 ${span.from.m}월 → ${cur.y}년 ${cur.m}월 (${span.n}개월) 잔액 기준 연환산${span.n < 12 ? ' · <b>1년 미만 기간이라 실제보다 크게 보일 수 있어요</b>' : ''}. 저축·추가 납입도 포함돼요.` : '연평균 수익률은 두 달 이상 기록이 쌓이면 표시돼요.'}
-  현금비중은 순자산 대비예요.</p>`;
+  현금비중은 순자산 대비예요.</p>${fab}${fab ? '<div style="height:64px"></div>' : ''}`;
 }
 
 /* ───────── 화면: 분석 ───────── */
@@ -452,19 +482,19 @@ function viewAnalysis(){
 
 /* ───────── 화면: 가계부 ───────── */
 function viewBudget(){
-  const TX = S.model.txMode;
-  if (TX && S.bview === 'cal') return viewCal();
-  if (TX && S.bview === 'stat') return viewStat();
-  if (TX && S.bview === 'bud') return viewBud();
-  if (S.bview === 'year') return viewTrend();
+  const TX = S.model.txMode, v = effView();
+  if (v === 'cal') return viewCal();
+  if (v === 'bud') return viewBud();
+  if (S.rview === 'y') return viewTrend();
+  // 리포트 › 이번 달: 저축·수입 배분(요약) + 어디에 썼나·누적·달라진 점·큰 지출(통계)
   const m = S.month.budget, b = bMonth(m), pb = bMonth(m-1);
-  if (!b.has){ emptyMonth(m, '가계부'); $('#view').innerHTML = bsegHtml() + (TX ? `<div class="empty"><b>${m}월 거래가 없어요</b>달력에서 거래를 입력하면 항목별로 합산돼요.</div>` : $('#view').innerHTML); return; }
+  if (!b.has){ emptyMonth(m, '가계부'); $('#view').innerHTML = bsegHtml() + rsegHtml() + (TX ? `<div class="empty"><b>${m}월 거래가 없어요</b>달력에서 거래를 입력하면 항목별로 합산돼요.</div>` : $('#view').innerHTML); return; }
   const ed = canEdit();
   const dExp = pb.has ? b.expense - pb.expense : null;
   const dSav = pb.has ? b.saving - pb.saving : null;
   const exItems = b.items.filter(i=>i.kind!=='수입' && i.amt>0).sort((x,y)=>y.amt-x.amt);
   const flowTot = Math.max(b.income, b.expense, 1);
-  let html = `${bsegHtml()}${!TX && ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
+  let html = `${bsegHtml()}${rsegHtml()}${!TX && ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
   <section class="card hero">
     <div class="label">${m}월 저축 합계 <span class="muted">· 일반 + 대출상환</span></div>
     <div class="big num ${b.saving<0?'up':''}">${money(b.saving)}</div>
@@ -482,7 +512,7 @@ function viewBudget(){
     <div class="tile"><div class="t"><i class="dot" style="background:var(--income)"></i>수입</div><div class="v num">${money(b.income)}</div>${pb.has?`<div class="d ${dir(b.income-pb.income)}">${signed(b.income-pb.income)}</div>`:''}</div>
     <div class="tile"><div class="t"><i class="dot" style="background:var(--expense)"></i>지출</div><div class="v num">${money(b.expense)}</div>${dExp!=null?`<div class="d ${dir(dExp)}">${signed(dExp)}</div>`:''}</div>
     <div class="tile"><div class="t"><i class="dot" style="background:var(--saving)"></i>저축 합계</div><div class="v num">${money(b.saving)}</div>${dSav!=null?`<div class="d ${dir(dSav)}">${signed(dSav)}</div>`:''}</div>
-  </div>
+  </div>${TX ? '<div id="rpStat"></div>' : ''}
   <section class="card">
     <h3>수입 배분 <small>수입 ${money(b.income)} 기준</small></h3>
     <div class="donut"><canvas id="cFlow"></canvas><div class="center"><div><b class="num">${pctPlain(Math.max(b.rate,0),0)}</b><span>저축률${b.repay?' (상환 포함)':''}</span></div></div></div>
@@ -493,7 +523,7 @@ function viewBudget(){
       <div class="lg"><i class="dot" style="background:transparent"></i><span class="n"><b>저축 합계</b></span><span class="p num">${pctPlain(b.rate,0)}</span><span class="a num"><b>${money(b.saving)}</b></span></div>
     </div>
   </section>`;
-  if (exItems.length) html += `
+  if (exItems.length && !TX) html += `
   <section class="card">
     <h3>지출 구성 <small>${exItems.length}개 항목</small></h3>
     <div class="donut"><canvas id="cExp"></canvas><div class="center"><div><b class="num" style="font-size:18px">${money(b.expense)}</b><span>총 지출</span></div></div></div>
@@ -515,19 +545,20 @@ function viewBudget(){
   }).join('')}</section>`;
   $('#view').innerHTML = html;
   donut('cFlow', ['고정비','변동비','일반 저축'], [b.fixed,b.variable,Math.max(b.cash,0)], [css('--fixed'),css('--expense'),css('--saving')]);
-  if (exItems.length) donut('cExp', exItems.map(i=>i.name), exItems.map(i=>i.amt), exItems.map((_,k)=>PALETTE[k%PALETTE.length]));
+  if (TX) statInto($('#rpStat'));
+  if (exItems.length && !TX) donut('cExp', exItems.map(i=>i.name), exItems.map(i=>i.amt), exItems.map((_,k)=>PALETTE[k%PALETTE.length]));
 }
 
 /* ───────── 화면: 월별추이 ───────── */
 function viewTrend(){
   const ms = Array.from({length:12},(_,i)=>bMonth(i+1)), on = ms.filter(x=>x.has);
-  if (!on.length){ emptyMonth(null, '가계부'); $('#view').innerHTML = bsegHtml() + $('#view').innerHTML; return; }
+  if (!on.length){ emptyMonth(null, '가계부'); $('#view').innerHTML = bsegHtml() + rsegHtml() + $('#view').innerHTML; return; }
   const tot = k => on.reduce((a,x)=>a+x[k],0);
   const inc = tot('income'), exp = tot('expense'), sav = tot('saving'), cash = tot('cash'), rep = tot('repay');
   const nul = (x,k) => x.has ? x[k] : null;
   const cum = k => { let c = 0; return ms.map(x => { if (!x.has) return null; c += x[k]; return c; }); };
   const share = v => sav ? pctPlain(v/sav, 0) : '-';
-  $('#view').innerHTML = bsegHtml() + `
+  $('#view').innerHTML = bsegHtml() + rsegHtml() + `
   <section class="card hero">
     <div class="label">${S.model.year}년 누적 저축 합계 <span class="muted">· ${on.length}개월</span></div>
     <div class="big num">${money(sav)}</div>
@@ -575,7 +606,7 @@ function viewTrend(){
       {label:'고정비', data:ms.map(x=>nul(x,'fixed')), backgroundColor:css('--fixed'), borderRadius:3, maxBarThickness:22},
       {label:'변동비', data:ms.map(x=>nul(x,'variable')), backgroundColor:css('--expense'), borderRadius:3, maxBarThickness:22}]},
     options:{plugins:{legend:leg, tooltip:tipIdx}, scales:{x:{...scaleX, stacked:true}, y:scaleWon({stacked:true})}}});
-  document.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => { const m=+tr.dataset.m; if (!bMonth(m).has) return; S.month.budget = m; S.bview = 'sum'; LS.set('bview', 'sum'); go('budget'); });
+  document.querySelectorAll('tr.click').forEach(tr => tr.onclick = () => { const m=+tr.dataset.m; if (!bMonth(m).has) return; S.month.budget = m; S.bview = 'rep'; S.rview = 'm'; LS.set('bview', 'rep'); LS.set('rview', 'm'); go('budget'); });
 }
 
 /* ───────── 화면: 자산 ───────── */
@@ -698,8 +729,8 @@ function emptyMonth(m, what){
 }
 
 /* ───────── 라우팅 ───────── */
-const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'분석'};
-const isYearView = () => S.tab === 'budget' && S.bview === 'year';   // 가계부 › 연간 (예전 월별추이)
+const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표'};
+const isYearView = () => S.tab === 'budget' && effView() === 'rep' && S.rview === 'y';   // 가계부 › 리포트 › 올해 (예전 월별추이)
 function render(){
   killCharts();
   document.body.classList.remove('onboarding');
@@ -802,7 +833,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = '버전 ' + APP_VER;
 }
-const APP_VER = 'v23';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v24';   // sw.js 캐시 이름과 같이 올려요
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   $('#sheet').scrollTop = 0;
@@ -1130,7 +1161,11 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];
     if (S.years[S.year].txMode) openItemTx(m, k); else editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
-  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats(); else if (a === 'budEdit') openBudEdit(); else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
+  else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats(); else if (a === 'budEdit') openBudEdit();
+  else if (a === 'homeLedger' || a === 'homeBud' || a === 'homeAddTx'){ const P = homeLedgerPos(); if (!P) return; setYear(P.y); S.month.budget = P.m;
+    if (a === 'homeAddTx') return editTx(null);
+    S.bview = a === 'homeBud' ? 'bud' : 'cal'; LS.set('bview', S.bview); go('budget'); if (a === 'homeBud') openBudEdit(); }
+  else if (a === 'homeGoal') go('analysis'); else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind); });
 
 /* ───────── 입력: 앱에서 고친 값을 구글 시트에 저장 ─────────
@@ -1666,10 +1701,12 @@ function applyReps(){
 }
 
 /* 가계부 탭 위쪽: 달력 / 통계 / 요약 */
-S.bview = LS.get('bview', 'cal');
-const bsegHtml = () => { const TX = S.model?.txMode, segs = TX ? [['cal', '달력'], ['bud', '예산'], ['stat', '통계'], ['sum', '요약'], ['year', '연간']] : [['sum', '요약'], ['year', '연간']];
-  const cur = segs.some(([v]) => v === S.bview) ? S.bview : 'sum';   // 옛 양식 해: 달력·예산·통계 → 요약
-  return `<div class="bseg">${segs.map(([v, l]) => `<button data-bv="${v}"${cur === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`; };
+S.bview = LS.get('bview', 'cal'); S.rview = LS.get('rview', 'm');
+if (['stat', 'sum', 'year'].includes(S.bview)){ S.rview = S.bview === 'year' ? 'y' : 'm'; S.bview = 'rep'; LS.set('bview', 'rep'); LS.set('rview', S.rview); }   // 예전 보기 이름 정리
+const effView = () => S.model?.txMode && ['cal', 'bud', 'rep'].includes(S.bview) ? S.bview : 'rep';
+const rsegHtml = () => `<div class="rseg"><button data-rv="m"${S.rview !== 'y' ? ' class="on"' : ''}>${S.month.budget}월</button><button data-rv="y"${S.rview === 'y' ? ' class="on"' : ''}>${S.year}년 전체</button></div>`;
+document.addEventListener('click', e => { const b = e.target.closest('[data-rv]'); if (!b) return; S.rview = b.dataset.rv; LS.set('rview', S.rview); render(); });
+const bsegHtml = () => S.model?.txMode ? `<div class="bseg">${[['cal', '달력'], ['bud', '예산'], ['rep', '리포트']].map(([v, l]) => `<button data-bv="${v}"${effView() === v ? ' class="on"' : ''}>${l}</button>`).join('')}</div>` : '';
 document.addEventListener('click', e => { const b = e.target.closest('[data-bv]'); if (!b) return; S.bview = b.dataset.bv; LS.set('bview', S.bview); render(); });
 
 function selDay(y, m){
@@ -1885,12 +1922,12 @@ function openBudEdit(){
 }
 
 /* 통계 */
-function viewStat(){
+function statInto(host){
   const y = S.year, m = S.month.budget, Y = S.model, T = (Y.tx[m] || []).filter(t => !t.skip), now = new Date();
   const cur = now.getFullYear() === y && now.getMonth() + 1 === m, cutDay = cur ? now.getDate() : 31;
   const E = T.filter(t => EXP_KINDS.includes(t.kind)), PT = txOf(m - 1), PE = PT && PT.some(t => EXP_KINDS.includes(t.kind)) ? PT.filter(t => EXP_KINDS.includes(t.kind)) : null;
-  let html = bsegHtml();
-  if (!E.length){ $('#view').innerHTML = html + `<div class="empty"><b>${m}월 지출 거래가 없어요</b>달력에서 거래를 입력하면 통계가 나와요.</div>`; return; }
+  let html = '';
+  if (!E.length || !host) return;
   const tot = E.reduce((a, t) => a + t.amt, 0), by = {};
   for (const t of E){ const k = groupKey(t); (by[k] = by[k] || {n: k, item: t.name, a: 0, c: 0}).a += t.amt; by[k].c++; }
   const G = Object.values(by).sort((a, z) => z.a - a.a), top = G.slice(0, 7), rest = G.slice(7).reduce((a, g) => a + g.a, 0);
@@ -1915,7 +1952,7 @@ function viewStat(){
   const big = [...E].sort((a, z) => z.amt - a.amt)[0]; ins.push(`가장 큰 지출은 ${big.d}일 <b>${esc(big.memo && big.memo !== '반복' ? big.memo : groupKey(big))}</b> ${money(big.amt)}이에요.`);
   html += `<section class="card"><h3>달라진 점</h3><ul class="ins">${ins.map(s => `<li>${s}</li>`).join('')}</ul></section>`;
   html += `<section class="card"><h3>큰 지출 TOP 5</h3>${[...E].sort((a, z) => z.amt - a.amt).slice(0, 5).map(t => txRowHtml(t, canEdit())).join('')}</section>`;
-  $('#view').innerHTML = html;
+  host.innerHTML = html;
   donut('cSub', top.map(g => g.n), top.map(g => g.a), top.map((_, k) => PALETTE[k % PALETTE.length]));
   const n = daysIn(y, m), cum = arr => { const o = Array(32).fill(0); for (const t of arr) o[t.d] += t.amt; let s = 0; return Array.from({length: n}, (_, i) => (s += o[i + 1])); };
   const a = cum(E).map((v, i) => i + 1 <= cutDay ? v : null), ds = [{label: `${m}월`, data: a, borderColor: css('--up'), backgroundColor: css('--up'), borderWidth: 2.5, pointRadius: 0, tension: .25, spanGaps: false}];

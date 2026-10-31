@@ -393,6 +393,16 @@ nav.tabs button.on{color:var(--ink)}
 .ber .n{flex:1;min-width:0}.ber .n b{display:block;font-size:14.5px}.ber .n small{font-size:11.5px;color:var(--sub)}
 .bin{width:124px;flex:none;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);text-align:right;padding:0 10px;font-weight:700;font-size:15px}
 .bin.rep{border-color:var(--accent);background:var(--accent-soft)}
+.rseg{display:inline-flex;gap:4px;margin:0 0 12px;padding:3px;border-radius:11px;background:var(--chip)}
+.rseg button{padding:6px 12px;border-radius:8px;font-size:13px;font-weight:700;color:var(--sub)}
+.rseg button.on{background:var(--card);color:var(--ink);box-shadow:var(--shadow)}
+.hledger,.hgoal{cursor:pointer}
+.hl-top{display:flex;justify-content:space-between;align-items:center}.hl-top .label{font-size:13px;color:var(--sub);font-weight:600}.hl-top .go{color:var(--faint);font-size:20px;line-height:1}
+.hledger .big{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px}.hledger .big em{font-style:normal;font-size:15px;color:var(--sub);font-weight:600}.hledger .big em.up{color:var(--expense)}
+.hl-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;color:var(--sub);margin-top:4px}.hl-row b{color:var(--ink)}
+.hl-link{color:var(--accent);font-weight:700;font-size:13px}
+.hl-today{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--sub)}.hl-today b{color:var(--ink);font-size:14px}
+.hg-row{display:flex;align-items:baseline;gap:10px;margin:4px 0 8px}.hg-row b{font-size:22px;font-weight:800;color:var(--accent)}.hg-row span{font-size:12.5px;color:var(--sub)}
 </style>
 </head>
 <body>
@@ -420,7 +430,7 @@ nav.tabs button.on{color:var(--ink)}
   <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 10 12 4l9 6"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/></svg>홈</button>
   <button data-tab="budget"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>가계부</button>
   <button data-tab="asset"><svg viewBox="0 0 24 24"><path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>자산</button>
-  <button data-tab="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="m4 15 5-5 4 3 7-8"/><path d="M15 5h5v5"/></svg>분석</button>
+  <button data-tab="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="m4 15 5-5 4 3 7-8"/><path d="M15 5h5v5"/></svg>목표</button>
 </nav>
 
 <div class="scrim" id="scrim"></div>

@@ -20,7 +20,7 @@
   --chip:#F2F4F6; --accent:#3182F6; --accent-soft:#E8F3FF;
   --up:#F04452; --down:#3182F6; --income:#3182F6; --expense:#F04452; --saving:#22B07D; --repay:#7C5CFC; --fixed:#FB923C;
   --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
-  --warn:#F59E0B; --warn-soft:#FFF4E0; --warn-ink:#B76E00; --bad-soft:#FFEBEE; --bad-ink:#C62835; --good-soft:#E6F7EF; --good-ink:#137A52;
+  --btn2:#E1E5EA; --warn:#F59E0B; --warn-soft:#FFF4E0; --warn-ink:#B76E00; --bad-soft:#FFEBEE; --bad-ink:#C62835; --good-soft:#E6F7EF; --good-ink:#137A52;
   --tabbar:rgba(255,255,255,.88);
 }
 :root[data-theme="dark"]{
@@ -28,7 +28,7 @@
   --chip:#23272E; --accent:#4C94FF; --accent-soft:#1B2B44;
   --up:#FF5C6A; --down:#4C94FF; --income:#4C94FF; --expense:#FF5C6A; --saving:#2FC48D; --repay:#9B86FF; --fixed:#FDA15A;
   --shadow:none; --tabbar:rgba(20,22,26,.88);
-  --warn:#FBBF24; --warn-soft:#3A2E14; --warn-ink:#FCD38A; --bad-soft:#3A1A1F; --bad-ink:#FF9AA4; --good-soft:#123326; --good-ink:#7FE0B6;
+  --btn2:#2E333B; --warn:#FBBF24; --warn-soft:#3A2E14; --warn-ink:#FCD38A; --bad-soft:#3A1A1F; --bad-ink:#FF9AA4; --good-soft:#123326; --good-ink:#7FE0B6;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
@@ -47,7 +47,8 @@ body::before{content:"";position:fixed;top:0;left:0;right:0;height:env(safe-area
 .icon-btn svg{width:20px;height:20px;stroke:var(--ink);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .icon-btn.spin svg{animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.status{font-size:12px;color:var(--sub);margin-top:2px}
+.status{font-size:12px;color:var(--sub);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw;line-height:1.25}
+.status:empty{display:none}
 
 .stepper{display:flex;align-items:center;justify-content:center;gap:4px;margin:6px 0 2px}
 .stepper button{width:40px;height:36px;border-radius:10px;display:grid;place-items:center;color:var(--sub)}
@@ -118,6 +119,7 @@ body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.
 .ob-list b{display:block;font-size:15px}.ob-list span{color:var(--sub);font-size:13.5px}
 .ob-note{color:var(--sub);font-size:12.5px;margin:6px 4px 14px;line-height:1.5}
 .ob-link{display:block;margin:6px auto 0;color:var(--accent);font-weight:700;font-size:15px;padding:10px}
+.btn.alt{background:var(--btn2);color:var(--ink)}
 .ob-step{color:var(--accent);font-weight:700;font-size:13px}
 .ob-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
 .ob-chips button{height:40px;padding:0 16px;border-radius:12px;background:var(--card);box-shadow:var(--shadow);font-weight:700}
@@ -437,6 +439,10 @@ body:not(.onboarding) #setBtn{display:none}
 .pback{justify-self:start;color:var(--accent);font-size:16px;font-weight:600;padding:6px 2px}
 .ebar{z-index:62}
 .toast{z-index:90!important}
+nav.tabs::after{content:"";position:absolute;left:0;right:0;top:100%;height:120px;background:var(--navfill)}
+:root{--navfill:#FFFFFF}:root[data-theme="dark"]{--navfill:#15171B}
+nav.tabs{background:var(--navfill)!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+@media (display-mode: standalone){html{background:linear-gradient(to bottom,var(--bg) 50%,var(--navfill) 50%)}}
 </style>
 </head>
 <body>
@@ -445,12 +451,12 @@ body:not(.onboarding) #setBtn{display:none}
     <div style="display:flex;align-items:center;gap:4px;min-width:0">
       <h1 id="title">가계부</h1>
     </div>
-    <div style="display:flex;gap:8px">
+    <div style="display:flex;gap:8px;align-items:center;min-width:0">
+      <div class="status" id="status"></div>
       <button class="icon-btn" id="syncBtn" aria-label="동기화"><svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 4v5h-5"/></svg></button>
       <button class="icon-btn" id="setBtn" aria-label="설정"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
   </div>
-  <div class="status" id="status"></div>
   <div class="stepper" id="stepper">
     <button id="prevM" aria-label="이전"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
     <div class="pickers"><span class="sel"><select id="selY" aria-label="연도"></select></span><span class="sel" id="selMWrap"><select id="selM" aria-label="월"></select></span></div>

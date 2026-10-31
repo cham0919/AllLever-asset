@@ -648,7 +648,7 @@ function viewAsset(){
     <div class="tile"><div class="t">유동자산</div><div class="v num">${money(c.liquid)}</div>${d(c.liquid,p.liquid)}</div>
     <div class="tile"><div class="t">비유동자산</div><div class="v num">${money(c.fixedA)}</div>${d(c.fixedA,p.fixedA)}</div>
   </div>
-  ${ytd ? `<section class="card"><h3>1월 대비 현재 <small>1월 → ${L}월${L<TM?` · ${TM}월 미입력`:''}</small></h3>
+  ${ytd ? `<section class="card"><h3>1월 대비 현재 <small>1월 → ${L}월</small></h3>
     <div class="stats">${ytd.map(([n,a,b,note])=>`
       <div class="stat"><div class="t">${n}</div><div class="v num ${dir(b-a)}" style="font-size:22px">${a?pct((b-a)/Math.abs(a),2):'-'}</div>
         <div class="h" style="color:var(--sub)"><span class="${dir(b-a)}" style="white-space:nowrap">${signed(b-a)}</span> · <span style="white-space:nowrap">${money(a)}</span> → <span style="white-space:nowrap">${money(b)}</span></div>
@@ -724,7 +724,7 @@ function emptyMonth(m, what){
   $('#view').innerHTML = !S.model ? `
     <div class="empty"><b>시트를 불러오지 못했어요</b>새로고침 버튼을 누르거나 설정에서 연결을 확인해 주세요.
       <div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="sync">다시 불러오기</button><button class="btn ghost" data-act="openSheet">설정 열기</button></div></div>`
-    : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>${m && canEdit() ? '앱에서 바로 입력할 수 있어요.' : '시트의 ' + (what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트") + '에 입력하면 여기에 표시돼요.'}
+    : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>${m && canEdit() ? '' : '시트의 ' + (what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트") + '에 입력하면 여기에 표시돼요.'}
       ${m && canEdit() ? `<div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="${what==='자산'?'editAsset':'editBudget'}">${m}월 ${what==='자산'?'잔액':'가계부'} 입력하기</button></div>` : ''}</div>`;
 }
 
@@ -747,7 +747,7 @@ function render(){
     const trend = isYearView();
     $('#selMWrap').style.display = trend ? 'none' : '';
     if (!trend) $('#selM').innerHTML = Array.from({length:12}, (_,i) => i+1).map(m =>
-      `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월${key==='budget' || fn(m).has?'':' · 미입력'}</option>`).join('');
+      `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월</option>`).join('');
     $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }
@@ -756,7 +756,7 @@ function render(){
   if (!S.model) return emptyMonth(null, '');
   ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
-function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings'){ S.spage = 'main'; hPop(); } S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
@@ -844,18 +844,18 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v28';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v29';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
-  S.spage = key;
+  S.spage = key; if (key !== 'main') hPush(); else if (!$('#ed').classList.contains('on')) hPop();
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   window.scrollTo(0, 0);
 }
 function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g){ syncSheet(); sPage(g.dataset.go, g.dataset.go === 'main'); return; }
+  const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
   const a = e.target.closest('[data-sa]'); if (!a) return;
   const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
   ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
@@ -897,10 +897,9 @@ async function loadDemo(){
 const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
 function updateStatus(){
   const q = S.queue?.length || 0;
-  if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '저장 대기 ' + q + '건 · 연결되면 시트에 저장해요'}</span>`; return; }
-  if (S.model && S.meta.source === 'demo'){ $('#status').innerHTML = '예시 데이터로 보는 중 · <button class="slink" data-act="obRestart">내 데이터로 시작하기</button>'; return; }
-  $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` :
-    S.meta.source==='local' ? `이 기기에 저장 중${yearsList().length > 1 ? ` · ${yearsList().length}개 연도` : ''}` : `기기 파일 · ${fmtTime(S.meta.syncedAt)}`;
+  if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '오프라인 · 대기 ' + q + '건'}</span>`; return; }
+  if (S.model && S.meta.source === 'demo'){ $('#status').innerHTML = '<button class="slink" data-act="obRestart">내 데이터로 시작</button>'; return; }
+  $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}` : S.meta.source==='local' ? '이 기기에 저장' : `기기 파일 · ${fmtTime(S.meta.syncedAt)}`;
 }
 let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2600); }
 
@@ -1459,22 +1458,38 @@ function openEd(html, opt = {}){
   el.className = 'sheet ed page on' + (opt.tall ? ' tall' : '') + (was ? ' swap' : '');
   el.innerHTML = `<div class="phead"><button class="pback" id="edBack"${edNoClose ? ' hidden' : ''}>‹ 뒤로</button><b id="edTitle"></b><span></span></div>` + html;
   const h = el.querySelector('h4'); if (h) $('#edTitle').textContent = (h.childNodes[0]?.textContent || '').trim();
-  $('#edBack').onclick = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
-  if (!was) el.scrollTop = 0;
+  $('#edBack').onclick = goBack;
+  if (!was){ el.scrollTop = 0; hPush(); }
   const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 280);
 }
 function closeEd(){
   $('#ed').classList.remove('on', 'swap');
   if (S.tab === 'settings') syncSheet();
+  if (!(S.tab === 'settings' && S.spage && S.spage !== 'main')) hPop();
 }
-(() => {   // 화면 왼쪽 끝에서 오른쪽으로 밀면 뒤로
-  const el = $('#ed'); let x0 = null, y0 = 0, dx = 0, drag = false;
-  el.addEventListener('touchstart', e => { x0 = null; if (edNoClose || e.touches.length > 1 || e.touches[0].clientX > 28) return; x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; drag = false; }, {passive: true});
-  el.addEventListener('touchmove', e => { if (x0 == null) return; dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
-    if (!drag){ if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){ x0 = null; return; } if (dx < 10) return; drag = true; el.style.transition = 'none'; }
-    el.style.transform = `translateX(${Math.max(0, dx)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
-  const end = () => { if (x0 == null) return; x0 = null; el.style.transition = ''; el.style.transform = ''; if (drag && dx > 90) $('#edBack').click(); drag = false; };
-  el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
+const edBackAction = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
+/* 뒤로 가기: 화면을 열 때 브라우저 기록을 하나 쌓아서, 안드로이드 뒤로 버튼·사파리 뒤로 밀기·나중에 앱으로 감쌀 때도 같은 동작을 해요 */
+const H = {open: false, skip: false};
+function hPush(){ if (H.open) return; try { history.pushState({alv: 1}, ''); H.open = true; } catch(e){} }
+function hPop(){ if (!H.open) return; H.open = false; H.skip = true; history.back(); }
+function backAction(){
+  if ($('#ed').classList.contains('on')){ if (edNoClose) return; edBackAction(); if ($('#ed').classList.contains('on')) hPush(); return; }
+  if (S.tab === 'settings' && S.spage && S.spage !== 'main'){ syncSheet(); sPage('main', true); }
+}
+function goBack(){ if (H.open) history.back(); else backAction(); }
+window.addEventListener('popstate', () => { if (H.skip){ H.skip = false; return; } H.open = false; backAction(); });
+(() => {   // 화면 왼쪽 끝에서 오른쪽으로 밀면 뒤로 (편집 화면, 설정 상세 화면)
+  let x0 = null, y0 = 0, dx = 0, drag = false, tgt = null;
+  const target = () => $('#ed').classList.contains('on') ? (edNoClose ? null : $('#ed')) : S.tab === 'settings' && S.spage && S.spage !== 'main' ? $('#sheet .spage.on') : null;
+  document.addEventListener('touchstart', e => { x0 = null; if (e.touches.length > 1 || e.touches[0].clientX > 40) return; tgt = target(); if (!tgt) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; drag = false; }, {passive: true});
+  document.addEventListener('touchmove', e => { if (x0 == null) return; dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
+    if (!drag){ if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){ x0 = null; return; } if (dx < 10) return; drag = true; tgt.style.transition = 'none'; }
+    tgt.style.transform = `translateX(${Math.max(0, dx)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
+  const end = () => { if (x0 == null) return; x0 = null; const t = tgt;
+    if (drag && dx > 80){ t.style.transition = 'transform .18s ease-out'; t.style.transform = 'translateX(100%)'; setTimeout(() => { t.style.transition = ''; t.style.transform = ''; goBack(); }, 170); }
+    else { t.style.transition = ''; t.style.transform = ''; } drag = false; };
+  document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
 })();
 function bindWon(inp, onChange){
   inp.addEventListener('input', () => {
@@ -2228,13 +2243,11 @@ function viewOnboard(){
     <ul class="ob-list">
       <li><b>가계부</b><span>수입·지출과 저축률을 달마다 정리해요. 대출 원금 상환도 저축으로 계산해요.</span></li>
       <li><b>자산</b><span>계좌별 잔액으로 순자산과 변화를 그래프로 보여줘요.</span></li>
-      <li><b>분석</b><span>지금 속도라면 목표에 언제 닿는지, 계획보다 앞서는지 알려줘요.</span></li>
+      <li><b>목표</b><span>지금 속도라면 목표에 언제 닿는지, 계획보다 앞서는지 알려줘요.</span></li>
     </ul>
     <button class="btn" id="obGoogle">구글로 시작하기</button>
-    <p class="ob-note">내 구글 드라이브의 시트에 저장해요. 폰을 바꿔도, PC에서도 볼 수 있어요.</p>
-    <button class="btn ghost" id="obLocal">앱만 사용하기</button>
-    <p class="ob-note">이 기기에만 저장해요. 앱을 지우거나 폰을 바꾸면 데이터가 사라질 수 있으니, 설정에서 엑셀로 내보내 보관하세요.</p>
-    <button class="ob-link" id="obDemo">예시로 둘러보기</button></section>`;
+    <button class="btn alt" id="obLocal">앱만 사용하기</button>
+    <button class="btn alt" id="obDemo">예시로 둘러보기</button></section>`;
   $('#obGoogle').onclick = () => { if (!gReady()) return toast('구글 연결 설정이 아직 없어요'); S.ob = {step: 'goal', path: 'google'}; saveOb(); render(); };
   $('#obLocal').onclick = () => { S.ob = {step: 'goal', path: 'local'}; saveOb(); render(); };
   $('#obDemo').onclick = () => loadDemo();

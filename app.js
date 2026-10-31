@@ -4,9 +4,16 @@
 const LSP = 'alv.';
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem(LSP+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem(LSP+k, JSON.stringify(v)); }catch(e){} },
+  set(k, v){ try{ localStorage.setItem(LSP+k, JSON.stringify(v)); return true; }catch(e){ storageFail(k); return false; } },
   del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
 };
+// 기기 저장 공간이 꽉 차는 등으로 저장에 실패하면 알려요 (가계부·자산·저장 대기 데이터일 때만, 같은 안내는 10초에 한 번)
+let storageWarnAt = 0;
+function storageFail(k){
+  if (!['years', 'queue', 'meta', 'model'].includes(k) || Date.now() - storageWarnAt < 10000) return;
+  storageWarnAt = Date.now();
+  setTimeout(() => { try { toast('기기 저장 공간이 부족해 저장하지 못했어요. 설정 › 엑셀로 내보내기로 먼저 백업해 주세요'); } catch(e){} }, 0);
+}
 const S = {
   tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis','settings'].includes(t) ? t : 'home')(LS.get('tab','home')),
   theme: LS.get('theme','system'),
@@ -846,7 +853,7 @@ function syncSheet(){
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v37';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v38';   // sw.js 캐시 이름과 같이 올려요
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
@@ -972,16 +979,20 @@ async function gFetch(url, opt = {}, tok){
   return r;
 }
 function gLogin(pending){
-  try { sessionStorage.setItem(LSP + 'pending', pending); } catch(e){}
+  // 일회용 확인값: 이 기기에서 시작한 로그인만 돌아올 때 받아들여요 (남이 보낸 로그인 링크로 다른 계정이 심어지는 것 방지)
+  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(24)), b => b.toString(16).padStart(2, '0')).join('');
+  try { sessionStorage.setItem(LSP + 'pending', pending); localStorage.setItem(LSP + 'nonce', nonce); } catch(e){}
   const back = location.origin + location.pathname;
-  location.href = gServer() + '/auth/start?return=' + encodeURIComponent(back) + (S.guser ? '&hint=' + encodeURIComponent(S.guser) : '');
+  location.href = gServer() + '/auth/start?return=' + encodeURIComponent(back) + '&nonce=' + nonce + (S.guser ? '&hint=' + encodeURIComponent(S.guser) : '');
 }
 // 구글 로그인에서 돌아왔을 때: 주소의 #alv_sid=… 를 저장하고 주소창에서 지운 뒤, 하려던 동작을 이어서 해요.
 function gReturn(){
   const h = new URLSearchParams(location.hash.slice(1));
   if (!h.has('alv_sid') && !h.has('alv_err')) return null;
   history.replaceState(null, '', location.pathname + location.search);
-  let pending = null; try { pending = sessionStorage.getItem(LSP + 'pending'); sessionStorage.removeItem(LSP + 'pending'); } catch(e){}
+  let pending = null, nonce = null;
+  try { pending = sessionStorage.getItem(LSP + 'pending'); sessionStorage.removeItem(LSP + 'pending'); nonce = localStorage.getItem(LSP + 'nonce'); localStorage.removeItem(LSP + 'nonce'); } catch(e){}
+  if (!nonce || h.get('alv_nonce') !== nonce){ if (h.has('alv_sid')) toast('이 기기에서 시작한 로그인이 아니라서 무시했어요. 다시 로그인해 주세요'); return null; }
   if (h.has('alv_err')){
     const e = h.get('alv_err');
     toast(e === 'access_denied' || e === 'denied' ? '구글 권한을 허용하지 않았어요' : e === 'scope' ? "구글 드라이브 권한에 체크해야 시트를 볼 수 있어요" : '구글 로그인을 마치지 못했어요 (' + e + ')');

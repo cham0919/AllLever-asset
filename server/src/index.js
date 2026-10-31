@@ -4,8 +4,9 @@
 // 하지 않는 일: 시트·가계부·자산 데이터를 읽거나 저장하지 않는다. 앱이 접근 토큰으로 구글에서 직접 받는다.
 //
 // 엔드포인트
-//   GET  /auth/start?return=<앱 주소>   구글 로그인 화면으로 보냄
-//   GET  /auth/callback                  구글이 돌려보내는 곳. 세션을 만들고 앱 주소#alv_sid=… 로 돌려보냄
+//   GET  /auth/start?return=<앱 주소>&nonce=<앱이 만든 일회용 값>   구글 로그인 화면으로 보냄
+//   GET  /auth/callback                  구글이 돌려보내는 곳. 세션을 만들고 앱 주소#alv_sid=…&alv_nonce=… 로 돌려보냄
+//        (앱은 자기가 만든 nonce와 같을 때만 세션을 받아들여요. 남이 만든 로그인 링크로 세션이 심어지는 것을 막아요)
 //   POST /token     (Authorization: Bearer <세션>)  새 접근 토큰
 //   POST /logout    (Authorization: Bearer <세션>)  구글 권한 취소 + 세션 삭제
 //   GET  /health
@@ -68,10 +69,11 @@ function bearer(req){ const m = /^Bearer\s+([\w-]{20,})$/.exec(req.headers.get('
 const emailFromIdToken = idt => { try { return JSON.parse(dec.decode(unb64u(idt.split('.')[1]))).email || null; } catch { return null; } };
 
 async function authStart(req, env, url){
-  const ret = url.searchParams.get('return') || '';
+  const ret = url.searchParams.get('return') || '', nonce = url.searchParams.get('nonce') || '';
   if (!returnOk(env, ret)) return page('허용되지 않은 앱 주소예요.');
+  if (!/^[\w-]{16,64}$/.test(nonce)) return page('앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');
   const state = rand(24), now = Date.now();
-  await env.DB.prepare('INSERT INTO auth_state (state, return_url, created) VALUES (?1, ?2, ?3)').bind(state, ret, now).run();
+  await env.DB.prepare('INSERT INTO auth_state (state, return_url, created, nonce) VALUES (?1, ?2, ?3, ?4)').bind(state, ret, now, nonce).run();
   await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
   const q = new URLSearchParams({
     client_id: env.GOOGLE_CLIENT_ID, redirect_uri: url.origin + '/auth/callback', response_type: 'code',
@@ -83,10 +85,10 @@ async function authStart(req, env, url){
 
 async function authCallback(req, env, url){
   const state = url.searchParams.get('state') || '', code = url.searchParams.get('code');
-  const row = await env.DB.prepare('SELECT return_url, created FROM auth_state WHERE state = ?1').bind(state).first();
+  const row = await env.DB.prepare('SELECT return_url, created, nonce FROM auth_state WHERE state = ?1').bind(state).first();
   if (row) await env.DB.prepare('DELETE FROM auth_state WHERE state = ?1').bind(state).run();
   if (!row || Date.now() - row.created > STATE_TTL) return page('로그인 요청이 만료됐어요.');
-  const back = (frag) => Response.redirect(row.return_url.split('#')[0] + '#' + new URLSearchParams(frag), 302);
+  const back = (frag) => Response.redirect(row.return_url.split('#')[0] + '#' + new URLSearchParams({...frag, alv_nonce: row.nonce || ''}), 302);
   if (!code) return back({alv_err: url.searchParams.get('error') || 'denied'});
   const r = await fetch(urls(env).token, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: new URLSearchParams({code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,

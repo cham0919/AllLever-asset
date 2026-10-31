@@ -178,6 +178,20 @@ function busy(t, sub = ''){   // 전체 화면 로딩창 (t 없으면 닫기)
   if (!t){ el.classList.remove('on'); return; }
   $('#busyT').textContent = t; $('#busyS').textContent = sub; el.classList.add('on');
 }
+// 새 시트를 넣을 드라이브 폴더 '자산관리': 앱이 전에 만든 폴더가 있으면 그대로 쓰고, 없으면 내 드라이브 맨 위에 만들어요.
+// (drive.file 권한이라 앱이 만든 폴더만 보여요. 직접 만든 같은 이름 폴더와는 따로 생길 수 있어요)
+const FOLDER = '자산관리', MIME_FOLDER = 'application/vnd.google-apps.folder';
+async function gFolder(tok){
+  const ok = async id => { try { const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,trashed`, {cache: 'no-store'}, tok)).json(); return j.id && !j.trashed; } catch(e){ return false; } };
+  const saved = LS.get('gfolder', null); if (saved && await ok(saved)) return saved;
+  const q = `mimeType='${MIME_FOLDER}' and name='${FOLDER}' and trashed=false`;
+  const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, fields: 'files(id)', orderBy: 'createdTime', pageSize: '1'}), {cache: 'no-store'}, tok)).json();
+  let id = j.files?.[0]?.id;
+  if (!id) id = (await (await gFetch('https://www.googleapis.com/drive/v3/files?fields=id', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: FOLDER, mimeType: MIME_FOLDER})}, tok)).json()).id;
+  if (!id) throw new Error('드라이브에 폴더를 만들지 못했어요');
+  LS.set('gfolder', id); return id;
+}
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!leaveLocalOk()) return;
@@ -193,9 +207,10 @@ async function gCreate(year){
   if (used.has(y)) return toast(`${y}년 시트는 이미 연결돼 있어요`);
   try {
     const tok = await gToken(true, 'create:' + y); if (!S.guser) await gWhoAmI(tok);
-    busy('생성 중입니다', `${y}년 시트를 구글 드라이브에 만들고 있어요`);
+    busy('생성 중입니다', `구글 드라이브 '자산관리' 폴더에 ${y}년 시트를 만들고 있어요`);
     const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
-    const meta = {name: `자산관리_${y}`, mimeType: MIME_SHEET};
+    let folder = null; try { folder = await gFolder(tok); } catch(e){}   // 폴더를 못 만들면 내 드라이브 맨 위에라도 만들어요
+    const meta = {name: `가계부_${y}`, mimeType: MIME_SHEET, ...(folder ? {parents: [folder]} : {})};
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(meta)], {type: 'application/json'}));
     form.append('file', new Blob([await tpl.arrayBuffer()], {type: MIME_XLSX}));
@@ -208,7 +223,7 @@ async function gCreate(year){
     gAdd([{id: f.id, name: f.name, mime: f.mimeType}]);
     busy('거의 다 됐어요', '만든 시트를 불러오고 있어요');
     await syncGoogle(true);
-    busy(); toast(`'${f.name}' 시트를 만들었어요`);
+    busy(); toast(folder ? `'${FOLDER}' 폴더에 '${f.name}' 시트를 만들었어요` : `'${f.name}' 시트를 만들었어요 (내 드라이브 맨 위)`);
   } catch(e){ busy(); toast('시트를 만들지 못했어요: ' + e.message); }
 }
 function gRemove(i){
@@ -222,7 +237,7 @@ function gSignOut(){
   const sid = LS.get('gsid', null);
   if (sid && gServer()) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
   else try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}
-  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gsid');
+  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gsid'); LS.del('gfolder');
   if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
   syncSheet();
 }

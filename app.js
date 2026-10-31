@@ -8,7 +8,7 @@ const LS = {
   del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
 };
 const S = {
-  tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis'].includes(t) ? t : 'home')(LS.get('tab','home')),
+  tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis','settings'].includes(t) ? t : 'home')(LS.get('tab','home')),
   theme: LS.get('theme','system'),
   unit: LS.get('unit','short'),
   gfiles: LS.get('gfiles', []),          // 구글 연결 시트 [{id, name, year, mime}]
@@ -729,15 +729,16 @@ function emptyMonth(m, what){
 }
 
 /* ───────── 라우팅 ───────── */
-const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표'};
+const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표', settings:'설정'};
 const isYearView = () => S.tab === 'budget' && effView() === 'rep' && S.rview === 'y';   // 가계부 › 리포트 › 올해 (예전 월별추이)
 function render(){
   killCharts();
   document.body.classList.remove('onboarding');
+  document.body.classList.toggle('tab-settings', S.tab === 'settings');
   $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
   const key = S.tab==='asset' ? 'asset' : 'budget';
-  const step = $('#stepper'); step.style.display = (S.model && S.tab !== 'home' && S.tab !== 'analysis') ? 'flex' : 'none';
+  const step = $('#stepper'); step.style.display = (S.model && ['budget', 'asset'].includes(S.tab)) ? 'flex' : 'none';
   if (S.model){
     const fn = key==='asset' ? aMonth : bMonth;
     const now = new Date();
@@ -751,11 +752,12 @@ function render(){
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }
   updateStatus();
+  if (S.tab === 'settings'){ syncSheet(); sPage(S.spage || 'main'); return; }
   if (!S.model) return emptyMonth(null, '');
   ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
-function go(tab){ S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
-document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => go(b.dataset.tab));
+function go(tab){ if (tab !== 'settings') S.spage = 'main'; S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
 function defaultYear(){ const ys = yearsList(), cy = new Date().getFullYear(); return ys.includes(cy) ? cy : ys[0]; }
@@ -818,36 +820,47 @@ function syncSheet(){
   goalFields();
   seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
   seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
-  const ys = yearsList().slice().reverse().join(', ');
-  $('#sSource').textContent = !S.model ? '없음' : S.meta.source==='google' ? `구글 시트 · ${ys}년` : S.meta.source==='local' ? `이 기기에 저장 · ${ys}년` : S.meta.source==='file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
-  $('#btnAddYear').hidden = S.meta.source !== 'local'; $('#btnExport').hidden = !S.model || S.meta.source === 'demo'; $('#btnSync').hidden = S.meta.source !== 'google';
+  const ys = yearsList().slice().reverse().join(', '), src = S.meta.source, g = S.goal;
+  $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트 · ${ys}년` : src === 'local' ? `이 기기에 저장 · ${ys}년` : src === 'file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
+  $('#btnAddYear').hidden = src !== 'local'; $('#btnExport').hidden = !S.model || src === 'demo'; $('#btnSync').hidden = src !== 'google';
+  $('#svSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '';
   renderG();
-  $('#sSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '-';
-  // 첫 화면 목록 오른쪽 요약
-  const src = S.meta.source, g = S.goal;
   $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
-  $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트${S.meta.syncedAt ? ' · ' + fmtTime(S.meta.syncedAt) : ''}`
-    : src === 'local' ? '이 기기에 저장' : src === 'file' ? '기기 파일' : '예시 데이터';
+  // 가계부 (올해 거래 양식 파일이 있을 때만)
+  const ly = ledgerYear(), LY = ly && S.years[ly], lm = ly && ledgerMonth(ly), its = LY ? (LY.budget[lm] || []) : [];
+  $('#shdLedger').hidden = $('#slLedger').hidden = !LY;
+  if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => i.kind !== '수입').length}개`;
+    $('#svReps').textContent = `${(LY.reps[lm] || []).length}개`; const bt = its.filter(i => i.bud > 0).reduce((a, i) => a + i.bud, 0); $('#svBud').textContent = bt ? `${lm}월 ${money(bt)}` : '없음'; }
+  // 결제수단: 거래 입력 화면에 보일 수단
+  $('#slPay').innerHTML = PAY_OPTS.map(p => `<label class="srow"><span>${p}</span><input type="checkbox" class="tgl" data-pay="${p}"${S.payOff.includes(p) ? '' : ' checked'}></label>`).join('');
+  $('#slPay').querySelectorAll('.tgl').forEach(t => t.onchange = () => {
+    const off = PAY_OPTS.filter(p => !$(`#slPay [data-pay="${p}"]`).checked);
+    if (off.length === PAY_OPTS.length){ t.checked = true; return toast('결제수단을 하나 이상 켜 두세요'); }
+    S.payOff = off; LS.set('payOff', off); });
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
-  $('#sVer').textContent = '버전 ' + APP_VER;
+  $('#sVer').textContent = APP_VER;
 }
-const APP_VER = 'v25';   // sw.js 캐시 이름과 같이 올려요
+const APP_VER = 'v26';   // sw.js 캐시 이름과 같이 올려요
+// 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
+const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
+const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
+  S.spage = key;
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
-  $('#sheet').scrollTop = 0;
+  window.scrollTo(0, 0);
 }
-function openSheet(page = 'main'){ syncSheet(); sPage(page); $('#sheet').classList.add('on'); $('#scrim').classList.add('on'); }
+function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
-  const go = e.target.closest('[data-go]'); if (go){ syncSheet(); sPage(go.dataset.go, go.dataset.go === 'main'); return; }
-  if (e.target.closest('[data-close]')) closeSheet();
+  const g = e.target.closest('[data-go]'); if (g){ syncSheet(); sPage(g.dataset.go, g.dataset.go === 'main'); return; }
+  const a = e.target.closest('[data-sa]'); if (!a) return;
+  const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
+  ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
 });
-function closeSheet(){
-  $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on');
-}
-$('#setBtn').onclick = () => openSheet(); $('#scrim').onclick = closeSheet;
-$('#btnSync').onclick = () => { $('#sheet').classList.remove('on'); $('#scrim').classList.remove('on'); syncNow(true); };
+function closeSheet(){ if (S.tab === 'settings') go('home'); }
+$('#setBtn').onclick = () => openSheet();
+$('#btnSync').onclick = () => syncNow(true);
 $('#btnDemo').onclick = () => { if (S.meta.source === 'local' && !confirm('예시 데이터로 바꾸면 이 기기에 저장된 데이터가 화면에서 사라져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return; closeSheet(); loadDemo(); };
 $('#btnExport').onclick = () => exportAll();
 $('#btnAddYear').onclick = () => addLocalYear();
@@ -871,7 +884,6 @@ function setYears(years, meta, keepView){
   S.year = null; setYear(keepView && years[y] ? y : defaultYear());
   if (keepView && S.year === y) S.month = keep;
   render();
-  if ($('#sheet').classList.contains('on')) syncSheet();
 }
 async function loadDemo(){
   try {
@@ -1005,7 +1017,7 @@ async function gPick(){
   if (!leaveLocalOk()) return;
   try {
     const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
-    if (!$('#sheet').classList.contains('on')) openSheet('google');
+    if (S.tab !== 'settings' || S.spage !== 'google') openSheet('google');
     const q = `(mimeType='${MIME_SHEET}' or mimeType='${MIME_XLSX}') and trashed=false`;
     const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, orderBy: 'modifiedTime desc', pageSize: '100',
       fields: 'files(id,name,mimeType,modifiedTime)'}), {cache: 'no-store'}, tok)).json();
@@ -1439,7 +1451,6 @@ function swipeClose(el, canClose, close){
 }
 let edNoClose = false;
 swipeClose($('#ed'), () => !edNoClose, () => closeEd());
-swipeClose($('#sheet'), () => true, () => closeSheet());
 function openEd(html, opt = {}){
   edNoClose = !!opt.noClose;
   const el = $('#ed'); el.className = 'sheet ed on' + (opt.tall ? ' tall' : ''); el.innerHTML = '<div class="grab"></div>' + html;
@@ -1546,7 +1557,7 @@ function addBudgetItem(m, kind, fromCats){
     if ((S.years[y].budget[m] || []).some(i => i.kind === kind && i.name === name)) return toast('같은 이름의 항목이 이미 있어요');
     const name2 = name.replace(/\|/g, ' '), months = Array.from({length: 13 - m}, (_, i) => m + i);
     closeEd(); commit([{t: 'addB', y, kind, name: name2, months}]);
-    if (fromCats) return openCats();
+    if (fromCats) return openCats(null);
     if (!S.years[y].txMode) setTimeout(() => editBudgetItem(m, kind, name, 0), 50);
   };
 }
@@ -1676,7 +1687,8 @@ const txOf = (m, y = S.year) => { [m, y] = wrapYM(m, y); return S.years?.[y]?.tx
 const shortAmt = n => { const a = Math.abs(n); return a >= 1e5 ? Math.round(a / 1e4) + '만' : a >= 1e4 ? (+(a / 1e4).toFixed(1)) + '만' : a.toLocaleString('ko-KR'); };
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_OPTS = ['신용카드', '체크카드', '현금'];
-const payChips = (id, cur) => `<div class="elbl">결제수단</div><div class="echips" id="${id}">${[...PAY_OPTS, ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div>`;
+S.payOff = LS.get('payOff', []);   // 설정에서 끈 결제수단 (거래 입력 화면에서 숨김)
+const payChips = (id, cur) => `<div class="elbl">결제수단</div><div class="echips" id="${id}">${[...PAY_OPTS.filter(p => !S.payOff.includes(p) || p === cur), ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div>`;
 const bindPay = (id, st) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st.pay = st.pay === b.dataset.p ? '' : b.dataset.p;
   document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x.dataset.p === st.pay)); });
 const groupKey = t => t.sub || t.name;
@@ -1972,7 +1984,7 @@ function editTx(id, presetDay){
   const U = usage(y);
   const st = old ? {inc: old.kind === '수입', amt: old.amt, kind: old.kind, name: old.name, sub: old.sub, m: m0, d: old.d, pay: old.pay, memo: old.memo === '반복' ? '' : old.memo}
     : {inc: false, amt: null, kind: null, name: null, sub: '', m: m0, d: presetDay || selDay(y, m0), pay: '', memo: '', rep: false};
-  const favPay = PAY_OPTS.slice().sort((a, z) => (U['p|' + z] || 0) - (U['p|' + a] || 0)).find(p => U['p|' + p]) || '';
+  const favPay = PAY_OPTS.filter(p => !S.payOff.includes(p)).sort((a, z) => (U['p|' + z] || 0) - (U['p|' + a] || 0)).find(p => U['p|' + p]) || '';
   if (!old) st.pay = favPay;
   const pad = n => String(n).padStart(2, '0');
   const draw = () => {
@@ -2078,16 +2090,18 @@ function editRep(ri, direct){
 }
 
 /* 분류 · 예산 (그 달 시트의 세부분류·월 예산 칸) */
-function openCats(){
+let catKinds = KINDS;   // 분류 관리에 보일 구분 (설정의 수입 항목 / 지출 항목)
+function openCats(kinds){
+  if (Array.isArray(kinds)) catKinds = kinds; else if (kinds === undefined) catKinds = KINDS;
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const items = Y.budget[m] || [];
   const ed = items.map(i => ({subs: [...(i.subs || [])], bud: i.bud ?? null}));   // 저장 전 고친 내용
   const months = Array.from({length: 13 - m}, (_, i) => m + i);
   const draw = () => {
     const sc = $('#ed').scrollTop;
-    openEd(`<h4>분류 관리 <button class="ex" id="edX">닫기</button></h4>
+    openEd(`<h4>${catKinds.length === 1 ? '수입 항목' : catKinds.length === 2 ? '지출 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
       <div class="esub">${m < 12 ? `${m}~12월` : '12월'}에 적용돼요 · 항목 이름을 누르면 바꾸거나 지울 수 있어요</div>
-      ${KINDS.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
+      ${catKinds.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>
           <div class="echips sm">${e.subs.map((s, j) => `<button class="csub" data-j="${j}">${esc(s)} <b aria-label="삭제">×</b></button>`).join('')}<button class="add cadd">+ 세부분류</button></div></div>`; }).join('')}
         <button class="eadd" data-kind="${k}">+ ${k} 항목 추가</button></div>`; }).join('')}
@@ -2120,17 +2134,17 @@ function itemMenu(it){
     <input id="imName" class="ememo" maxlength="30" value="${esc(it.name)}" placeholder="항목 이름">
     <button class="btn" id="imRen">이름 바꾸기</button>
     <button class="btn ghost danger" id="imDel">항목 삭제</button>`);
-  $('#edX').onclick = openCats;
+  $('#edX').onclick = () => openCats(null);
   $('#imRen').onclick = () => { const to = $('#imName').value.trim().replace(/\|/g, ' ');
     if (!to || to === it.name) return toast('새 이름을 넣어 주세요');
     if (Object.values(Y.budget).some(L => L.some(i => i.kind === it.kind && i.name === to))) return toast(`'${to}' 항목이 이미 있어요`);
     const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0));
-    commit([{t: 'renB', y, kind: it.kind, name: it.name, to, months}]); openCats(); };
+    commit([{t: 'renB', y, kind: it.kind, name: it.name, to, months}]); openCats(null); };
   $('#imDel').onclick = () => {
     const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0) && !hasTx(mm));
     if (!months.length) return toast('모든 달에 거래가 있어 지울 수 없어요. 거래를 다른 항목으로 옮겨 주세요');
     if (!confirm(`'${it.name}' 항목을 지울까요?${txMonths.length ? `\n거래가 있는 ${txMonths.join(', ')}월은 남겨 둬요.` : ''}`)) return;
-    commit([{t: 'delB', y, kind: it.kind, name: it.name, months}]); openCats(); };
+    commit([{t: 'delB', y, kind: it.kind, name: it.name, months}]); openCats(null); };
 }
 
 /* 항목 하나: 이 달 거래 목록 */
@@ -2145,7 +2159,7 @@ function openItemTx(m, idx){
     ${ed ? `<input id="itMemo" class="ememo" maxlength="80" placeholder="이 달 메모 (선택)" value="${esc(it.memo)}"><button class="btn" id="itSave">메모 저장</button><button class="btn ghost" id="itCat">세부분류 관리</button>` : ''}`, {tall: T.length > 6});
   $('#edX').onclick = closeEd;
   $('#ed').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => { closeEd(); editTx(el.dataset.tx); });
-  if (ed){ $('#itCat').onclick = () => openCats(idx);
+  if (ed){ $('#itCat').onclick = () => openCats([it.kind]);
     $('#itSave').onclick = () => { const v = $('#itMemo').value.trim(); closeEd(); if (v !== str(it.memo)) commit([{t: 'b', y, m, kind: it.kind, name: it.name, idx: occ(Y.budget[m], it, bKey), f: 'memo', v, o: str(it.memo)}]); }; }
 }
 
@@ -2161,7 +2175,7 @@ function viewOnboard(){
     el.innerHTML = `<section class="ob">
       <div class="ob-step">2 / ${S.ob.path === 'google' ? 3 : 2}</div>
       <h2>목표 순자산을 정해 주세요</h2>
-      <p class="ob-sub">분석 탭에서 달성 예상 시점과 계획 대비 진행을 보여줘요. 나중에 설정에서 바꿀 수 있어요.</p>
+      <p class="ob-sub">목표 탭에서 달성 예상 시점과 계획 대비 진행을 보여줘요. 나중에 설정에서 바꿀 수 있어요.</p>
       <div class="ob-chips">${opts.map(v => `<button data-v="${v}"${v === cur ? ' class="on"' : ''}>${money(v)}</button>`).join('')}</div>
       <label class="field"><span>직접 입력 (억원)</span><input id="obGoal" type="number" inputmode="decimal" step="0.5" value="${cur / 1e8}"></label>
       <button class="btn" id="obNext">${S.ob.path === 'google' ? '다음' : '시작하기'}</button>
@@ -2253,7 +2267,7 @@ async function addLocalYear(){
 function exportYear(y){
   const M = S.years[y]; if (!M) return;
   const wb = XLSX.utils.book_new();
-  const st = [['기준 연도', y], ['전년 12월 말 부채', M.prevDebt ?? ''], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 → "이 기기에서 엑셀 파일 열기"로 다시 불러올 수 있어요.']];
+  const st = [['기준 연도', y], ['전년 12월 말 부채', M.prevDebt ?? ''], [], ['이 파일은 자산관리 앱에서 내보낸 백업이에요. 앱 설정 탭 → "엑셀 파일 가져오기"로 다시 불러올 수 있어요.']];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(st), '설정');
   for (let m = 1; m <= 12; m++){
     const rows = [[`${m}월 가계부`], [], ['구분(1차)', '항목(2차)', '금액', '메모']];

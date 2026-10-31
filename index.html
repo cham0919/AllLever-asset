@@ -403,6 +403,22 @@ nav.tabs button.on{color:var(--ink)}
 .hl-link{color:var(--accent);font-weight:700;font-size:13px}
 .hl-today{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:13px;color:var(--sub)}.hl-today b{color:var(--ink);font-size:14px}
 .hg-row{display:flex;align-items:baseline;gap:10px;margin:4px 0 8px}.hg-row b{font-size:22px;font-weight:800;color:var(--accent)}.hg-row span{font-size:12.5px;color:var(--sub)}
+.setpage{display:none;padding:0 0 calc(110px + env(safe-area-inset-bottom))}
+body.tab-settings .setpage{display:block}body.tab-settings #view{display:none}
+body:not(.onboarding) #setBtn{display:none}
+.setpage .shd{font-size:13px;color:var(--sub);font-weight:600;margin:22px 20px 8px}
+.setpage .spage[data-page="main"] .shd:first-child{margin-top:6px}
+.setpage .slist{border-radius:0;box-shadow:none;margin:0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.setpage .srow{padding:0 20px;min-height:54px;font-size:16px;position:relative}
+.setpage .srow + .srow{border-top:0}
+.setpage .srow + .srow:before{content:"";position:absolute;top:0;left:20px;right:0;border-top:1px solid var(--line)}
+.setpage .srow span{font-weight:500}
+.setpage .srow.danger span{color:var(--expense)}
+.srow-info{cursor:default}.srow-info em{flex:1}
+.setpage .spage:not([data-page="main"]){padding:0 16px}
+.tgl{appearance:none;-webkit-appearance:none;margin-left:auto;width:51px;height:31px;border-radius:99px;background:var(--line);position:relative;transition:background .2s;flex:none;cursor:pointer}
+.tgl:before{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.2);transition:transform .2s}
+.tgl:checked{background:#34C759}.tgl:checked:before{transform:translateX(20px)}
 </style>
 </head>
 <body>
@@ -425,37 +441,46 @@ nav.tabs button.on{color:var(--ink)}
 </header>
 
 <main id="view"></main>
-
-<nav class="tabs">
-  <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 10 12 4l9 6"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/></svg>홈</button>
-  <button data-tab="budget"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>가계부</button>
-  <button data-tab="asset"><svg viewBox="0 0 24 24"><path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>자산</button>
-  <button data-tab="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="m4 15 5-5 4 3 7-8"/><path d="M15 5h5v5"/></svg>목표</button>
-</nav>
-
-<div class="scrim" id="scrim"></div>
-<section class="sheet" id="sheet" aria-label="설정">
-<div class="grab"></div>
+<section class="setpage" id="sheet" aria-label="설정">
 <div class="spage on" data-page="main">
-  <h2>설정 <button id="closeSheet" data-close style="font-size:15px;color:var(--accent);font-weight:600">완료</button></h2>
+  <h5 class="shd">계정</h5>
   <div class="slist">
     <button class="srow" data-go="google"><span>구글 계정 · 시트</span><em id="svGoogle"></em><i>›</i></button>
-    <button class="srow" data-go="data"><span>데이터</span><em id="svData"></em><i>›</i></button>
+    <button class="srow" id="btnSync"><span>지금 불러오기</span><em id="svSync"></em><i>›</i></button>
+    <div class="srow srow-info" id="rowSource"><span>데이터</span><em id="svData"></em></div>
   </div>
+  <h5 class="shd" id="shdLedger">가계부</h5>
+  <div class="slist" id="slLedger">
+    <button class="srow" data-sa="catInc"><span>수입 항목</span><em id="svInc"></em><i>›</i></button>
+    <button class="srow" data-sa="catExp"><span>지출 항목</span><em id="svExp"></em><i>›</i></button>
+    <button class="srow" data-sa="reps"><span>반복 거래</span><em id="svReps"></em><i>›</i></button>
+    <button class="srow" data-sa="bud"><span>예산</span><em id="svBud"></em><i>›</i></button>
+  </div>
+  <h5 class="shd">결제수단</h5>
+  <div class="slist" id="slPay"></div>
+  <h5 class="shd">목표 · 화면</h5>
   <div class="slist">
     <button class="srow" data-go="goal"><span>목표와 계획</span><em id="svGoal"></em><i>›</i></button>
     <button class="srow" data-go="fire"><span>FIRE 계산</span><em id="svFire"></em><i>›</i></button>
     <button class="srow" data-go="view"><span>화면</span><em id="svView"></em><i>›</i></button>
   </div>
+  <h5 class="shd">백업 및 복구</h5>
   <div class="slist">
-    <button class="srow" id="btnDemo"><span>예시 데이터로 보기</span></button>
-    <button class="srow" id="btnRestart"><span>처음 화면으로</span></button>
-    <a class="srow" href="privacy.html" target="_blank" rel="noopener"><span>개인정보 처리방침</span><i>›</i></a>
+    <button class="srow" id="btnExport"><span>엑셀로 내보내기</span><i>›</i></button>
+    <button class="srow" id="btnFile"><span>엑셀 파일 가져오기</span><i>›</i></button>
+    <button class="srow" id="btnAddYear"><span>새 연도 추가</span><i>›</i></button>
   </div>
-  <p class="sver" id="sVer"></p>
+  <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+  <h5 class="shd">정보</h5>
+  <div class="slist">
+    <button class="srow" id="btnDemo"><span>예시 데이터로 보기</span><i>›</i></button>
+    <a class="srow" href="privacy.html" target="_blank" rel="noopener"><span>개인정보 처리방침</span><i>›</i></a>
+    <div class="srow srow-info"><span>버전</span><em id="sVer"></em></div>
+    <button class="srow danger" id="btnRestart"><span>처음 화면으로</span></button>
+  </div>
 </div>
 <div class="spage" data-page="google">
-  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>구글 계정 · 시트</b><button class="sdone" data-close>완료</button></div>
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>구글 계정 · 시트</b><span></span></div>
   <div class="card" style="padding:14px">
 <div class="kv"><span>계정</span><span id="gUser">연결 안 됨</span></div>
     <div id="gList" style="margin:6px 0 12px"></div>
@@ -467,24 +492,8 @@ nav.tabs button.on{color:var(--ink)}
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
   
   </div>
-</div>
-<div class="spage" data-page="data">
-  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>데이터</b><button class="sdone" data-close>완료</button></div>
-  <div class="card" style="padding:14px">
-<div class="kv"><span>데이터</span><span id="sSource">-</span></div>
-    <div class="kv"><span>마지막 동기화</span><span id="sSync">-</span></div>
-    <div style="margin-top:12px">
-      <button class="btn" id="btnSync">지금 불러오기</button>
-      <button class="btn ghost" id="btnAddYear" hidden>새 연도 추가</button>
-      <button class="btn ghost" id="btnExport" hidden>엑셀로 내보내기 (백업)</button>
-      <button class="btn ghost" id="btnFile">이 기기에서 엑셀 파일 열기</button>
-    </div>
-    <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-  
-  </div>
-</div>
-<div class="spage" data-page="goal">
-  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>목표와 계획</b><button class="sdone" data-close>완료</button></div>
+</div><div class="spage" data-page="goal">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>목표와 계획</b><span></span></div>
   <div class="card" style="padding:14px">
 <label class="field"><span>목표 순자산 (억원)</span><input id="gTarget" type="number" inputmode="decimal" step="1"></label>
     <label class="field"><span>계획 연 수익률 (%)</span><input id="gRate" type="number" inputmode="decimal" step="0.5"></label>
@@ -494,17 +503,15 @@ nav.tabs button.on{color:var(--ink)}
     <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
     
   </div>
-</div>
-<div class="spage" data-page="fire">
-  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>FIRE 계산</b><button class="sdone" data-close>완료</button></div>
+</div><div class="spage" data-page="fire">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>FIRE 계산</b><span></span></div>
   <div class="card" style="padding:14px">
 <label class="field"><span>FIRE 연 배당률 (%)</span><input id="gDiv" type="number" inputmode="decimal" step="0.5"></label>
     <label class="field" style="margin:0"><span>FIRE 세후 비율 (%) · 배당소득세 15.4% 원천징수면 84.6</span><input id="gNet" type="number" inputmode="decimal" step="0.1"></label>
   
   </div>
-</div>
-<div class="spage" data-page="view">
-  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>화면</b><button class="sdone" data-close>완료</button></div>
+</div><div class="spage" data-page="view">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>화면</b><span></span></div>
   <div class="card" style="padding:14px">
 <div class="field"><span>테마</span>
       <div class="seg" id="segTheme"><button data-v="system">시스템</button><button data-v="light">라이트</button><button data-v="dark">다크</button></div></div>
@@ -514,6 +521,17 @@ nav.tabs button.on{color:var(--ink)}
   </div>
 </div>
 </section>
+
+<nav class="tabs">
+  <button data-tab="home" class="on"><svg viewBox="0 0 24 24"><path d="M3 10 12 4l9 6"/><path d="M5 10v9h14v-9"/><path d="M10 19v-5h4v5"/></svg>홈</button>
+  <button data-tab="budget"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>가계부</button>
+  <button data-tab="asset"><svg viewBox="0 0 24 24"><path d="M21 12A9 9 0 1 1 12 3v9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>자산</button>
+  <button data-tab="analysis"><svg viewBox="0 0 24 24"><path d="M3 20h18"/><path d="m4 15 5-5 4 3 7-8"/><path d="M15 5h5v5"/></svg>목표</button>
+  <button data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>설정</button>
+</nav>
+
+<div class="scrim" id="scrim"></div>
+
 <div class="scrim" id="edScrim"></div>
 <section class="sheet ed" id="ed" aria-label="입력"></section>
 <div class="toast" id="toast"></div>

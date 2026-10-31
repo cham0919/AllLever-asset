@@ -15,11 +15,7 @@ function render(){
     const fn = key==='asset' ? aMonth : bMonth;
     const now = new Date();
     if (S.month[key]==null) S.month[key] = key === 'budget' && S.model.txMode && canEdit() && S.year === now.getFullYear() ? now.getMonth() + 1 : lastWith(fn);
-    $('#selY').innerHTML = yearsList().map(y => `<option value="${y}"${y===S.year?' selected':''}>${y}년</option>`).join('');
     const trend = isYearView();
-    $('#selMWrap').style.display = trend ? 'none' : '';
-    if (!trend) $('#selM').innerHTML = Array.from({length:12}, (_,i) => i+1).map(m =>
-      `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월</option>`).join('');
     $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
     $('#ymLabel').textContent = trend ? `${S.year}년` : `${S.year}년 ${S.month[key]}월`;
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
@@ -54,8 +50,6 @@ function shift(n){
   else S.month[key] = m;
   render();
 }
-$('#selY').onchange = e => { setYear(+e.target.value); render(); };
-$('#selM').onchange = e => { S.month[S.tab==='asset'?'asset':'budget'] = +e.target.value; render(); };
 $('#prevM').onclick = () => shift(-1); $('#nextM').onclick = () => shift(1);
 // 좌우 스와이프로 월 이동
 (() => { let x0=null, y0=null;
@@ -116,9 +110,10 @@ function syncSheet(){
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
-  $('#sVer').textContent = APP_VER;
+  appVersion().then(v => { $('#sVer').textContent = v; });
 }
-const APP_VER = 'v39';   // sw.js 캐시 이름과 같이 올려요
+// 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요
+const appVersion = () => (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
 // 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
 const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
 const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);

@@ -1,20 +1,6 @@
 // 편집 화면 · 뒤로 가기 · 월 단위 입력
 // (app.js를 나눈 파일이에요. index.html의 순서대로 불러와 같은 전역 범위를 써요)
-/* 입력용 아래 시트 */
-// 아래 시트: 손가락으로 아래로 밀면 닫혀요 (맨 위까지 스크롤된 상태이거나 손잡이를 잡았을 때)
-function swipeClose(el, canClose, close){
-  let y0 = null, dy = 0, drag = false;
-  el.addEventListener('touchstart', e => { y0 = null;
-    if (!el.classList.contains('on') || !canClose() || e.touches.length > 1) return;
-    if (el.scrollTop > 0 && !e.target.closest('.grab,h4,.shead')) return;
-    y0 = e.touches[0].clientY; dy = 0; drag = false; }, {passive: true});
-  el.addEventListener('touchmove', e => { if (y0 == null) return; dy = e.touches[0].clientY - y0;
-    if (!drag){ if (dy < 10){ if (dy < -4) y0 = null; return; } drag = true; el.style.transition = 'none'; document.activeElement?.blur?.(); }
-    el.style.transform = `translateY(${Math.max(0, dy - 10)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
-  const end = () => { if (y0 == null) return; y0 = null; el.style.transition = ''; el.style.transform = '';
-    if (drag && dy > 90) close(); drag = false; };
-  el.addEventListener('touchend', end); el.addEventListener('touchcancel', end);
-}
+/* 입력·편집 화면 */
 // 입력·편집 화면: 오른쪽에서 밀려 들어오는 전체 화면 (위 '‹ 뒤로', 왼쪽 끝에서 오른쪽으로 밀어도 뒤로)
 let edNoClose = false;
 function openEd(html, opt = {}){

@@ -311,6 +311,14 @@ nav.tabs button.on{color:var(--ink)}
   padding:11px 16px;border-radius:14px;font-size:14px;opacity:0;transition:.25s;max-width:88vw;text-align:center;pointer-events:none}
 .toast.on{opacity:1;transform:translate(-50%,0)}
 .demo-badge{font-size:11px;font-weight:700;color:var(--accent);background:var(--accent-soft);padding:2px 7px;border-radius:6px;margin-left:6px;vertical-align:middle}
+.busy{position:fixed;inset:0;z-index:80;display:grid;place-items:center;background:rgba(0,0,0,.35);opacity:0;pointer-events:none;transition:opacity .2s}
+.busy.on{opacity:1;pointer-events:auto}
+.busy .box{background:var(--card);color:var(--ink);border-radius:20px;padding:26px 28px 22px;min-width:220px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+.busy .spin{width:36px;height:36px;margin:0 auto 14px;border-radius:50%;border:3.5px solid var(--accent-soft);border-top-color:var(--accent);animation:busySpin .8s linear infinite}
+.busy .t{font-size:16px;font-weight:700}
+.busy .s{font-size:13px;color:var(--sub);margin-top:6px}
+@keyframes busySpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.busy .spin{animation-duration:2.4s}}
 </style>
 </head>
 <body>
@@ -398,6 +406,7 @@ nav.tabs button.on{color:var(--ink)}
 <div class="scrim" id="edScrim"></div>
 <section class="sheet ed" id="ed" aria-label="입력"></section>
 <div class="toast" id="toast"></div>
+<div class="busy" id="busy" role="alertdialog" aria-live="assertive" aria-modal="true"><div class="box"><div class="spin"></div><div class="t" id="busyT">생성 중입니다</div><div class="s" id="busyS"></div></div></div>
 
 <script src="vendor/xlsx.full.min.js"></script>
 <script src="vendor/chart.umd.min.js"></script>

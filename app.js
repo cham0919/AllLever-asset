@@ -1002,6 +1002,11 @@ async function gPicker(){
   } catch(e){ toast(e.message); }
 }
 // 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
+function busy(t, sub = ''){   // 전체 화면 로딩창 (t 없으면 닫기)
+  const el = $('#busy'); if (!el) return;
+  if (!t){ el.classList.remove('on'); return; }
+  $('#busyT').textContent = t; $('#busyS').textContent = sub; el.classList.add('on');
+}
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!leaveLocalOk()) return;
@@ -1016,6 +1021,7 @@ async function gCreate(year){
   if (used.has(y)) return toast(`${y}년 시트는 이미 연결돼 있어요`);
   try {
     const tok = await gToken(true, 'create:' + y); if (!S.guser) await gWhoAmI(tok);
+    busy('생성 중입니다', `${y}년 시트를 구글 드라이브에 만들고 있어요`);
     const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
     const meta = {name: `자산관리_${y}`, mimeType: MIME_SHEET};
     const form = new FormData();
@@ -1028,9 +1034,10 @@ async function gCreate(year){
     await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${f.id}/values/${encodeURIComponent('설정!B4:B5')}?valueInputOption=USER_ENTERED`,
       {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({values: vals})}, tok);
     gAdd([{id: f.id, name: f.name, mime: f.mimeType}]);
-    toast(`'${f.name}' 시트를 만들었어요`);
+    busy('거의 다 됐어요', '만든 시트를 불러오고 있어요');
     await syncGoogle(true);
-  } catch(e){ toast('시트를 만들지 못했어요: ' + e.message); }
+    busy(); toast(`'${f.name}' 시트를 만들었어요`);
+  } catch(e){ busy(); toast('시트를 만들지 못했어요: ' + e.message); }
 }
 function gRemove(i){
   const f = S.gfiles[i]; if (!confirm(`${f.year ? f.year + '년 ' : ''}'${f.name}' 연결을 해제할까요? (구글 드라이브의 파일은 지워지지 않아요)`)) return;

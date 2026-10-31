@@ -1,0 +1,179 @@
+// 라우팅 · 테마 · 설정 탭 · 데이터 반영
+// (app.js를 나눈 파일이에요. index.html의 순서대로 불러와 같은 전역 범위를 써요)
+/* ───────── 라우팅 ───────── */
+const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표', settings:'설정'};
+const isYearView = () => S.tab === 'budget' && effView() === 'rep' && S.rview === 'y';   // 가계부 › 리포트 › 올해 (예전 월별추이)
+function render(){
+  killCharts();
+  document.body.classList.remove('onboarding');
+  document.body.classList.toggle('tab-settings', S.tab === 'settings');
+  $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
+  const key = S.tab==='asset' ? 'asset' : 'budget';
+  const step = $('#stepper'); step.style.display = (S.model && ['budget', 'asset'].includes(S.tab)) ? 'flex' : 'none';
+  if (S.model){
+    const fn = key==='asset' ? aMonth : bMonth;
+    const now = new Date();
+    if (S.month[key]==null) S.month[key] = key === 'budget' && S.model.txMode && canEdit() && S.year === now.getFullYear() ? now.getMonth() + 1 : lastWith(fn);
+    $('#selY').innerHTML = yearsList().map(y => `<option value="${y}"${y===S.year?' selected':''}>${y}년</option>`).join('');
+    const trend = isYearView();
+    $('#selMWrap').style.display = trend ? 'none' : '';
+    if (!trend) $('#selM').innerHTML = Array.from({length:12}, (_,i) => i+1).map(m =>
+      `<option value="${m}"${m===S.month[key]?' selected':''}>${m}월</option>`).join('');
+    $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
+    $('#ymLabel').textContent = trend ? `${S.year}년` : `${S.year}년 ${S.month[key]}월`;
+    $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
+  }
+  updateStatus();
+  if (S.tab === 'settings'){ syncSheet(); sPage(S.spage || 'main'); return; }
+  if (!S.model) return emptyMonth(null, '');
+  ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
+}
+function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings'){ S.spage = 'main'; hPop(); } S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
+const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
+const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
+function defaultYear(){ const ys = yearsList(), cy = new Date().getFullYear(); return ys.includes(cy) ? cy : ys[0]; }
+function setYear(y){
+  const ys = yearsList();
+  if (!ys.length){ S.year = null; S.model = null; return; }
+  if (!ys.includes(y)) y = defaultYear();
+  if (y !== S.year) S.month = {budget:null, asset:null};
+  S.year = y; S.model = S.years[y]; LS.set('year', y);
+}
+function canShift(n){
+  if (isYearView()) return adjYear(n) != null;
+  const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
+  return (m >= 1 && m <= 12) || adjYear(n) != null;
+}
+function shift(n){
+  if (!S.model || !canShift(n)) return;
+  if (isYearView()){ setYear(adjYear(n)); return render(); }
+  const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
+  if (m < 1 || m > 12){ setYear(adjYear(n)); S.month[key] = m < 1 ? 12 : 1; }   // 연도 넘어가기
+  else S.month[key] = m;
+  render();
+}
+$('#selY').onchange = e => { setYear(+e.target.value); render(); };
+$('#selM').onchange = e => { S.month[S.tab==='asset'?'asset':'budget'] = +e.target.value; render(); };
+$('#prevM').onclick = () => shift(-1); $('#nextM').onclick = () => shift(1);
+// 좌우 스와이프로 월 이동
+(() => { let x0=null, y0=null;
+  document.addEventListener('touchstart', e => { if (e.target.closest('canvas,.sheet,select,input')) return; x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
+  document.addEventListener('touchend', e => { if (x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
+    if (S.model && S.tab!=='home' && S.tab!=='analysis' && Math.abs(dx)>70 && Math.abs(dy)<40) shift(dx<0?1:-1); }, {passive:true});
+})();
+
+/* ───────── 테마 ───────── */
+const mq = window.matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){
+  const t = S.theme==='system' ? (mq.matches?'dark':'light') : S.theme;
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name=theme-color]').content = t==='dark' ? '#0E1013' : '#F5F6F8';
+  document.documentElement.style.backgroundColor = t==='dark' ? '#0E1013' : '#F5F6F8'; document.documentElement.style.colorScheme = t;
+}
+mq.addEventListener?.('change', () => { if (S.theme==='system'){ applyTheme(); render(); } });
+
+/* ───────── 설정 시트 ───────── */
+function seg(id, val, cb){ const el = $(id); el.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v===val); b.onclick = () => cb(b.dataset.v); }); }
+function goalFields(){
+  const g = S.goal;
+  $('#gTarget').value = g.target / 1e8; $('#gRate').value = +(g.planRate * 100).toFixed(2); $('#gSave').value = g.planSave / 1e4;
+  $('#gYear').value = g.planYear; $('#gBase').value = g.planBase == null ? '' : g.planBase / 1e4;
+  $('#gDiv').value = +((g.divRate ?? 0.04) * 100).toFixed(2); $('#gNet').value = +((g.divNet ?? 0.846) * 100).toFixed(1);
+  const save = () => {
+    const n = id => { const v = $(id).value.trim(); return v === '' ? null : +v; };
+    S.goal = {target: (n('#gTarget') || 10) * 1e8, planRate: (n('#gRate') ?? 6) / 100, planSave: (n('#gSave') ?? 2400) * 1e4,
+              planYear: n('#gYear') || new Date().getFullYear(), planBase: n('#gBase') == null ? null : n('#gBase') * 1e4,
+              divRate: (n('#gDiv') ?? 4) / 100, divNet: (n('#gNet') ?? 84.6) / 100};
+    LS.set('goal', S.goal); S.sim = null; if (S.tab === 'analysis') render();
+  };
+  ['#gTarget','#gRate','#gSave','#gYear','#gBase','#gDiv','#gNet'].forEach(id => $(id).onchange = save);
+}
+function syncSheet(){
+  goalFields();
+  seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
+  seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
+  const ys = yearsList().slice().reverse().join(', '), src = S.meta.source, g = S.goal;
+  $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트 · ${ys}년` : src === 'local' ? `이 기기에 저장 · ${ys}년` : src === 'file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
+  $('#btnAddYear').hidden = src !== 'local'; $('#btnExport').hidden = !S.model || src === 'demo'; $('#btnSync').hidden = src !== 'google';
+  $('#svSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '';
+  renderG();
+  $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
+  // 가계부 (올해 거래 양식 파일이 있을 때만)
+  const ly = ledgerYear(), LY = ly && S.years[ly], lm = ly && ledgerMonth(ly), its = LY ? (LY.budget[lm] || []) : [];
+  $('#shdLedger').hidden = $('#slLedger').hidden = !LY;
+  if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => i.kind !== '수입').length}개`;
+    $('#svReps').textContent = `${(LY.reps[lm] || []).length}개`; const bt = its.filter(i => i.bud > 0).reduce((a, i) => a + i.bud, 0); $('#svBud').textContent = bt ? `${lm}월 ${money(bt)}` : '없음'; }
+  // 결제수단: 거래 입력 화면에 보일 수단
+  const payOn = PAY_OPTS.filter(p => !S.payOff.includes(p));
+  $('#svPay').textContent = payOn.length === PAY_OPTS.length ? '전체' : payOn.join(' · ');
+  $('#slPay').innerHTML = PAY_OPTS.map(p => `<button class="srow${S.payOff.includes(p) ? '' : ' on'}" data-pay="${p}"><span>${p}</span><b class="chk">✓</b></button>`).join('');
+  $('#slPay').querySelectorAll('[data-pay]').forEach(b => b.onclick = () => {
+    const p = b.dataset.pay, off = S.payOff.includes(p) ? S.payOff.filter(x => x !== p) : [...S.payOff, p];
+    if (off.length === PAY_OPTS.length) return toast('결제수단을 하나 이상 골라 두세요');
+    S.payOff = off; LS.set('payOff', off); syncSheet(); });
+  $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
+  $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세후 ${+((g.divNet ?? 0.846) * 100).toFixed(1)}%`;
+  $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
+  $('#sVer').textContent = APP_VER;
+}
+const APP_VER = 'v39';   // sw.js 캐시 이름과 같이 올려요
+// 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
+const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
+const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
+function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
+  S.spage = key; if (key !== 'main') hPush(); else if (!$('#ed').classList.contains('on')) hPop();
+  $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
+  window.scrollTo(0, 0);
+}
+function openSheet(page = 'main'){ S.spage = page; go('settings'); }
+$('#sheet').addEventListener('click', e => {
+  const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
+  const a = e.target.closest('[data-sa]'); if (!a) return;
+  const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
+  ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
+});
+function closeSheet(){ if (S.tab === 'settings') go('home'); }
+$('#setBtn').onclick = () => openSheet();
+$('#btnSync').onclick = () => syncNow(true);
+$('#btnDemo').onclick = () => { if (S.meta.source === 'local' && !confirm('예시 데이터로 바꾸면 이 기기에 저장된 데이터가 화면에서 사라져요. 먼저 엑셀로 내보내기를 권해요. 계속할까요?')) return; closeSheet(); loadDemo(); };
+$('#btnExport').onclick = () => exportAll();
+$('#btnAddYear').onclick = () => addLocalYear();
+$('#btnRestart').onclick = () => { if (S.meta.source !== 'local' && !confirm('처음 화면으로 돌아갈까요? 연결한 구글 시트는 그대로 남아요')) return; restartOb(); };
+$('#btnFile').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; closeSheet();
+  try { const md = parseWorkbook(await f.arrayBuffer());
+    if (S.meta.source === 'google' && !confirm('구글 시트 연결 대신 이 파일을 이 기기에 저장해서 쓸까요? (구글 시트 연결은 유지돼요)')) { e.target.value=''; return; }
+    if (S.meta.source === 'local' && S.years[md.year] && !confirm(`이 기기에 저장된 ${md.year}년 데이터를 이 파일 내용으로 바꿀까요?`)) { e.target.value=''; return; }
+    const ys = S.meta.source === 'local' ? {...S.years} : {}; ys[md.year] = md;   // 이 기기 저장 데이터에 연도별로 합침
+    finishOb(); setYears(ys, {source:'local', name:f.name}); setYear(md.year); render(); toast(`${md.year}년 파일을 불러왔어요. 이제 앱에서 입력할 수 있어요`); }
+  catch(err){ toast('파일을 읽지 못했어요: ' + err.message); } e.target.value=''; };
+$('#syncBtn').onclick = () => S.gfiles.length ? syncNow(true) : openSheet('google');
+
+/* ───────── 데이터 반영 ───────── */
+function setYears(years, meta, keepView){
+  const y = S.year, keep = {...S.month};
+  if (meta.source === 'google' && S.queue?.length) reapplyQueue(years);   // 아직 시트에 못 쓴 입력은 유지
+  S.years = years; S.meta = {...meta, syncedAt: Date.now()};
+  LS.set('years', years); LS.set('meta', S.meta);
+  S.year = null; setYear(keepView && years[y] ? y : defaultYear());
+  if (keepView && S.year === y) S.month = keep;
+  render();
+}
+async function loadDemo(){
+  try {
+    const ys = {};
+    for (const f of ['demo2025.xlsx', 'demo.xlsx']){ const r = await fetch(f); if (!r.ok) throw new Error(r.status); const md = parseWorkbook(await r.arrayBuffer()); ys[md.year] = md; }
+    setYears(ys, {source:'demo'}); toast('예시 데이터를 불러왔어요 (2025 · 2026년)');
+  } catch(e){ toast('예시 파일을 불러오지 못했어요'); }
+}
+const fmtTime = t => { const d = new Date(t); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+function updateStatus(){
+  const q = S.queue?.length || 0;
+  if (q && S.model){ $('#status').innerHTML = `<span class="pend">${flushing ? '저장 중…' : navigator.onLine ? '저장 대기 ' + q + '건' : '오프라인 · 대기 ' + q + '건'}</span>`; return; }
+  if (S.model && S.meta.source === 'demo'){ $('#status').innerHTML = '<button class="slink" data-act="obRestart">내 데이터로 시작</button>'; return; }
+  $('#status').textContent = !S.model ? '' : S.meta.source==='google' ? `업데이트 ${fmtTime(S.meta.syncedAt)}` : S.meta.source==='local' ? '이 기기에 저장' : `기기 파일 · ${fmtTime(S.meta.syncedAt)}`;
+}
+let toastT; function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('on'), 2600); }
+

@@ -149,15 +149,19 @@ async function gWhoAmI(tok){
 }
 async function gDownload(f, tok){
   try {   // 편집 권한 (보기 전용 공유 시트는 앱에서 입력을 막아요) · 휴지통
-    const c = await (await gFetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id) + '?fields=capabilities(canEdit),trashed', {cache: 'no-store'}, tok)).json();
+    const c = await (await gFetch('https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id) + '?fields=capabilities(canEdit),trashed,modifiedTime', {cache: 'no-store'}, tok)).json();
     if (c.trashed) throw Object.assign(new Error('시트가 휴지통에 있어요'), {gone: true, status: 404});
     f.ro = c.capabilities?.canEdit === false;
+    // 마지막으로 받은 뒤 시트가 바뀌지 않았고 저장 대기 중인 입력도 없으면, 기기에 있는 데이터를 그대로 써요 (엑셀 변환·내려받기 생략)
+    const have = S.meta.source === 'google' && f.year && S.years?.[f.year];
+    if (c.modifiedTime && f.mod === c.modifiedTime && have && !S.queue.some(o => o.fileId === f.id)) return Object.assign(S.years[f.year], {__cached: true});
+    f.modNext = c.modifiedTime || null;
   } catch(e){ if (e.gone || e.auth) throw e; }
   const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id);
   const url = f.mime === MIME_SHEET || !f.mime ? `${base}/export?mimeType=${encodeURIComponent(MIME_XLSX)}` : `${base}?alt=media`;
   const buf = await (await gFetch(url, {cache: 'no-store'}, tok)).arrayBuffer(), h = new Uint8Array(buf.slice(0, 2));
   if (h[0] !== 0x50 || h[1] !== 0x4B) throw new Error('스프레드시트 파일이 아니에요');
-  return parseWorkbook(buf);
+  const M = parseWorkbook(buf); f.mod = f.modNext; delete f.modNext; return M;
 }
 function gSave(){ LS.set('gfiles', S.gfiles); }
 function gAdd(list){
@@ -347,6 +351,9 @@ async function syncGoogle(interactive){
     gSave(); renderG();
     if (!res.some(r => r.m)){   // 하나도 못 받았으면 기존 데이터·동기화 시각을 그대로 둬요
       toast(fail.some(r => r.e.auth) ? '구글 로그인이 만료됐어요. 새로고침 버튼을 눌러 다시 로그인해 주세요' : '불러오기 실패: ' + fail[0].e.message); return; }
+    const same = res.every(r => r.m?.__cached) && !dup.length;
+    for (const r of res) if (r.m) delete r.m.__cached;
+    if (same){ S.meta.syncedAt = Date.now(); LS.set('meta', S.meta); applyReps(); if (interactive) toast('최신 데이터예요'); return; }   // 바뀐 게 없으면 화면을 다시 그리지 않아요
     finishOb(); setYears(next, {source: 'google'}, S.meta.source === 'google'); applyReps();
     if (dup.length){ const d = dup[0], y = res.find(r => r.f === d).m.year;
       toast(`${y}년 시트는 이미 연결돼 있어서 '${d.name}'${dup.length > 1 ? ` 외 ${dup.length - 1}개` : ''}는 연결하지 않았어요`); }

@@ -54,7 +54,7 @@ const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).
 // 아이폰·안드로이드 앱(Capacitor) 안에서 실행 중인지
 const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 // 앱의 네이티브 기능(로그인 창·Face ID·알림 등)을 부르는 창구. vendor/capacitor.js(@capacitor/core)의 registerPlugin을 써요
-const nativePlugins = {};
+const nativePlugins = window.__bootPlugins || {};   // js/boot-lock.js가 먼저 만든 것도 같이 써요
 const nativePlugin = name => {
   if (!NATIVE) return null;
   const reg = window.capacitorExports?.registerPlugin; if (!reg) return null;

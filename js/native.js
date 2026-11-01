@@ -76,7 +76,9 @@ function setLocked(on){ document.documentElement.classList.toggle('locked', on);
 async function unlock(){
   if (unlocking) return; unlocking = true;
   try {
-    await nativePlugin('Biometric').authenticate({reason: '머니머슬 잠금 해제'});
+    const boot = window.__bootUnlock; window.__bootUnlock = null;   // 시작할 때 이미 띄운 Face ID 결과가 있으면 그걸로
+    if (boot){ const r = await boot; if (!r.ok) throw Object.assign(new Error('잠금 해제 실패'), {code: r.code}); }
+    else await nativePlugin('Biometric').authenticate({reason: '머니머슬 잠금 해제'});
     setLocked(false);
   } catch(e){
     if (e.code === 'unavailable'){   // 기기 암호를 꺼서 확인할 방법이 없으면 잠금을 풀고 꺼요

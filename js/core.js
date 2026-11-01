@@ -130,14 +130,24 @@ const MIDS = {
   stock:  ['투자', '퇴직금'],           // 자산 탭 '주식 계좌 증가율' (중분류 '코인'은 제외)
 };
 const inMids = (mids, a) => a.big !== '부채' && mids.includes(a.mid);
+// 직접 만든 중분류(또는 이름을 바꾼 중분류)가 홈의 어느 묶음에 들어갈지: 사용자가 정한 값 → 기본 중분류 이름 순서로 정해요
+const HOME_KEYS = {invest: '금융투자', cash: '현금', estate: '부동산'};
+let MID_HOME = LS.get('midHome', {});   // {'유동자산|주식': 'invest', …} (이 기기에 저장)
+function setMidHome(big, mid, g){ if (g) MID_HOME[big + '|' + mid] = g; else delete MID_HOME[big + '|' + mid]; LS.set('midHome', MID_HOME); }
+function homeGroupOf(a){
+  if (a.big === '부채') return null;
+  const g = MID_HOME[a.big + '|' + a.mid]; if (g && HOME_KEYS[g]) return g;
+  for (const k of Object.keys(HOME_KEYS)) if (MIDS[k].includes(a.mid)) return k;
+  return null;
+}
 const HOME_GROUPS = {
-  invest: {label:'금융투자', note:'중분류 ' + MIDS.invest.join(' · '), match: a => inMids(MIDS.invest, a)},
-  estate: {label:'부동산',   note:'중분류 ' + MIDS.estate.join(' · '), match: a => inMids(MIDS.estate, a)},
-  cash:   {label:'현금',     note:'중분류 ' + MIDS.cash.join(' · '),   match: a => inMids(MIDS.cash, a)},
+  invest: {label:'금융투자', note:'중분류 ' + MIDS.invest.join(' · '), match: a => homeGroupOf(a) === 'invest'},
+  estate: {label:'부동산',   note:'중분류 ' + MIDS.estate.join(' · '), match: a => homeGroupOf(a) === 'estate'},
+  cash:   {label:'현금',     note:'중분류 ' + MIDS.cash.join(' · '),   match: a => homeGroupOf(a) === 'cash'},
 };
 const RETURN_GROUPS = [
-  {name:'주식',   label:'주식 계좌 증가율', note:'중분류 ' + MIDS.stock.join(' + ') + ' · 추가 납입 포함',  match: a => inMids(MIDS.stock, a)},
-  {name:'부동산', label:'부동산 평가액 변화', note:'중분류 ' + MIDS.estate.join(' + '), match: a => inMids(MIDS.estate, a)},
+  {name:'주식',   label:'주식 계좌 증가율', note:'중분류 ' + MIDS.stock.join(' + ') + ' · 추가 납입 포함',  match: a => homeGroupOf(a) === 'invest' && a.mid !== '코인'},
+  {name:'부동산', label:'부동산 평가액 변화', note:'중분류 ' + MIDS.estate.join(' + '), match: a => homeGroupOf(a) === 'estate'},
 ];
 const inGroup = (g, a) => g.match(a);
 

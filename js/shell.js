@@ -14,7 +14,7 @@ function render(){
   if (S.model){
     const fn = key==='asset' ? aMonth : bMonth;
     const now = new Date();
-    if (S.month[key]==null) S.month[key] = key === 'budget' && S.model.txMode && canEdit() && S.year === now.getFullYear() ? now.getMonth() + 1 : lastWith(fn);
+    if (S.month[key]==null) S.month[key] = S.year === now.getFullYear() && canEdit() && (key === 'asset' || S.model.txMode) ? now.getMonth() + 1 : lastWith(fn);   // 올해는 이번 달부터
     const trend = isYearView();
     $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
     $('#ymLabel').textContent = trend ? `${S.year}년` : `${S.year}년 ${S.month[key]}월`;

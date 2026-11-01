@@ -164,11 +164,13 @@ function editAssetMonth(m, bigSel){
     <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
     ${pv.has ? '<div class="echips"><button id="fillSame">빈 칸 모두 지난달 값으로</button></div>' : ''}
-    <div class="ecard">${mids.map(md => `<button class="tag mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리">${esc(md)} ›</button>${its.filter(a => a.mid === md).map(rowH).join('')}`).join('') || '<p class="note" style="margin:0">항목이 없어요</p>'}
-      <button class="eadd" id="adA">+ ${big} 항목 추가</button></div>
+    ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})] || '홈 묶음 없음'}</span>` : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
+      <div class="agb">${its.filter(a => a.mid === md).map(rowH).join('')}</div></div>`).join('') || '<div class="ecard"><p class="note" style="margin:0">항목이 없어요</p></div>'}
+    <button class="eadd agadd" id="adA">+ ${big} 항목 추가</button>
     <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>
     <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
   const upd = () => { const n = net(), d = pv.has ? n - pv.net : null;
+    $('#ed').querySelectorAll('[data-sum]').forEach(e => { const s = its.filter(a => a.mid === e.dataset.sum).reduce((t, a) => t + (V.get(a) || 0), 0); e.textContent = s ? money(s) : ''; });
     $('#aNet').textContent = money(n); $('#aDiff').innerHTML = d == null ? '-' : `<span class="${dir(d)}">${signed(d)}</span>`;
     const c = changed(), left = list.filter(a => V.get(a) == null && (pv.has ? pv.val(a) : 0)).length;
     $('#fSum').innerHTML = `${c}개 항목 변경${left ? ` · ${left}개 비어 있음` : ''}<b>${cur.has || c ? '저장하면 시트에 반영돼요' : '처음 입력하는 달이에요'}</b>`; };
@@ -193,7 +195,7 @@ function editAssetMonth(m, bigSel){
 const assetMids = (y, big) => [...new Set([...(big === '부채' ? ['대출'] : big === '유동자산' ? ['저축', '투자', '코인'] : ['부동산', '퇴직금', '청약']),
   ...S.years[y].assets.filter(a => a.big === big).map(a => a.mid)])];
 // 중분류 고르기 (+ 직접 입력). 고른 값은 get()으로
-function midPicker(el, mids, cur){
+function midPicker(el, mids, cur, onChange){
   let mid = cur ?? mids[0];
   const draw = () => {
     const all = mids.includes(mid) ? mids : [...mids, mid];
@@ -201,25 +203,35 @@ function midPicker(el, mids, cur){
     el.querySelectorAll('button').forEach(b => b.onclick = async () => {
       if (b.dataset.new){ const v = ((await askText('새 중분류', {placeholder: '예: 연금, 금, 자동차', ok: '추가', max: 20})) || '').trim(); if (!v) return; mid = v; }
       else mid = b.dataset.v;
-      draw(); });
+      draw(); onChange?.(mid); });
   };
   draw(); return {get: () => mid};
+}
+// 홈 묶음(금융투자·현금·부동산) 고르기. 부채는 묶음이 없어요
+function homePicker(el, big, mid){
+  if (big === '부채'){ el.hidden = true; return {get: () => null, set(){}}; }
+  let g = homeGroupOf({big, mid}) || (big === '유동자산' ? 'cash' : 'estate');
+  const draw = () => { el.innerHTML = Object.entries(HOME_KEYS).map(([k, l]) => `<button data-g="${k}"${k === g ? ' class="on"' : ''}>${l}</button>`).join('');
+    el.querySelectorAll('button').forEach(b => b.onclick = () => { g = b.dataset.g; draw(); }); };
+  draw();
+  return {get: () => g, set(m2){ g = homeGroupOf({big, mid: m2}) || g; draw(); }};
 }
 function addAssetItem(m, big){
   const y = S.year, mids = assetMids(y, big);
   openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
     <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
     <div class="etitle">중분류</div><div class="echips" id="adMid"></div>
+    ${big !== '부채' ? '<div class="etitle">홈 묶음</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>
-    <p class="note">중분류에 따라 홈의 묶음이 정해져요: 투자·퇴직금·코인 = 금융투자, 저축·청약 = 현금, 부동산 = 부동산</p>
     <button class="btn" id="edSave">추가</button>`);
-  const mp = midPicker($('#adMid'), mids);
+  const hp = homePicker($('#adHome'), big, mids[0]), mp = midPicker($('#adMid'), mids, null, md => hp.set(md));
   $('#edX').onclick = () => editAssetMonth(m, big);
   $('#edSave').onclick = () => {
     const small = $('#adName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
     if (findAsset(S.years[y], big, mid, small)) return toast('같은 항목이 이미 있어요');
+    if (hp.get()) setMidHome(big, mid, hp.get());
     commit([{t: 'addA', y, big, mid, small}]);
-    editAssetMonth.state = null; editAssetMonth(m, big);
+    editAssetMonth(m, big);   // 입력 중이던 잔액은 그대로 둬요
   };
 }
 // 중분류 관리: 이름 바꾸기(속한 항목 모두), 삭제(다른 중분류로 옮기거나 항목까지 삭제)
@@ -237,17 +249,21 @@ function midMenu(m, big, mid){
     <div class="etitle">이름 바꾸기</div>
     <input id="mmName" class="ememo" maxlength="20" value="${esc(mid)}" placeholder="중분류 이름">
     <button class="btn" id="mmRen">이름 바꾸기</button>
+    ${big !== '부채' ? '<div class="etitle" style="margin-top:22px">홈 묶음</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
     <div class="etitle" style="margin-top:22px">삭제 · 항목을 옮길 중분류</div>
     <div class="echips" id="mmTo"></div>
     <button class="btn ghost" id="mmMove">항목을 위 중분류로 옮기고 삭제</button>
     <button class="btn ghost danger" id="mmDel">항목까지 모두 삭제</button>`);
   const mp = midPicker($('#mmTo'), others.length ? others : ['기타']);
   const back = () => editAssetMonth(m, big);
+  const hp = homePicker($('#mmHome'), big, mid);
+  $('#mmHome').addEventListener('click', e => { if (!e.target.closest('button')) return; setMidHome(big, mid, hp.get()); haptic(); toast(`'${mid}'은(는) 홈의 ${HOME_KEYS[hp.get()]}에 들어가요`); render(); });
   $('#edX').onclick = back;
   $('#mmRen').onclick = () => {
     const to = $('#mmName').value.trim(); if (!to) return toast('중분류 이름을 넣어 주세요');
     if (to === mid) return back();
     if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
+    if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}));   // 이름을 바꿔도 홈 묶음은 그대로
     commit(opsFor('renA', to)); back(); };
   $('#mmMove').onclick = async () => {
     const to = mp.get(); if (!to || to === mid) return toast('옮길 중분류를 골라 주세요');

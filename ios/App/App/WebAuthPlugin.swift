@@ -2,6 +2,7 @@ import UIKit
 import Capacitor
 import AuthenticationServices
 import LocalAuthentication
+import Security
 
 // 앱 첫 화면: Capacitor 기본 화면에 우리 플러그인(WebAuth)을 등록해요. (Main.storyboard가 이 클래스를 써요)
 class MainViewController: CAPBridgeViewController {
@@ -10,6 +11,7 @@ class MainViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         bridge?.registerPluginInstance(WebAuthPlugin())
         bridge?.registerPluginInstance(BiometricPlugin())
+        bridge?.registerPluginInstance(SecureStorePlugin())
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(hideContent), name: UIApplication.willResignActiveNotification, object: nil)
         nc.addObserver(self, selector: #selector(showContent), name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -26,6 +28,64 @@ class MainViewController: CAPBridgeViewController {
         v.addSubview(c); cover = c
     }
     @objc private func showContent() { cover?.removeFromSuperview(); cover = nil }
+}
+
+// 로그인 세션 값 보관: 아이폰 키체인 (이 기기에서만, 잠금 해제 후에만 읽을 수 있어요. 백업·다른 기기로 옮겨지지 않아요)
+// 앱을 지웠다 다시 깔면 키체인에 남은 값은 쓰지 않고 지워요 (앱 저장 공간에 표시가 없으면 새 설치로 봐요).
+@objc(SecureStorePlugin)
+public class SecureStorePlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "SecureStorePlugin"
+    public let jsName = "SecureStore"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "get", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "set", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "remove", returnType: CAPPluginReturnPromise)
+    ]
+    private let service = "com.alllever.asset.secure"
+    private let installedKey = "alv.secure.installed"
+
+    private func key(_ call: CAPPluginCall) -> String? {
+        guard let k = call.getString("key"), k.range(of: "^[a-z]{1,32}$", options: .regularExpression) != nil else {
+            call.reject("잘못된 요청이에요", "bad_args"); return nil
+        }
+        return k
+    }
+    private func base(_ k: String) -> [String: Any] {
+        return [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: k]
+    }
+
+    @objc func get(_ call: CAPPluginCall) {
+        guard let k = key(call) else { return }
+        if !UserDefaults.standard.bool(forKey: installedKey) {   // 새로 설치: 예전 설치에서 남은 값은 지워요
+            SecItemDelete([kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service] as CFDictionary)
+            UserDefaults.standard.set(true, forKey: installedKey)
+            call.resolve(["value": NSNull()]); return
+        }
+        var q = base(k); q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
+        var out: AnyObject?
+        let st = SecItemCopyMatching(q as CFDictionary, &out)
+        if st == errSecSuccess, let d = out as? Data, let v = String(data: d, encoding: .utf8) { call.resolve(["value": v]) }
+        else if st == errSecItemNotFound { call.resolve(["value": NSNull()]) }
+        else { call.reject("키체인을 읽지 못했어요 (\(st))", "failed") }
+    }
+
+    @objc func set(_ call: CAPPluginCall) {
+        guard let k = key(call) else { return }
+        guard let v = call.getString("value"), !v.isEmpty, v.count <= 512 else { call.reject("잘못된 요청이에요", "bad_args"); return }
+        UserDefaults.standard.set(true, forKey: installedKey)
+        SecItemDelete(base(k) as CFDictionary)
+        var q = base(k)
+        q[kSecValueData as String] = Data(v.utf8)
+        q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        let st = SecItemAdd(q as CFDictionary, nil)
+        if st == errSecSuccess { call.resolve() } else { call.reject("키체인에 저장하지 못했어요 (\(st))", "failed") }
+    }
+
+    @objc func remove(_ call: CAPPluginCall) {
+        guard let k = key(call) else { return }
+        SecItemDelete(base(k) as CFDictionary)
+        call.resolve()
+    }
 }
 
 // 앱 잠금: 기기의 Face ID·Touch ID (실패하면 기기 암호). 얼굴·지문 정보는 앱이 받지 않고 성공/실패만 받아요.

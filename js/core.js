@@ -129,7 +129,6 @@ const MIDS = {
   estate: ['부동산'],                   // 홈 '부동산'
   stock:  ['투자', '퇴직금'],           // 자산 탭 '주식 계좌 증가율' (중분류 '코인'은 제외)
 };
-const inMids = (mids, a) => a.big !== '부채' && mids.includes(a.mid);
 // 직접 만든 중분류(또는 이름을 바꾼 중분류)가 홈의 어느 묶음에 들어갈지: 사용자가 정한 값 → 기본 중분류 이름 순서로 정해요
 const HOME_KEYS = {invest: '금융투자', cash: '현금', estate: '부동산'};
 let MID_HOME = LS.get('midHome', {});   // {'유동자산|주식': 'invest', …} (이 기기에 저장)

@@ -6,59 +6,84 @@ const GOOGLE = {
   clientId: '919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com',        // OAuth 클라이언트 ID (웹 애플리케이션) … .apps.googleusercontent.com
   apiKey:   'AIzaSyA737jtGTgXBmwvRO-DuAgPvxDMVWN3CZQ',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
   appId:    '919106003112',        // Google Cloud 프로젝트 번호 (숫자)
-  authServer: 'https://alllever-asset-auth.alllever.workers.dev',
-  pickerPage: 'https://cham0919.github.io/AllLever-asset/picker.html',   // 앱(아이폰·안드로이드)에서 시트 선택 창을 여는 웹 페이지      // 로그인 유지 서버 주소 (server/ 폴더, 예: https://alllever-asset-auth.xxx.workers.dev). 비우면 1시간 로그인 방식
+  authServer: 'https://alllever-asset-auth.alllever.workers.dev',   // 로그인 유지 서버 (server/ 폴더)
+  pickerPage: 'https://cham0919.github.io/AllLever-asset/picker.html',   // 앱(아이폰·안드로이드)에서 시트 선택 창을 여는 웹 페이지
 };
-const G_SCOPE = 'https://www.googleapis.com/auth/drive.file email';
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const gReady = () => !!(GOOGLE.clientId && GOOGLE.apiKey && GOOGLE.appId);
-let gTok = null, gClient = null;   // 토큰은 메모리에만 (약 1시간)
+let gTok = null;   // 접근 토큰은 메모리에만 (약 1시간)
 const loadJs = src => new Promise((ok, bad) => {
   if (document.querySelector(`script[src="${src}"]`)) return ok();
   const el = document.createElement('script'); el.src = src; el.async = true; el.onload = ok; el.onerror = () => bad(new Error('구글 스크립트를 불러오지 못했어요')); document.head.append(el);
 });
-async function gInit(){
-  if (gClient) return;
-  await loadJs('https://accounts.google.com/gsi/client');
-  gClient = google.accounts.oauth2.initTokenClient({client_id: GOOGLE.clientId, scope: G_SCOPE, callback: () => {}});
+/* ───────── 로그인 세션 값 보관 ─────────
+   앱(아이폰·안드로이드): 키체인·키스토어(SecureStore 플러그인). 다른 앱이나 백업으로 꺼낼 수 없어요.
+   웹: 이 브라우저의 저장 공간. 플러그인이 없는 예전 앱에서도 웹 방식으로 동작해요. */
+const SID_RE = /^[\w-]{40,64}$/;
+let sidMem, sidSecure = null;   // sidMem: 앱에서 한 번 읽은 값 (undefined = 아직 안 읽음)
+// 플러그인 객체는 async 함수에서 돌려주면 안 돼요 (Capacitor 플러그인은 then이 있는 것처럼 보여서 기다리다 멈춰요). 그래서 쓸 수 있는지만 돌려줘요.
+const SS = () => nativePlugin('SecureStore');
+async function secureOk(){
+  if (!NATIVE) return false;
+  if (sidSecure === null){ try { await SS().get({key: 'gsid'}); sidSecure = true; } catch(e){ sidSecure = false; } }   // 구현이 없으면 웹 방식
+  return sidSecure;
 }
-// 토큰 받기. 사용자가 누른 버튼에서만 팝업이 뜰 수 있어서, 자동 동기화에서는 남은 토큰만 써요.
-// 로그인 유지 서버가 있으면: 기기에 저장된 세션으로 서버에서 새 토큰을 조용히 받아요 (다시 로그인할 필요 없음).
+async function sidGet(){
+  if (!(await secureOk())) return LS.get('gsid', null);
+  if (sidMem !== undefined) return sidMem;
+  let v = null;
+  try { v = (await SS().get({key: 'gsid'})).value || null; } catch(e){}
+  const old = LS.get('gsid', null);   // 예전 버전이 브라우저 저장 공간에 둔 값은 키체인으로 옮기고 지워요
+  if (!v && old && SID_RE.test(old)){ try { await SS().set({key: 'gsid', value: old}); v = old; } catch(e){ return old; } }
+  if (old) LS.del('gsid');
+  return sidMem = v;
+}
+async function sidSet(v){
+  if (await secureOk()){ try { await SS().set({key: 'gsid', value: v}); sidMem = v; LS.del('gsid'); return; } catch(e){} }
+  LS.set('gsid', v); sidMem = undefined;
+}
+async function sidDel(){
+  sidMem = undefined; LS.del('gsid');
+  if (await secureOk()) try { await SS().remove({key: 'gsid'}); sidMem = null; } catch(e){}
+}
+// 토큰 받기: 기기에 저장된 세션으로 로그인 유지 서버에서 새 토큰을 조용히 받아요 (다시 로그인할 필요 없음).
+// 서버가 하루에 한 번 새 세션 값을 주면 바로 바꿔 저장해요. 옛 값은 곧 쓸 수 없게 돼서, 빼돌린 값이 있어도 오래 못 써요.
 // 세션이 없거나 서버가 다시 로그인하라고 하면, 사용자가 누른 동작일 때만 구글 로그인 화면으로 이동해요.
-const gServer = () => (GOOGLE.authServer || '').replace(/\/+$/, '');
+const gServer = () => GOOGLE.authServer.replace(/\/+$/, '');
+let tokReq = null;
+function serverToken(){   // 동시에 여러 번 불려도 서버 요청은 하나만 (세션 값 교체가 엇갈리지 않게). 웹은 여러 탭 사이에도 한 번에 하나
+  if (tokReq) return tokReq;
+  const run = async () => {
+    if (gTok && Date.now() < gTok.exp - 60e3) return gTok.v;
+    const sid = await sidGet(); if (!sid) return null;
+    let r;
+    try { r = await fetch(gServer() + '/token', {method: 'POST', headers: {Authorization: 'Bearer ' + sid, 'X-Alv-Rotate': '1'}, cache: 'no-store'}); }
+    catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
+    const j = await r.json().catch(() => ({}));
+    if (r.ok && j.access_token){
+      if (j.sid && SID_RE.test(j.sid)) await sidSet(j.sid);
+      gTok = {v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000};
+      if (j.email && j.email !== S.guser){ S.guser = j.email; LS.set('guser', j.email); }
+      return gTok.v;
+    }
+    if (r.status === 401){   // 권한 취소·만료·보안상 로그아웃 → 다시 로그인
+      await sidDel();
+      if (j.error === 'reused') toast('보안을 위해 구글 로그인이 해제됐어요. 다시 로그인해 주세요');
+      return null;
+    }
+    throw new Error('로그인 서버 응답 오류');
+  };
+  const locked = !NATIVE && navigator.locks?.request ? () => navigator.locks.request(LSP + 'token', run) : run;
+  return tokReq = locked().finally(() => { tokReq = null; });
+}
 async function gToken(interactive, pending){
   if (gTok && Date.now() < gTok.exp - 60e3) return gTok.v;
-  if (gServer()){
-    const sid = LS.get('gsid', null);
-    if (sid){
-      let r;
-      try { r = await fetch(gServer() + '/token', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}, cache: 'no-store'}); }
-      catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
-      const j = await r.json().catch(() => ({}));
-      if (r.ok && j.access_token){
-        gTok = {v: j.access_token, exp: Date.now() + (j.expires_in || 3600) * 1000};
-        if (j.email && j.email !== S.guser){ S.guser = j.email; LS.set('guser', j.email); }
-        return gTok.v;
-      }
-      if (r.status === 401) LS.del('gsid');   // 권한 취소·만료 → 다시 로그인
-      else throw new Error('로그인 서버 응답 오류');
-    }
-    if (!interactive) return null;
-    if (NATIVE){ await nativeLogin(); return gToken(false); }   // 앱: 로그인 창을 띄웠다가 돌아오면 바로 이어서
-    gLogin(pending || 'sync');
-    return new Promise(() => {});   // 구글 로그인 화면으로 이동 중
-  }
+  const t = await serverToken(); if (t) return t;
   if (!interactive) return null;
-  await gInit();
-  return new Promise((ok, bad) => {
-    gClient.callback = r => {
-      if (r.error) return bad(new Error(r.error === 'access_denied' ? '구글 권한을 허용하지 않았어요' : r.error));
-      gTok = {v: r.access_token, exp: Date.now() + (r.expires_in || 3600) * 1000}; ok(gTok.v);
-    };
-    gClient.error_callback = e => bad(new Error(e?.type === 'popup_closed' ? '로그인 창을 닫았어요' : '로그인 창을 열지 못했어요'));
-    gClient.requestAccessToken({prompt: S.guser ? '' : 'consent', login_hint: S.guser || undefined});
-  });
+  if (NATIVE){ await nativeLogin(); return gToken(false); }   // 앱: 로그인 창을 띄웠다가 돌아오면 바로 이어서
+  gLogin(pending || 'sync');
+  return new Promise(() => {});   // 구글 로그인 화면으로 이동 중
 }
 async function gFetch(url, opt = {}, tok){
   const r = await fetch(url, {...opt, headers: {...(opt.headers || {}), Authorization: 'Bearer ' + tok}});
@@ -119,8 +144,8 @@ async function nativeLogin(){
   let r, j;
   try { r = await fetch(gServer() + '/auth/exchange', {method: 'POST', headers: {'Content-Type': 'application/json'}, cache: 'no-store', body: JSON.stringify({code: h.get('alv_code'), verifier})}); j = await r.json(); }
   catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
-  if (!r.ok || !/^[\w-]{40,64}$/.test(j.sid || '')) throw new Error('구글 로그인을 마치지 못했어요. 다시 시도해 주세요');
-  LS.set('gsid', j.sid);
+  if (!r.ok || !SID_RE.test(j.sid || '')) throw new Error('구글 로그인을 마치지 못했어요. 다시 시도해 주세요');
+  await sidSet(j.sid);
   if (j.email){ S.guser = j.email; LS.set('guser', j.email); }
 }
 
@@ -138,8 +163,8 @@ function gReturn(){
     return null;
   }
   const sid = h.get('alv_sid');
-  if (!/^[\w-]{40,64}$/.test(sid)){ toast('로그인 정보가 올바르지 않아요. 다시 시도해 주세요'); return null; }
-  LS.set('gsid', sid);
+  if (!SID_RE.test(sid)){ toast('로그인 정보가 올바르지 않아요. 다시 시도해 주세요'); return null; }
+  LS.set('gsid', sid);   // 웹에서만 오는 경로예요 (앱은 nativeLogin)
   if (h.get('alv_email')){ S.guser = h.get('alv_email'); LS.set('guser', S.guser); }
   return pending || 'sync';
 }
@@ -307,10 +332,10 @@ async function gRemove(i){
 }
 async function gSignOut(){
   if (!(await ask('· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.', {title: '구글 계정 연결을 해제할까요?', ok: '해제하고 삭제', danger: true}))) return;
-  const sid = LS.get('gsid', null);
-  if (sid && gServer()) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
-  else try { if (gTok && window.google?.accounts?.oauth2) google.accounts.oauth2.revoke(gTok.v, () => {}); } catch(e){}
-  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gsid'); LS.del('gfolder');
+  const sid = await sidGet();
+  if (sid) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
+  await sidDel();
+  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gfolder');
   if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
   syncSheet();
 }

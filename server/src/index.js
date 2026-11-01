@@ -11,6 +11,7 @@
 //        콜백은 세션 대신 일회용 코드를 <앱 주소>#alv_code=…&alv_nonce=… 로 돌려줘요 (60초, 한 번만).
 //   POST /auth/exchange  {code, verifier}  일회용 코드 + 앱만 아는 값 → 세션 (앱 주소를 가로챈 다른 앱은 쓸 수 없어요)
 //   POST /token     (Authorization: Bearer <세션>)  새 접근 토큰
+//        X-Alv-Rotate: 1 을 보내는 앱에는 하루에 한 번 새 세션 값(sid)도 함께 줘요. 옛 값은 교체 후 10분까지만 받아요.
 //   POST /logout    (Authorization: Bearer <세션>)  구글 권한 취소 + 세션 삭제
 //   GET  /health
 //
@@ -21,7 +22,11 @@
 
 const SCOPE = 'openid email https://www.googleapis.com/auth/drive.file';
 const STATE_TTL = 10 * 60 * 1000;            // 로그인 시작 후 10분 안에 돌아와야 함
-const SESSION_IDLE = 180 * 24 * 3600 * 1000; // 180일 동안 안 쓰면 세션 정리
+const DAY = 24 * 3600 * 1000;
+const SESSION_IDLE = 60 * DAY;               // 60일 동안 안 쓰면 다시 로그인
+const SESSION_MAX = 180 * DAY;               // 로그인하고 180일이 지나면 다시 로그인
+const ROTATE_EVERY = DAY;                    // 세션 값은 하루에 한 번 새 값으로 바꿔요
+const ROTATE_LEEWAY = 10 * 60 * 1000;        // 바꾼 뒤 10분 동안은 옛 값도 받아요 (응답을 못 받은 경우)
 const CODE_TTL = 60 * 1000;                  // 앱용 일회용 코드는 60초 안에 바꿔야 함
 
 const enc = new TextEncoder(), dec = new TextDecoder();
@@ -64,7 +69,7 @@ function cors(env, req, res){
   if (originOk(env, o)){
     res.headers.set('Access-Control-Allow-Origin', o);
     res.headers.set('Vary', 'Origin');
-    res.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    res.headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Alv-Rotate');
     res.headers.set('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
     res.headers.set('Access-Control-Max-Age', '86400');
   }
@@ -136,32 +141,51 @@ async function exchange(req, env){   // 앱: 일회용 코드 + verifier → 세
 
 async function token(req, env){
   const sid = bearer(req); if (!sid) return json({error: 'no_session'}, 401);
-  const h = await sha256(sid);
-  const row = await env.DB.prepare('SELECT email, refresh_enc FROM sessions WHERE sid_hash = ?1').bind(h).first();
-  if (!row) return json({error: 'relogin'}, 401);
+  const h = await sha256(sid), now = Date.now(), cols = 'sid_hash, email, refresh_enc, created, last_used, rotated';
+  let row = await env.DB.prepare(`SELECT ${cols} FROM sessions WHERE sid_hash = ?1`).bind(h).first(), viaPrev = false;
+  if (!row){
+    row = await env.DB.prepare(`SELECT ${cols} FROM sessions WHERE prev_hash = ?1`).bind(h).first();
+    if (!row) return json({error: 'relogin'}, 401);
+    if (now - row.rotated > ROTATE_LEEWAY){   // 이미 바꾼 옛 값이 한참 뒤에 다시 옴 → 빼돌린 값일 수 있어요. 세션을 지워요
+      await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
+      return json({error: 'reused'}, 401);
+    }
+    viaPrev = true;   // 바꾼 직후 응답을 못 받은 경우: 새 값을 다시 줘요
+  }
+  if (now - row.created > SESSION_MAX || now - row.last_used > SESSION_IDLE){
+    await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
+    return json({error: 'relogin'}, 401);
+  }
   const r = await fetch(urls(env).token, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: new URLSearchParams({refresh_token: await open(env, row.refresh_enc), client_id: env.GOOGLE_CLIENT_ID,
       client_secret: env.GOOGLE_CLIENT_SECRET, grant_type: 'refresh_token'})});
   const t = await r.json().catch(() => ({}));
   if (!r.ok){
     if (t.error === 'invalid_grant'){   // 사용자가 권한을 취소했거나 만료됨 → 세션 정리, 다시 로그인
-      await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(h).run();
+      await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
       return json({error: 'relogin'}, 401);
     }
     return json({error: 'google', detail: t.error || r.status}, 502);
   }
-  await env.DB.prepare('UPDATE sessions SET last_used = ?2 WHERE sid_hash = ?1').bind(h, Date.now()).run();
-  return json({access_token: t.access_token, expires_in: t.expires_in || 3600, email: row.email});
+  const out = {access_token: t.access_token, expires_in: t.expires_in || 3600, email: row.email};
+  const rotate = req.headers.get('X-Alv-Rotate') === '1' && (viaPrev || now - row.rotated > ROTATE_EVERY);
+  if (rotate){
+    const next = rand(32), nh = await sha256(next);
+    if (viaPrev) await env.DB.prepare('UPDATE sessions SET sid_hash = ?2, last_used = ?3 WHERE sid_hash = ?1').bind(row.sid_hash, nh, now).run();
+    else await env.DB.prepare('UPDATE sessions SET sid_hash = ?2, prev_hash = ?1, rotated = ?3, last_used = ?3 WHERE sid_hash = ?1').bind(h, nh, now).run();
+    out.sid = next;
+  } else await env.DB.prepare('UPDATE sessions SET last_used = ?2 WHERE sid_hash = ?1').bind(row.sid_hash, now).run();
+  return json(out);
 }
 
 async function logout(req, env){
   const sid = bearer(req); if (!sid) return json({ok: true});
   const h = await sha256(sid);
-  const row = await env.DB.prepare('SELECT refresh_enc FROM sessions WHERE sid_hash = ?1').bind(h).first();
+  const row = await env.DB.prepare('SELECT sid_hash, refresh_enc FROM sessions WHERE sid_hash = ?1 OR prev_hash = ?1').bind(h).first();
   if (row){
     try { await fetch(urls(env).revoke, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
       body: new URLSearchParams({token: await open(env, row.refresh_enc)})}); } catch {}
-    await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(h).run();
+    await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
   }
   return json({ok: true});
 }
@@ -208,7 +232,7 @@ async function route(req, env){
 
 async function cleanup(env){   // 매일: 오래 안 쓴 세션과 남은 로그인 요청 정리
   const now = Date.now();
-  await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1').bind(now - SESSION_IDLE).run();
+  await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1 OR created < ?2').bind(now - SESSION_IDLE, now - SESSION_MAX).run();
   await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
   await env.DB.prepare('DELETE FROM app_codes WHERE created < ?1').bind(now - CODE_TTL).run();
 }

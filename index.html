@@ -452,6 +452,9 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
 #lockScr b{font-size:20px;font-weight:800;color:var(--ink)}
 #lockScr p{margin:0;color:var(--sub);font-size:14px}
 #lockScr .btn{width:auto;min-width:180px;margin-top:10px}
+/* 알림 설정: 묶음 사이 간격과 설명 줄 */
+.nt .slist{margin-bottom:22px}.nt .srow{min-height:60px;padding-top:10px;padding-bottom:10px}
+.nt .srow span small{display:block;margin-top:3px;font-size:12.5px;font-weight:400;color:var(--sub)}
 .zt{display:block;width:100%;padding:12px 0 2px;font-size:13px;font-weight:600;color:var(--sub);text-align:center}
 .gmark{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:8px;background:#fff;margin-right:4px;flex:none}.gmark svg{width:18px;height:18px}
 .ymlabel{min-width:132px;text-align:center;font-size:18px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
@@ -490,6 +493,9 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="srow" id="btnSync"><span>지금 불러오기</span><em id="svSync"></em><i>›</i></button>
     <div class="srow srow-info"><span>데이터</span><em id="svData"></em></div>
   </div>
+  <div class="slist" style="margin-top:18px">
+    <button class="srow" data-go="view"><span>화면</span><em id="svView"></em><i>›</i></button>
+  </div>
   <h5 class="shd" id="shdLedger">가계부</h5>
   <div class="slist" id="slLedger">
     <button class="srow" data-sa="catInc"><span>수입 항목</span><em id="svInc"></em><i>›</i></button>
@@ -506,11 +512,10 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="srow" data-go="noti"><span>알림</span><em id="svNoti"></em><i>›</i></button>
   </div>
   </div>
-  <h5 class="shd">목표 · 화면</h5>
+  <h5 class="shd">목표</h5>
   <div class="slist">
     <button class="srow" data-go="goal"><span>목표와 계획</span><em id="svGoal"></em><i>›</i></button>
     <button class="srow" data-go="fire"><span>FIRE 계산</span><em id="svFire"></em><i>›</i></button>
-    <button class="srow" data-go="view"><span>화면</span><em id="svView"></em><i>›</i></button>
   </div>
   <h5 class="shd">백업 및 복구</h5>
   <div class="slist">
@@ -538,22 +543,25 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
       <button class="srow" data-d="300"><span>5분 후</span><b class="chk">✓</b></button>
     </div>
   </div>
-  <ul class="slines"><li>앱을 열거나 다른 앱에서 돌아올 때 확인해요.</li><li>인증이 안 되면 휴대폰 암호로 열 수 있어요.</li><li>얼굴·지문 정보는 앱이 받지 않아요.</li></ul>
 </div>
 <div class="spage" data-page="noti">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>알림</b><span></span></div>
+  <div class="nt">
+  <h5 class="shd">매일</h5>
   <div class="slist pl">
-    <button class="srow" id="nt-daily" role="switch" aria-checked="false"><span>기록 알림</span><b class="tg"></b></button>
+    <button class="srow" id="nt-daily" role="switch" aria-checked="false"><span>기록 알림<small>그날 앱에서 입력했으면 울리지 않아요</small></span><b class="tg"></b></button>
     <button class="srow" id="ntTime" hidden><span>알림 시간</span><em id="ntTimeV"></em><i>›</i></button>
   </div>
+  <h5 class="shd">가계부 일정</h5>
   <div class="slist pl">
-    <button class="srow" id="nt-reps" role="switch" aria-checked="false"><span>반복 거래 알림</span><b class="tg"></b></button>
-    <button class="srow" id="nt-monthEnd" role="switch" aria-checked="false"><span>월말 정리 알림</span><b class="tg"></b></button>
+    <button class="srow" id="nt-reps" role="switch" aria-checked="false"><span>반복 거래 알림<small>거래 날짜 아침 9시</small></span><b class="tg"></b></button>
+    <button class="srow" id="nt-monthEnd" role="switch" aria-checked="false"><span>월말 정리 알림<small>매달 마지막 날 저녁 8시</small></span><b class="tg"></b></button>
   </div>
+  <h5 class="shd">표시</h5>
   <div class="slist pl">
-    <button class="srow" id="nt-amounts" role="switch" aria-checked="false"><span>알림에 금액 보이기</span><b class="tg"></b></button>
+    <button class="srow" id="nt-amounts" role="switch" aria-checked="false"><span>알림에 금액 보이기<small>잠금 화면에도 금액이 보여요</small></span><b class="tg"></b></button>
   </div>
-  <ul class="slines"><li>기록 알림은 그날 앱에서 입력했으면 울리지 않아요.</li><li>반복 거래 알림은 거래 날짜 아침 9시에 울려요.</li><li>월말 정리 알림은 매달 마지막 날 저녁 8시에 울려요.</li><li>알림은 휴대폰 안에서 예약돼요. 서버로 보내는 정보는 없어요.</li></ul>
+  </div>
 </div>
 <div class="spage" data-page="pay">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>결제수단</b><span></span></div>

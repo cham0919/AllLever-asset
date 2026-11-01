@@ -8,7 +8,7 @@ function viewOnboard(){
   document.body.classList.add('onboarding');
   const st = S.ob.step, el = $('#view');
   if (st === 'goal'){
-    const cur = S.goal.target, opts = [5e8, 1e9, 2e9, 3e9];
+    const cur = S.goal.target, opts = [1e8, 5e8, 1e9, 2e9, 3e9];
     el.innerHTML = `<section class="ob">
       <div class="ob-step">2 / ${S.ob.path === 'google' ? 3 : 2}</div>
       <h2>목표 순자산을 정해 주세요</h2>

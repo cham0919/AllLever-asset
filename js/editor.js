@@ -216,29 +216,33 @@ function midPicker(el, mids, cur, onChange){
   };
   draw(); return {get: () => mid};
 }
-// 홈 묶음(금융투자·현금·부동산) 고르기. 부채는 묶음이 없어요
-function homePicker(el, big, mid){
+// 묶음(금융투자·현금·부동산) 고르기. 다시 누르면 선택 해제. 부채는 묶음이 없어요
+function homePicker(el, big, mid, onChange){
   if (big === '부채'){ el.hidden = true; return {get: () => null, set(){}}; }
-  let g = homeGroupOf({big, mid}) || (big === '유동자산' ? 'cash' : 'estate');
+  let g = homeGroupOf({big, mid});
   const draw = () => { el.innerHTML = Object.entries(HOME_KEYS).map(([k, l]) => `<button data-g="${k}"${k === g ? ' class="on"' : ''}>${l}</button>`).join('');
-    el.querySelectorAll('button').forEach(b => b.onclick = () => { g = b.dataset.g; draw(); }); };
+    el.querySelectorAll('button').forEach(b => b.onclick = () => { g = g === b.dataset.g ? null : b.dataset.g; draw(); onChange?.(g); }); };
   draw();
-  return {get: () => g, set(m2){ g = homeGroupOf({big, mid: m2}) || g; draw(); }};
+  return {get: () => g, set(m2){ g = homeGroupOf({big, mid: m2}); draw(); }};
 }
+// 묶음을 고르지 않으면 홈 대시보드에 표시되지 않는다고 알려요 (계속하면 true)
+const groupNotice = (big, g, ok = '그대로 저장', cancel = '선택하기', hint = '') => big === '부채' || g ? Promise.resolve(true)
+  : ask('묶음을 선택하지 않으면 홈 대시보드의 금융투자·현금·부동산 어디에도 표시되지 않아요.' + hint, {title: '묶음을 선택하지 않았어요', ok, cancel});
 function addAssetItem(m, big){
   const y = S.year, mids = assetMids(y, big);
   openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
     <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
     <div class="etitle">중분류</div><div class="echips" id="adMid"></div>
-    ${big !== '부채' ? '<div class="etitle">홈 묶음</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
+    ${big !== '부채' ? '<div class="etitle">묶음</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>
     <button class="btn" id="edSave">추가</button>`);
   const hp = homePicker($('#adHome'), big, mids[0]), mp = midPicker($('#adMid'), mids, null, md => hp.set(md));
   $('#edX').onclick = () => editAssetMonth(m, big);
-  $('#edSave').onclick = () => {
+  $('#edSave').onclick = async () => {
     const small = $('#adName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
     if (findAsset(S.years[y], big, mid, small)) return toast('같은 항목이 이미 있어요');
-    if (hp.get()) setMidHome(big, mid, hp.get());
+    if (!(await groupNotice(big, hp.get()))) return;
+    if (big !== '부채') setMidHome(big, mid, hp.get() || 'none');
     commit([{t: 'addA', y, big, mid, small}]);
     editAssetMonth(m, big);   // 입력 중이던 잔액은 그대로 둬요
   };
@@ -253,20 +257,21 @@ function midMenu(m, big, mid){
   const clash = to => its.some(a => findAsset(Y, big, to, a.small));
   openEd(`<h4>중분류 · ${esc(mid)} <button class="ex" id="edX">뒤로</button></h4>
     <div class="esub">${big} · 항목 ${its.length}개${months ? ` · 잔액 ${months}개월 입력됨` : ''}</div>
-    <div class="etitle">이름 바꾸기</div>
+    ${big !== '부채' ? '<div class="etitle">묶음</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
+    <div class="etitle"${big !== '부채' ? ' style="margin-top:18px"' : ''}>이름 바꾸기</div>
     <input id="mmName" class="ememo" maxlength="20" value="${esc(mid)}" placeholder="중분류 이름">
     <button class="btn" id="mmRen">이름 바꾸기</button>
-    ${big !== '부채' ? '<div class="etitle" style="margin-top:22px">홈 묶음</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
     <button class="btn ghost danger" id="mmDel" style="margin-top:22px">중분류 삭제</button>`);
   const back = () => editAssetMonth(m, big);
-  const hp = homePicker($('#mmHome'), big, mid);
-  $('#mmHome').addEventListener('click', e => { if (!e.target.closest('button')) return; setMidHome(big, mid, hp.get()); haptic(); toast(`'${mid}'은(는) 홈의 ${HOME_KEYS[hp.get()]}에 들어가요`); render(); });
+  const hp = homePicker($('#mmHome'), big, mid, async g => {   // 고르면 바로 저장
+    setMidHome(big, mid, g || 'none'); haptic(); render();
+    if (g) toast(`'${mid}' 묶음: ${HOME_KEYS[g]}`); else await groupNotice(big, g, '확인', ''); });
   $('#edX').onclick = back;
   $('#mmRen').onclick = () => {
     const to = $('#mmName').value.trim(); if (!to) return toast('중분류 이름을 넣어 주세요');
     if (to === mid) return back();
     if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
-    if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}));   // 이름을 바꿔도 홈 묶음은 그대로
+    if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}) || 'none');   // 이름을 바꿔도 묶음은 그대로
     commit(opsFor('renA', to)); back(); };
   $('#mmDel').onclick = async () => {
     const names = its.map(a => a.small).join(', ');
@@ -279,17 +284,18 @@ function assetItemMenu(m, big, a){
   const y = S.year, Y = S.years[y], idx = occ(Y.assets, a, aKey), filled = a.v.filter(v => v != null).length;
   openEd(`<h4>${esc(a.small)} <button class="ex" id="edX">뒤로</button></h4>
     <div class="esub">${big} · ${y}년${filled ? ` · 잔액 ${filled}개월 입력됨` : ''}</div>
-    <div class="etitle">이름</div>
-    <input id="aiName" class="ememo" maxlength="30" value="${esc(a.small)}" placeholder="항목 이름">
     <div class="etitle">중분류</div><div class="echips" id="aiMid"></div>
+    <div class="etitle" style="margin-top:18px">이름</div>
+    <input id="aiName" class="ememo" maxlength="30" value="${esc(a.small)}" placeholder="항목 이름">
     <button class="btn" id="aiSave">저장</button>
     <button class="btn ghost danger" id="aiDel">항목 삭제</button>`);
   const mp = midPicker($('#aiMid'), assetMids(y, big), a.mid);
   $('#edX').onclick = () => editAssetMonth(m, big);
-  $('#aiSave').onclick = () => {
+  $('#aiSave').onclick = async () => {
     const small = $('#aiName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
     if (small === a.small && mid === a.mid) return editAssetMonth(m, big);
     if (findAsset(Y, big, mid, small)) return toast('같은 항목이 이미 있어요');
+    if (mid !== a.mid && !(await groupNotice(big, homeGroupOf({big, mid}), '그대로 옮기기', '취소', `\n\n옮긴 뒤 잔액 입력 화면에서 '${mid}' 이름을 눌러 묶음을 정할 수 있어요.`))) return;
     commit([{t: 'renA', y, big, mid: a.mid, small: a.small, idx, to: {mid, small}}]);
     editAssetMonth(m, big);
   };

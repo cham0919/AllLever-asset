@@ -136,7 +136,7 @@ let MID_HOME = LS.get('midHome', {});   // {'유동자산|주식': 'invest', …
 function setMidHome(big, mid, g){ if (g) MID_HOME[big + '|' + mid] = g; else delete MID_HOME[big + '|' + mid]; LS.set('midHome', MID_HOME); }
 function homeGroupOf(a){
   if (a.big === '부채') return null;
-  const g = MID_HOME[a.big + '|' + a.mid]; if (g && HOME_KEYS[g]) return g;
+  const g = MID_HOME[a.big + '|' + a.mid]; if (g === 'none') return null; if (g && HOME_KEYS[g]) return g;   // 'none' = 묶음 선택 안 함
   for (const k of Object.keys(HOME_KEYS)) if (MIDS[k].includes(a.mid)) return k;
   return null;
 }

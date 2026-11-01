@@ -166,7 +166,7 @@ function budState(y, m){
 const bClass = r => r > 1 ? 'bf-over' : r >= .85 ? 'bf-warn' : '';   // 막대 색 (전역 .warn 과 겹치지 않게 bf- 접두어)
 function budStrip(bs){
   const rem = bs.total - bs.spent, r = bs.spent / bs.total;
-  return `<button class="bstrip" data-act="goBud"><div class="l"><span>${rem >= 0 ? `예산 <b>${money(rem)}</b> 남음` : `예산 <b class="up">${money(-rem)}</b> 넘음`}${bs.cur && bs.daily ? ` · 하루 ${money(bs.daily)}` : ''}</span><span class="num">${Math.round(r * 100)}% ›</span></div>
+  return `<button class="bstrip" data-act="goBud"><div class="l"><span>${rem >= 0 ? `예산 <b>${money(rem)}</b> 남음` : `예산 <b class="up">${money(-rem)}</b> 넘음`}</span><span class="num">${Math.round(r * 100)}% ›</span></div>
     <div class="btrack sm"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%"></b>` : ''}</div></button>`;
 }
 function viewBud(){
@@ -177,17 +177,12 @@ function viewBud(){
       ${ed ? `<button class="btn" data-act="budEdit">예산 정하기</button>` : `<p class="note">${esc(editNote(y))}</p>`}</section>`; return; }
   const rem = bs.total - bs.spent, r = bs.spent / bs.total;
   const tops = bs.rows.filter(x => !x.fixed && x.it.amt > x.exp).sort((a, z) => (z.it.amt - z.exp) - (a.it.amt - a.exp)).slice(0, 2).map(x => x.it.name);
-  let alert = '';
-  if (bs.canProj && bs.proj > bs.total) alert = `<div class="balert bad">이 속도면 월말에 <b>${money(bs.proj - bs.total)} 초과</b>해요.${tops.length ? ` ${tops.map(esc).join('·')}${josa(tops.at(-1), '을', '를')} 줄이면 맞출 수 있어요.` : ''}</div>`;
-  else if (bs.cur && bs.spent <= bs.okLine + 1e4) alert = `<div class="balert good">${bs.okLine - bs.spent >= 1e4 ? `적정선보다 <b>${money(bs.okLine - bs.spent)}</b> 덜 썼어요` : '적정선에 맞게 쓰고 있어요'}. 이대로면 예산 안에서 끝나요.</div>`;
-  else if (bs.ended) alert = rem >= 0 ? `<div class="balert good">예산보다 <b>${money(rem)}</b> 아꼈어요.</div>` : `<div class="balert bad">예산을 <b>${money(-rem)}</b> 넘었어요.</div>`;
-  const g3 = bs.cur ? [['하루 권장', money(bs.daily)], ['오늘까지 적정', money(bs.okLine)], ['월말 예상', bs.canProj ? money(bs.proj) : '-', bs.canProj && bs.proj > bs.total ? 'up' : '']]
-    : [['예산', money(bs.total)], ['쓴 돈', money(bs.spent)], [rem >= 0 ? '남은 돈' : '초과', money(Math.abs(rem)), rem < 0 ? 'up' : '']];
+  // 월말에 넘을 것 같을 때만 경고
+  const alert = bs.canProj && bs.proj > bs.total ? `<div class="balert bad">이 속도면 월말에 <b>${money(bs.proj - bs.total)} 초과</b>해요.${tops.length ? ` ${tops.map(esc).join('·')}${josa(tops.at(-1), '을', '를')} 줄이면 맞출 수 있어요.` : ''}</div>` : '';
   html += `<section class="card bhero"><div class="lab">${bs.cur ? '이번 달' : `${m}월`} 예산 ${money(bs.total)} 중</div>
-    <div class="big num">${rem >= 0 ? `${money(rem)} 남았어요` : `${money(-rem)} 넘었어요`}<em>${Math.round(r * 100)}% 사용</em></div>
+    <div class="big num">${rem >= 0 ? `${money(rem)} 남았어요` : `<span class="up">${money(-rem)} 넘었어요</span>`}</div>
     <div class="btrack"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%" data-l="적정선"></b>` : ''}</div>
-    <div class="bmeta2"><span>${bs.unbAmt ? '예산 항목에서 ' : ''}쓴 돈 ${money(bs.spent)}</span><span>${bs.cur ? `남은 날 ${bs.left}일 (오늘 포함)` : bs.ended ? '지난 달' : '아직 시작 전'}</span></div>
-    <div class="bg3 num">${g3.map(([k, v, c]) => `<div>${k}<b${c ? ` class="${c}"` : ''}>${v}</b></div>`).join('')}</div>${alert}</section>`;
+    ${bs.cur ? `<div class="bmeta2"><span>오늘까지 적정 <b>${money(bs.okLine)}</b> · 쓴 돈 <b class="${bs.spent > bs.okLine + 1e4 ? 'up' : ''}">${money(bs.spent)}</b></span><span>${bs.left}일 남음</span></div>` : ''}${alert}</section>`;
   // 변동비: 오른쪽에 남은 돈(넘으면 빨간 '넘음'), 넘은 항목부터. 고정비: 냈는지만 체크 목록으로
   const L = S.model.budget[m] || [], ORD = {over: 0, warn: 1, fit: 2, ok: 3};
   const left = i => i.amt > i.bud ? `<span class="up">${money(i.amt - i.bud)} 넘음</span>` : `${money(i.bud - i.amt)} 남음`;

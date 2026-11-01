@@ -34,7 +34,7 @@ function homeLedger(){
     <div class="hl-top"><span class="label">${P.cur ? '이번 달' : `${P.y}년 ${P.m}월`} 가계부</span><span class="go">›</span></div>
     ${bs?.total ? `<div class="big num">${rem >= 0 ? `${money(rem)} <em>남았어요</em>` : `${money(-rem)} <em class="up">넘었어요</em>`}</div>
       <div class="btrack sm"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%"></b>` : ''}</div>
-      <div class="hl-row"><span>예산 ${money(bs.total)} 중 ${Math.round(r * 100)}%</span><span>${bs.cur && bs.left ? `하루 <b>${money(bs.daily)}</b> 쓸 수 있어요` : ''}</span></div>`
+      <div class="hl-row"><span>예산 ${money(bs.total)} 중 ${Math.round(r * 100)}%</span><span>${bs.cur ? `오늘까지 적정 <b>${money(bs.okLine)}</b>` : ''}</span></div>`
     : `<div class="big num">${money(b.expense)} <em>썼어요</em></div><div class="hl-row"><span>수입 ${money(b.income)} · 저축 ${money(b.save)}</span>${ed ? '<button class="hl-link" data-act="homeBud">예산 정하기 ›</button>' : ''}</div>`}
     ${P.cur && TX ? `<div class="hl-today"><span>오늘</span><b class="num">${today ? money(today) + ' 썼어요' : '아직 지출이 없어요'}</b></div>` : ''}
   </section>`;

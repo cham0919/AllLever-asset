@@ -447,6 +447,10 @@ nav.tabs button.on{color:var(--ink)}
 .gwhen{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}.gwhen b{font-size:16px;font-weight:750}
 .gchip{font-size:12px;font-weight:700;border-radius:99px;padding:3px 9px}.gchip.ok{background:var(--accent-soft);color:var(--accent)}.gchip.late{background:var(--warn-soft);color:var(--warn-ink)}
 .t3.g2{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.t3.g3{display:grid;grid-template-columns:auto auto 1fr;gap:20px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.t3.g3 span{display:block;font-size:12.5px;color:var(--sub);font-weight:600}.t3.g3 b{font-size:16px;font-weight:800;white-space:nowrap}
+.gtop{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 0 2px}.gtop>b{font-size:32px;font-weight:800;color:var(--accent);letter-spacing:-.02em}
+.gtop span{font-size:14px;color:var(--sub)}.gtop span b{font-size:17px;font-weight:800;color:var(--ink)}
 .t3.g2 span{display:block;font-size:12.5px;color:var(--sub);font-weight:600}.t3.g2 b{font-size:17px;font-weight:800}
 .hl-top{display:flex;justify-content:space-between;align-items:center}.hl-top .label{font-size:13px;color:var(--sub);font-weight:600}.hl-top .go{color:var(--faint);font-size:20px;line-height:1}
 .hledger .big{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px}.hledger .big em{font-style:normal;font-size:15px;color:var(--sub);font-weight:600}.hledger .big em.up{color:var(--expense)}
@@ -646,7 +650,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <label class="field"><span>계획 연 수익률 (%)</span><input id="gRate" type="number" inputmode="decimal" step="0.5"></label>
     <label class="field"><span>계획 연 저축 (만원)</span><input id="gSave" type="number" inputmode="numeric" step="100"></label>
     <label class="field"><span>계획 시작 연도</span><input id="gYear" type="number" inputmode="numeric"></label>
-    <label class="field" style="margin:0"><span>계획 시작 순자산 (만원 · 전년도 말 기준, 비우면 첫 기록값)</span><input id="gBase" type="number" inputmode="numeric" placeholder="자동"></label>
+    <label class="field" style="margin:0"><span>계획 시작 순자산 (만원)</span><input id="gBase" type="number" inputmode="numeric" placeholder="자동 · 전년도 말 또는 첫 기록"></label>
     <p class="note">계획: 매년 말 순자산 = 전년도 말 순자산 × (1 + 계획 수익률) + 계획 연 저축</p>
     
   </div>
@@ -654,7 +658,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>FIRE 계산</b><span></span></div>
   <div class="card" style="padding:14px">
 <label class="field" style="margin:0"><span>FIRE 연 배당률 (%)</span><input id="gDiv" type="number" inputmode="decimal" step="0.5"></label>
-    <ul class="slines"><li>배당금은 배당소득세 15.4%를 뗀 금액으로 계산해요.</li><li>100만 원을 받으면 84만 6천 원이 들어온다고 보고 계산해요.</li></ul>
+    <ul class="slines"><li>배당금은 배당소득세 15.4%를 뗀 금액으로 계산해요.</li></ul>
   
   </div>
 </div><div class="spage" data-page="view">

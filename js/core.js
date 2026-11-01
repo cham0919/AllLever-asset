@@ -53,7 +53,13 @@ const axisWon = v => { const a=Math.abs(v); return a>=1e8 ? (+(v/1e8).toFixed(2)
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 // 아이폰·안드로이드 앱(Capacitor) 안에서 실행 중인지
 const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-const nativePlugin = name => NATIVE && window.Capacitor.registerPlugin ? window.Capacitor.registerPlugin(name) : null;
+// 앱의 네이티브 기능(로그인 창·Face ID·알림 등)을 부르는 창구. vendor/capacitor.js(@capacitor/core)의 registerPlugin을 써요
+const nativePlugins = {};
+const nativePlugin = name => {
+  if (!NATIVE) return null;
+  const reg = window.capacitorExports?.registerPlugin; if (!reg) return null;
+  return nativePlugins[name] || (nativePlugins[name] = window.capacitorExports[name] || reg(name));   // SystemBars 등 core에 이미 있는 건 그대로
+};
 const DIV_NET = 1 - 0.154;   // 배당소득세 15.4%를 뗀 비율
 const PALETTE = ['#4A5FC1','#2A9D74','#F59E0B','#8B5CF6','#F04452','#06B6D4','#EC4899','#84CC16','#F97316','#6366F1','#14B8A6','#A855F7'];
 

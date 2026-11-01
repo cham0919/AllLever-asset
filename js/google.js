@@ -370,7 +370,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   const a = b.dataset.act;
   if (a === 'pending') return openPending();
   if (a === 'openSheet') openSheet('google'); else if (a === 'loadDemo') loadDemo(); else if (a === 'obRestart') restartOb(); else if (a === 'sync') syncNow(true);
-  else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset);
+  else if (a === 'editBudget') editBudgetMonth(S.month.budget); else if (a === 'editAsset') editAssetMonth(S.month.asset); else if (a === 'prevAsset') loadPrevAsset(S.month.asset);
   else if (a === 'eb'){ const [m, k] = b.dataset.k.split('|').map(Number), L = S.years[S.year].budget[m], it = L[k];
     if (S.years[S.year].txMode) openItemTx(m, k); else editBudgetItem(m, it.kind, it.name, occ(L, it, bKey)); }
   else if (a === 'addTx') editTx(null); else if (a === 'reps') openReps(); else if (a === 'addRep') editRep(null, true); else if (a === 'cats') openCats(); else if (a === 'budEdit') openBudEdit();

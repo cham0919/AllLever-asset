@@ -157,6 +157,16 @@ function addBudgetItem(m, kind, fromCats){
 }
 
 // ④ 자산 월말 잔액 입력
+// 자산 첫 화면 '전월 불러오기': 이번 달 빈 칸을 전월 값으로 채운 입력 화면을 열어요 (저장 전 확인·수정)
+function loadPrevAsset(m){
+  const y = S.year; if (!canEdit(y)) return toast(editNote(y));
+  const pv = aMonth(m - 1); if (!pv.has) return toast(`${pv.m}월 자산 데이터가 없어요`);
+  const list = S.years[y].assets;
+  editAssetMonth.state = {y, m, val: new Map()};
+  let n = 0; for (const a of list){ const p = pv.val(a); if (a.v[m - 1] == null && p != null){ editAssetMonth.state.val.set(a, p); n++; } }
+  editAssetMonth(m);
+  toast(n ? `${pv.m}월 잔액 ${n}개를 불러왔어요. 확인하고 저장해 주세요` : '빈 칸이 없어서 불러올 값이 없어요');
+}
 function editAssetMonth(m, bigSel){
   const y = S.year; if (!canEdit(y)) return toast(editNote(y));
   const big = bigSel || '유동자산', list = S.years[y].assets, pv = aMonth(m - 1), cur = aMonth(m);
@@ -165,14 +175,12 @@ function editAssetMonth(m, bigSel){
   const V = {get: a => st.val.has(a) ? st.val.get(a) : a.v[m - 1], set: (a, v) => st.val.set(a, v)};   // 탭을 바꿔도 입력값 유지
   const rowH = a => { const p = pv.has ? pv.val(a) : null, v = V.get(a);
     return `<div class="frow${v !== a.v[m - 1] ? ' edited' : ''}" data-k="${list.indexOf(a)}"><button class="n an" aria-label="${esc(a.small)} 항목 고치기">${esc(a.small)} <span class="an-i" aria-hidden="true">›</span>${p != null && pv.has ? `<small>${pv.m}월 ${money(p)}</small>` : ''}</button>
-      <input inputmode="numeric" autocomplete="off" placeholder="잔액 입력" value="${v != null ? fmtWon(v) : ''}">
-      ${pv.has ? '<button class="same">그대로</button>' : '<span class="same"></span>'}</div>`; };
+      <input inputmode="numeric" autocomplete="off" placeholder="잔액 입력" value="${v != null ? fmtWon(v) : ''}"></div>`; };
   const net = () => { let t = 0; for (const a of list){ const v = V.get(a) ?? 0; t += a.big === '부채' ? -v : v; } return t; };
   const changed = () => list.filter(a => V.get(a) !== a.v[m - 1]).length;
   openEd(`<h4>${m}월 말 잔액 <button class="ex" id="edX">닫기</button></h4>
     <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
-    ${pv.has ? '<div class="echips"><button id="fillSame">빈 칸 모두 지난달 값으로</button></div>' : ''}
     ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? (homeGroupOf({big, mid: md}) ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})]}</span>` : '<span class="hg need">묶음 필요</span>') : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
       <div class="agb">${its.filter(a => a.mid === md).map(rowH).join('')}</div></div>`).join('') || '<div class="ecard"><p class="note" style="margin:0">항목이 없어요</p></div>'}
     <button class="eadd agadd" id="adA">+ ${big} 항목 추가</button>
@@ -186,11 +194,9 @@ function editAssetMonth(m, bigSel){
   $('#ed').querySelectorAll('.frow').forEach(r => {
     const a = list[+r.dataset.k], inp = r.querySelector('input');
     bindWon(inp, v => { V.set(a, Number.isNaN(v) ? null : v); r.classList.toggle('edited', V.get(a) !== a.v[m - 1]); upd(); });
-    const b = r.querySelector('button.same'); if (b) b.onclick = () => { const p = pv.val(a); inp.value = fmtWon(p); inp.dispatchEvent(new Event('input')); };
     r.querySelector('.an').onclick = () => assetItemMenu(m, big, a);
   });
   $('#ed').querySelectorAll('.eseg button').forEach(b => b.onclick = () => editAssetMonth(m, b.dataset.b));
-  if (pv.has) $('#fillSame').onclick = () => { for (const a of list) if (V.get(a) == null && pv.val(a)) V.set(a, pv.val(a)); editAssetMonth(m, big); toast('빈 칸을 지난달 값으로 채웠어요 (모든 분류)'); };
   $('#adA').onclick = () => addAssetItem(m, big);
   $('#ed').querySelectorAll('.mtag').forEach(b => b.onclick = () => midMenu(m, big, b.dataset.mid));
   $('#edX').onclick = () => { editAssetMonth.state = null; closeEd(); };

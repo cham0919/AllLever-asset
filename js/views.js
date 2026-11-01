@@ -426,7 +426,7 @@ function viewAsset(){
     ...list.map((a,i)=>['item:'+i, `${a.small} · ${a.mid}`])];
   if (!opt.some(o=>o[0]===S.assetPick)) S.assetPick = '__net';
 
-  let html = `${edA ? `<div class="ebtnrow"><button class="btn" data-act="editAsset">✎ ${m}월 말 잔액 입력</button></div>` : ''}
+  let html = `${edA ? assetBtns(m) : ''}
   <section class="card hero">
     <div class="label">${m}월 말 순자산</div>
     <div class="big num">${money(c.net)}</div>
@@ -513,5 +513,7 @@ function emptyMonth(m, what){
     <div class="empty"><b>시트를 불러오지 못했어요</b>새로고침 버튼을 누르거나 설정에서 연결을 확인해 주세요.
       <div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="sync">다시 불러오기</button><button class="btn ghost" data-act="openSheet">설정 열기</button></div></div>`
     : `<div class="empty"><b>${m?m+'월 ':''}${what} 데이터가 없어요</b>${m && canEdit() ? '' : '시트의 ' + (what==='자산'?"'자산관리' 시트 "+(m||'')+"월 열":(m||'')+"월 시트") + '에 입력하면 여기에 표시돼요.'}
-      ${m && canEdit() ? `<div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="${what==='자산'?'editAsset':'editBudget'}">${m}월 ${what==='자산'?'잔액':'가계부'} 입력하기</button></div>` : ''}</div>`;
+      ${m && canEdit() ? (what === '자산' ? `<div style="margin-top:20px">${assetBtns(m)}</div>` : `<div style="margin-top:20px;max-width:320px;margin-inline:auto"><button class="btn" data-act="editBudget">${m}월 가계부 입력하기</button></div>`) : ''}</div>`;
 }
+// 자산: 전월 불러오기 · 신규 입력하기
+const assetBtns = m => `<div class="ebtnrow abtns"><button class="btn ghost" data-act="prevAsset">전월 불러오기</button><button class="btn" data-act="editAsset">신규 입력하기</button></div>`;

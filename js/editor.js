@@ -155,7 +155,7 @@ function editAssetMonth(m, bigSel){
   const st = editAssetMonth.state && editAssetMonth.state.m === m && editAssetMonth.state.y === y ? editAssetMonth.state : (editAssetMonth.state = {y, m, val: new Map()});
   const V = {get: a => st.val.has(a) ? st.val.get(a) : a.v[m - 1], set: (a, v) => st.val.set(a, v)};   // 탭을 바꿔도 입력값 유지
   const rowH = a => { const p = pv.has ? pv.val(a) : null, v = V.get(a);
-    return `<div class="frow${v !== a.v[m - 1] ? ' edited' : ''}" data-k="${list.indexOf(a)}"><div class="n">${esc(a.small)}${p != null && pv.has ? `<small>${pv.m}월 ${money(p)}</small>` : ''}</div>
+    return `<div class="frow${v !== a.v[m - 1] ? ' edited' : ''}" data-k="${list.indexOf(a)}"><button class="n an" aria-label="${esc(a.small)} 항목 고치기">${esc(a.small)} <span class="an-i" aria-hidden="true">›</span>${p != null && pv.has ? `<small>${pv.m}월 ${money(p)}</small>` : ''}</button>
       <input inputmode="numeric" autocomplete="off" placeholder="잔액 입력" value="${v != null ? fmtWon(v) : ''}">
       ${pv.has ? '<button class="same">그대로</button>' : '<span class="same"></span>'}</div>`; };
   const net = () => { let t = 0; for (const a of list){ const v = V.get(a) ?? 0; t += a.big === '부채' ? -v : v; } return t; };
@@ -176,6 +176,7 @@ function editAssetMonth(m, bigSel){
     const a = list[+r.dataset.k], inp = r.querySelector('input');
     bindWon(inp, v => { V.set(a, Number.isNaN(v) ? null : v); r.classList.toggle('edited', V.get(a) !== a.v[m - 1]); upd(); });
     const b = r.querySelector('button.same'); if (b) b.onclick = () => { const p = pv.val(a); inp.value = fmtWon(p); inp.dispatchEvent(new Event('input')); };
+    r.querySelector('.an').onclick = () => assetItemMenu(m, big, a);
   });
   $('#ed').querySelectorAll('.eseg button').forEach(b => b.onclick = () => editAssetMonth(m, b.dataset.b));
   if (pv.has) $('#fillSame').onclick = () => { for (const a of list) if (V.get(a) == null && pv.val(a)) V.set(a, pv.val(a)); editAssetMonth(m, big); toast('빈 칸을 지난달 값으로 채웠어요 (모든 분류)'); };
@@ -188,23 +189,61 @@ function editAssetMonth(m, bigSel){
   };
   upd();
 }
+const assetMids = (y, big) => [...new Set([...(big === '부채' ? ['대출'] : big === '유동자산' ? ['저축', '투자', '코인'] : ['부동산', '퇴직금', '청약']),
+  ...S.years[y].assets.filter(a => a.big === big).map(a => a.mid)])];
+// 중분류 고르기 (+ 직접 입력). 고른 값은 get()으로
+function midPicker(el, mids, cur){
+  let mid = cur ?? mids[0];
+  const draw = () => {
+    const all = mids.includes(mid) ? mids : [...mids, mid];
+    el.innerHTML = all.map(md => `<button data-v="${esc(md)}"${md === mid ? ' class="on"' : ''}>${esc(md)}</button>`).join('') + '<button class="add" data-new="1">+ 직접 입력</button>';
+    el.querySelectorAll('button').forEach(b => b.onclick = async () => {
+      if (b.dataset.new){ const v = ((await askText('새 중분류', {placeholder: '예: 연금, 금, 자동차', ok: '추가', max: 20})) || '').trim(); if (!v) return; mid = v; }
+      else mid = b.dataset.v;
+      draw(); });
+  };
+  draw(); return {get: () => mid};
+}
 function addAssetItem(m, big){
-  const y = S.year;
-  const mids = [...new Set([...(big === '부채' ? ['대출'] : big === '유동자산' ? ['저축', '투자', '코인'] : ['부동산', '퇴직금', '청약']),
-    ...S.years[y].assets.filter(a => a.big === big).map(a => a.mid)])];
+  const y = S.year, mids = assetMids(y, big);
   openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
     <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
-    <div class="etitle">중분류</div><div class="echips" id="adMid">${mids.map((md, i) => `<button data-v="${esc(md)}"${i ? '' : ' class="on"'}>${esc(md)}</button>`).join('')}</div>
+    <div class="etitle">중분류</div><div class="echips" id="adMid"></div>
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>
     <p class="note">중분류에 따라 홈의 묶음이 정해져요: 투자·퇴직금·코인 = 금융투자, 저축·청약 = 현금, 부동산 = 부동산</p>
     <button class="btn" id="edSave">추가</button>`);
-  let mid = mids[0];
-  $('#adMid').querySelectorAll('button').forEach(b => b.onclick = () => { mid = b.dataset.v; $('#adMid').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); });
+  const mp = midPicker($('#adMid'), mids);
   $('#edX').onclick = () => editAssetMonth(m, big);
   $('#edSave').onclick = () => {
-    const small = $('#adName').value.trim(); if (!small) return toast('항목 이름을 넣어 주세요');
+    const small = $('#adName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
     if (findAsset(S.years[y], big, mid, small)) return toast('같은 항목이 이미 있어요');
     commit([{t: 'addA', y, big, mid, small}]);
     editAssetMonth.state = null; editAssetMonth(m, big);
+  };
+}
+// 자산 항목 고치기: 이름(소분류)·중분류 바꾸기, 삭제. 시트의 '자산관리' 줄을 그대로 고쳐요 (월별 잔액은 유지)
+function assetItemMenu(m, big, a){
+  const y = S.year, Y = S.years[y], idx = occ(Y.assets, a, aKey), filled = a.v.filter(v => v != null).length;
+  openEd(`<h4>${esc(a.small)} <button class="ex" id="edX">뒤로</button></h4>
+    <div class="esub">${big} · ${y}년${filled ? ` · 잔액 ${filled}개월 입력됨` : ''}</div>
+    <div class="etitle">이름</div>
+    <input id="aiName" class="ememo" maxlength="30" value="${esc(a.small)}" placeholder="항목 이름">
+    <div class="etitle">중분류</div><div class="echips" id="aiMid"></div>
+    <button class="btn" id="aiSave">저장</button>
+    <button class="btn ghost danger" id="aiDel">항목 삭제</button>`);
+  const mp = midPicker($('#aiMid'), assetMids(y, big), a.mid);
+  $('#edX').onclick = () => editAssetMonth(m, big);
+  $('#aiSave').onclick = () => {
+    const small = $('#aiName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
+    if (small === a.small && mid === a.mid) return editAssetMonth(m, big);
+    if (findAsset(Y, big, mid, small)) return toast('같은 항목이 이미 있어요');
+    commit([{t: 'renA', y, big, mid: a.mid, small: a.small, idx, to: {mid, small}}]);
+    editAssetMonth(m, big);
+  };
+  $('#aiDel').onclick = async () => {
+    if (!(await ask(filled ? `입력된 잔액 ${filled}개월도 함께 지워져요.` : '', {title: `'${a.small}' 항목을 지울까요?`, ok: '지우기', danger: true}))) return;
+    editAssetMonth.state?.val?.delete(a);
+    commit([{t: 'delA', y, big, mid: a.mid, small: a.small, idx}]);
+    editAssetMonth(m, big);
   };
 }

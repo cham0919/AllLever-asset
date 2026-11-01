@@ -36,6 +36,8 @@ function applyOp(years, op){
   else if (op.t === 'addB'){ for (const m of op.months){ const L = Y.budget[m] = Y.budget[m] || [];
       if (!L.some(i => i.kind === op.kind && i.name === op.name)) L.push({kind: op.kind, name: op.name, amt: 0, memo: '', filled: false, subs: [], bud: null}); } }
   else if (op.t === 'addA'){ if (!findAsset(Y, op.big, op.mid, op.small)) Y.assets.push({big: op.big, mid: op.mid, small: op.small, v: Array(12).fill(null)}); }
+  else if (op.t === 'renA'){ const a = findAsset(Y, op.big, op.mid, op.small, op.idx); if (a){ a.mid = op.to.mid; a.small = op.to.small; } }
+  else if (op.t === 'delA'){ const a = findAsset(Y, op.big, op.mid, op.small, op.idx); if (a) Y.assets.splice(Y.assets.indexOf(a), 1); }
   else if (op.t === 'tx'){ const L = (Y.tx = Y.tx || {})[op.m] = Y.tx[op.m] || [], i = L.findIndex(t => t.id === op.tx.id);
     if (op.act === 'del'){ if (i >= 0) L.splice(i, 1); } else if (i >= 0) L[i] = {...op.tx}; else L.push({...op.tx}); }
   else if (op.t === 'cat'){ const it = findBudget(Y, op.m, op.kind, op.name, 0); if (it){ it.subs = [...op.subs]; it.bud = op.bud ?? null; } }
@@ -58,7 +60,13 @@ function commit(ops, quiet){
     for (const op of ops) applyOp(S.years, op);
     LS.set('years', S.years); S.meta.savedAt = Date.now(); LS.set('meta', S.meta); render(); if (!quiet) toast(withNote('저장했어요')); return;
   }
-  for (const op of ops){ op.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7); op.fileId = gfileOf(op.y)?.id; applyOp(S.years, op); S.queue.push(op); }
+  for (const op of ops){ op.id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7); op.fileId = gfileOf(op.y)?.id;
+    if (op.t === 'renA' || op.t === 'delA'){   // 아직 저장 안 된 같은 항목의 잔액 입력: 이름을 따라가거나(바꾸기) 버려요(삭제)
+      const same = o => o.t === 'a' && o.y === op.y && o.big === op.big && o.mid === op.mid && o.small === op.small && (o.idx || 0) === (op.idx || 0);
+      if (op.t === 'renA') S.queue.filter(same).forEach(o => { o.mid = op.to.mid; o.small = op.to.small; });
+      else S.queue = S.queue.filter(o => !same(o));
+    }
+    applyOp(S.years, op); S.queue.push(op); }
   saveQueue(); LS.set('years', S.years); render();
   flushQueue(!quiet);
 }
@@ -130,7 +138,7 @@ async function flushQueue(interactive){
       else if (f.ro) o.err = '보기 전용 시트라 저장할 수 없어요';
     }
     // 1) 새 항목 행부터 (행이 밀리니 하나씩)
-    for (const op of S.queue.filter(o => !o.err && ['addB', 'addA', 'renB', 'delB'].includes(o.t))){ curFile = op.fileId;
+    for (const op of S.queue.filter(o => !o.err && ['addB', 'addA', 'renB', 'delB', 'renA', 'delA'].includes(o.t))){ curFile = op.fileId;
       if (op.t === 'renB' || op.t === 'delB'){
         for (const m of op.months){
           const title = m + '월', [V] = await readRanges(op.fileId, [`${qs(title)}!A1:Z2200`], tok), L = locateBudget(V);
@@ -162,6 +170,15 @@ async function flushQueue(interactive){
           await writeCells(op.fileId, [{range: `${qs(title)}!A${L.marker}:B${L.marker}`, values: [[op.kind, op.name]]}], tok);
           if (C.tx >= 0){ const c = k => colL(C.tx + k), r0 = C.txH + 2, r1 = C.txEnd != null ? C.txEnd + 1 : 2100, r = L.marker;   // 거래 합계 수식 (거래 내역 끝 '▲' 행까지)
             await writeCells(op.fileId, [{range: `${qs(title)}!C${r}`, values: [[`=SUMIFS($${c(4)}$${r0}:$${c(4)}$${r1},$${c(1)}$${r0}:$${c(1)}$${r1},A${r},$${c(2)}$${r0}:$${c(2)}$${r1},B${r})`]]}], tok, 'USER_ENTERED'); }
+        }
+      } else if (op.t === 'renA' || op.t === 'delA'){   // 자산 항목 고치기·삭제
+        const [V] = await readRanges(op.fileId, [`'자산관리'!A1:Z300`], tok), L = locateAsset(V);
+        const hit = L && L.rows.filter(r => r.big === op.big && r.mid === op.mid && r.small === op.small)[op.idx || 0];
+        if (hit && op.t === 'renA') await writeCells(op.fileId, [{range: `'자산관리'!B${hit.row}:C${hit.row}`, values: [[op.to.mid, op.to.small]]}], tok);
+        if (hit && op.t === 'delA'){
+          const sid = await sheetIdOf(op.fileId, '자산관리', tok);
+          await gFetch(`https://sheets.googleapis.com/v4/spreadsheets/${op.fileId}:batchUpdate`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({requests: [{deleteDimension: {range: {sheetId: sid, dimension: 'ROWS', startIndex: hit.row - 1, endIndex: hit.row}}}]})}, tok);
         }
       } else {
         const [V] = await readRanges(op.fileId, [`'자산관리'!A1:Z300`], tok), L = locateAsset(V);
@@ -285,6 +302,8 @@ function opLabel(o){
     case 'a': return `${m}${o.small} 잔액`;
     case 'addB': return `항목 추가 · ${o.name}`;
     case 'addA': return `자산 항목 추가 · ${o.small}`;
+    case 'renA': return `자산 항목 고치기 · ${o.small} → ${o.to.small}`;
+    case 'delA': return `자산 항목 삭제 · ${o.small}`;
     case 'renB': return `이름 바꾸기 · ${o.name} → ${o.to}`;
     case 'delB': return `항목 삭제 · ${o.name}`;
   }

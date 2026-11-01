@@ -410,7 +410,7 @@ nav.tabs button.on{color:var(--ink)}
 .bfx .nm{flex:1;min-width:0;font-size:15px;font-weight:650}.bfx .nm small{font-size:12px;color:var(--sub);font-weight:500;margin-left:6px}
 .bfx .am{font-size:15px;font-weight:650;color:var(--ink)}.bfx.paid .nm,.bfx.paid .am{color:var(--sub)}
 .bsub{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--sub)}.bsub .up{color:var(--expense)}
-.bempty{text-align:center;padding:26px 20px}.bempty b{font-size:17px}.bempty p{color:var(--sub);font-size:13.5px;margin:8px 0 16px}
+.bempty{text-align:center;padding:26px 20px}.bempty .btn{margin-top:14px}.bempty b{font-size:17px}.bempty p{color:var(--sub);font-size:13.5px;margin:8px 0 16px}
 .bstrip{display:block;width:100%;text-align:left;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .bstrip .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub)}.bstrip .l b{color:var(--ink)}.bstrip .l b.up{color:var(--expense)}
 .btot{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:14px 16px;margin:10px 0}
@@ -439,6 +439,15 @@ nav.tabs button.on{color:var(--ink)}
 .hr3 span{display:block;font-size:12px;color:var(--sub);font-weight:600}
 .hr3 b{font-size:16px;font-weight:750}
 .hrate .note{margin:8px 0 0}
+.rsum .t3{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.rsum .t3 span{display:block;font-size:12.5px;color:var(--sub);font-weight:600}
+.rsum .t3 b{font-size:18px;font-weight:800;letter-spacing:-.02em}
+.rsum .t3 em{display:block;font-style:normal;font-size:12px;font-weight:600;margin-top:2px;color:var(--faint)}.rsum .t3 em.up{color:var(--up)}.rsum .t3 em.down{color:var(--down)}
+.rsum .flow{margin:16px 0 8px}
+.gwhen{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}.gwhen b{font-size:16px;font-weight:750}
+.gchip{font-size:12px;font-weight:700;border-radius:99px;padding:3px 9px}.gchip.ok{background:var(--accent-soft);color:var(--accent)}.gchip.late{background:var(--warn-soft);color:var(--warn-ink)}
+.t3.g2{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.t3.g2 span{display:block;font-size:12.5px;color:var(--sub);font-weight:600}.t3.g2 b{font-size:17px;font-weight:800}
 .hl-top{display:flex;justify-content:space-between;align-items:center}.hl-top .label{font-size:13px;color:var(--sub);font-weight:600}.hl-top .go{color:var(--faint);font-size:20px;line-height:1}
 .hledger .big{font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:2px}.hledger .big em{font-style:normal;font-size:15px;color:var(--sub);font-weight:600}.hledger .big em.up{color:var(--expense)}
 .hl-row{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12.5px;color:var(--sub);margin-top:4px}.hl-row b{color:var(--ink)}
@@ -555,8 +564,9 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="srow" id="btnSync"><span>지금 불러오기</span><em id="svSync"></em><i>›</i></button>
     <div class="srow srow-info"><span>데이터</span><em id="svData"></em></div>
   </div>
-  <div class="slist" style="margin-top:18px">
-    <button class="srow" data-go="view"><span>화면</span><em id="svView"></em><i>›</i></button>
+  <h5 class="shd">화면</h5>
+  <div class="slist">
+    <button class="srow" data-go="view"><span>테마 · 금액 단위</span><em id="svView"></em><i>›</i></button>
   </div>
   <div class="native-only">
   <h5 class="shd">보안 · 알림</h5>
@@ -581,7 +591,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
   <div class="slist">
     <button class="srow" id="btnDemo"><span>예시 데이터로 보기</span><i>›</i></button>
     <a class="srow" href="privacy.html" target="_blank" rel="noopener"><span>개인정보 처리방침</span><i>›</i></a>
-    <div class="srow srow-info"><span>버전</span><em id="sVer"></em></div>
+    <div class="srow srow-info" id="sVerRow"><span>버전</span><em id="sVer"></em></div>
     <button class="srow danger" id="btnRestart"><span>처음 화면으로</span></button>
   </div>
 </div>
@@ -625,7 +635,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
     <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
     <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제 (로그인 정보 삭제)</button>
-    <ul class="slines"><li>앱은 직접 고르거나 앱에서 만든 시트만 볼 수 있어요.</li><li>드라이브의 다른 파일에는 접근하지 않아요.</li><li>연도는 시트 '설정'의 기준 연도로 자동 구분돼요.</li><li>데이터는 이 기기에만 저장돼요.</li><li>연결을 해제하면 로그인 서버에 저장된 로그인 정보도 삭제돼요.</li></ul>
+    <ul class="slines"><li>앱은 고르거나 앱에서 만든 시트만 볼 수 있어요.</li></ul>
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
   
   </div>

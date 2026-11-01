@@ -51,7 +51,7 @@ function homeGoal(pts){
 function viewHome(){
   const pts = assetPoints(), led = homeLedger(), P = homeLedgerPos();
   const fab = P && S.years[P.y]?.txMode && P.cur && canEdit(P.y) ? '<button class="fab" data-act="homeAddTx" aria-label="거래 추가">+</button>' : '';
-  if (!pts.length){ $('#view').innerHTML = led + `<div class="empty"><b>자산 데이터가 없어요</b>자산 탭에서 월말 잔액을 입력하면 순자산과 목표가 홈에 표시돼요.</div>` + fab; return; }
+  if (!pts.length){ $('#view').innerHTML = led + `<section class="card hero"><div class="label">순자산</div><button class="btn" data-act="homeAsset" style="margin-top:12px">${new Date().getMonth() + 1}월 말 잔액 입력하기</button></section>` + fab; return; }
   const cur = pts.at(-1), G = HOME_GROUPS;
   const inv = grpSum(G.invest, cur), est = grpSum(G.estate, cur), cash = grpSum(G.cash, cur);
   const list = S.years[cur.y].assets;
@@ -123,7 +123,11 @@ function planCurve(base, g){
 let anaChart = null;
 function viewAnalysis(){
   const pts = assetPoints();
-  if (pts.length < 2){ $('#view').innerHTML = `<div class="empty"><b>분석하려면 두 달 이상의 자산 기록이 필요해요</b>엑셀 '자산관리' 시트에 월별로 입력하면 표시돼요.</div>`; return; }
+  if (pts.length < 2){   // 기록이 한 달 이하: 진행률만 (예상 시점은 두 달부터)
+    const T0 = S.goal.target, c0 = pts.at(-1), d0 = c0 ? Math.min(1, Math.max(0, c0.net / T0)) : 0;
+    $('#view').innerHTML = `<section class="card hero"><div class="label">목표 ${T0 / 1e8}억까지</div>
+      <div class="big num" style="color:${c0 ? 'var(--accent)' : 'var(--faint)'}">${c0 ? pctPlain(d0, 0) : '—'}</div><div class="prog"><i style="width:${d0 * 100}%"></i></div>
+      ${c0 ? `<div class="heq num">순자산 <b>${money(c0.net)}</b></div>` : '<button class="btn" data-act="homeAsset">잔액 입력하기</button>'}</section>`; return; }
   const g = S.goal, cur = pts.at(-1), curI = ymIdx(cur.y, cur.m), T = g.target;
   const inp = analysisInputs(pts);
   const base = g.planBase ?? pts[0].net;
@@ -271,39 +275,19 @@ function viewBudget(){
   if (S.rview === 'y') return viewTrend();
   // 리포트 › 이번 달: 저축·수입 배분(요약) + 어디에 썼나·누적·달라진 점·큰 지출(통계)
   const m = S.month.budget, b = bMonth(m), pb = bMonth(m-1);
-  if (!b.has){ emptyMonth(m, '가계부'); $('#view').innerHTML = bsegHtml() + rsegHtml() + (TX ? `<div class="empty"><b>${m}월 거래가 없어요</b>달력에서 거래를 입력하면 항목별로 합산돼요.</div>` : $('#view').innerHTML); return; }
+  if (!b.has){ emptyMonth(m, '가계부'); $('#view').innerHTML = bsegHtml() + rsegHtml() + (TX ? `<div class="empty"><b>${m}월 거래가 없어요</b></div>` : $('#view').innerHTML); return; }
   const ed = canEdit();
   const dExp = pb.has ? b.expense - pb.expense : null;
   const dSav = pb.has ? b.saving - pb.saving : null;
   const exItems = b.items.filter(i=>EXP_KINDS.includes(i.kind) && i.amt>0).sort((x,y)=>y.amt-x.amt);
   const flowTot = Math.max(b.income, b.expense + b.save, 1);
   let html = `${bsegHtml()}${rsegHtml()}${!TX && ed ? `<div class="ebtnrow"><button class="btn" data-act="editBudget">✎ ${m}월 한꺼번에 입력</button></div>` : ''}
-  <section class="card hero">
-    <div class="label">${m}월 저축</div>
-    <div class="big num">${money(b.save)}</div>
-    <div class="sub">저축률 <b style="color:var(--saving)">${pctPlain(b.rate)}</b>${dSav!=null?` · 전월 대비 <span class="${dir(dSav)}">${signed(dSav)}</span>`:''}</div>
-    <div class="split">
-      <div class="s"><div class="t"><i class="dot" style="background:var(--saving)"></i>저축</div><div class="v num">${money(b.save)}</div>
-        <div class="d">${pb.has?`<span class="${dir(b.save-pb.save)}">${signed(b.save-pb.save)}</span>`:'<span class="muted">가계부에 입력한 저축</span>'}</div></div>
-      <div class="s"><div class="t"><i class="dot" style="background:var(--faint)"></i>남은 돈</div><div class="v num ${b.left<0?'up':''}">${money(b.left)}</div>
-        <div class="d">${pb.has?`<span class="${dir(b.left-pb.left)}">${signed(b.left-pb.left)}</span>`:'<span class="muted">수입 − 지출 − 저축</span>'}</div></div>
-    </div>
-    <div class="flow"><i style="width:${b.fixed/flowTot*100}%;background:var(--fixed)"></i><i style="width:${b.variable/flowTot*100}%;background:var(--expense)"></i><i style="width:${b.save/flowTot*100}%;background:var(--saving)"></i></div>
-    <div class="flow-lg"><span>고정비 ${pctPlain(b.income? b.fixed/b.income:0,0)}</span><span>변동비 ${pctPlain(b.income? b.variable/b.income:0,0)}</span><span>저축 ${pctPlain(b.income? b.save/b.income:0,0)}</span></div>
-  </section>
-  <div class="tiles">
-    <div class="tile"><div class="t"><i class="dot" style="background:var(--income)"></i>수입</div><div class="v num">${money(b.income)}</div>${pb.has?`<div class="d ${dir(b.income-pb.income)}">${signed(b.income-pb.income)}</div>`:''}</div>
-    <div class="tile"><div class="t"><i class="dot" style="background:var(--expense)"></i>지출</div><div class="v num">${money(b.expense)}</div>${dExp!=null?`<div class="d ${dir(dExp)}">${signed(dExp)}</div>`:''}</div>
-    <div class="tile"><div class="t"><i class="dot" style="background:var(--saving)"></i>저축</div><div class="v num">${money(b.save)}</div>${dSav!=null?`<div class="d ${dir(dSav)}">${signed(dSav)}</div>`:''}</div>
-  </div>${TX ? '<div id="rpStat"></div>' : ''}
-  <section class="card">
-    <h3>수입 배분 <small>수입 ${money(b.income)} 기준</small></h3>
-    <div class="donut"><canvas id="cFlow"></canvas><div class="center"><div><b class="num">${pctPlain(Math.max(b.rate,0),0)}</b><span>저축률</span></div></div></div>
-    <div class="legend">
-      ${[['고정비',b.fixed,'--fixed'],['변동비',b.variable,'--expense'],['저축',b.save,'--saving'],['남은 돈',Math.max(b.left,0),'--faint']].map(([n,a,c])=>`
-      <div class="lg"><i class="dot" style="background:var(${c})"></i><span class="n">${n}</span><span class="p num">${b.income?pctPlain(a/b.income,0):'-'}</span><span class="a num">${money(a)}</span></div>`).join('')}
-    </div>
-  </section>`;
+  <section class="card rsum"><h3>${m}월${pb.has ? ` <small>${m === 1 ? '지난달' : (m - 1) + '월'} 대비</small>` : ''}</h3>
+    <div class="t3 num">${[['수입', b.income, pb.income], ['지출', b.expense, pb.expense], ['저축', b.save, pb.save]].map(([n, v, p]) => { const d = pb.has ? v - p : null;
+      return `<div><span>${n}</span><b>${money(v)}</b>${d == null ? '' : `<em class="${dir(d)}">${d ? `${d > 0 ? '▲' : '▼'} ${money(Math.abs(d))}` : '변동 없음'}</em>`}</div>`; }).join('')}</div>
+    <div class="flow">${[[b.fixed, '--fixed'], [b.variable, '--expense'], [b.save, '--saving'], [Math.max(b.left, 0), '--faint']].map(([a, c]) => `<i style="width:${a / flowTot * 100}%;background:var(${c})"></i>`).join('')}</div>
+    <div class="hmix">${[['고정비', b.fixed, '--fixed'], ['변동비', b.variable, '--expense'], ['저축', b.save, '--saving'], ['남은 돈', b.left, '--faint']].map(([n, a, c]) => `<div><i class="dot" style="background:var(${c})"></i><span>${n}</span><b class="num${a < 0 ? ' up' : ''}">${money(a)}</b><em class="num">${b.income ? pctPlain(a / b.income, 0) : ''}</em></div>`).join('')}</div>
+  </section>${TX ? '<div id="rpStat"></div>' : ''}`;
   if (exItems.length && !TX) html += `
   <section class="card">
     <h3>지출 구성 <small>${exItems.length}개 항목</small></h3>
@@ -330,7 +314,6 @@ function viewBudget(){
   }).join('');
   html += `<section class="card dlist"><h3>상세 내역${anyD ? ' <small>▲▼ 지난달 대비</small>' : ''}</h3>${groups}${nZero ? `<button class="zt" data-act="zeroItems">${S.showZero ? '0원 항목 숨기기' : `0원 항목 ${nZero}개 보기`}</button>` : ''}</section>`;
   $('#view').innerHTML = html;
-  donut('cFlow', ['고정비','변동비','저축','남은 돈'], [b.fixed,b.variable,b.save,Math.max(b.left,0)], [css('--fixed'),css('--expense'),css('--saving'),css('--faint')]);
   if (TX) statInto($('#rpStat'));
   if (exItems.length && !TX) donut('cExp', exItems.map(i=>i.name), exItems.map(i=>i.amt), exItems.map((_,k)=>PALETTE[k%PALETTE.length]));
 }
@@ -398,7 +381,6 @@ function viewAsset(){
   const m = S.month.asset, A = analysis(m), c = A.c, p = A.p;
   if (!c.has) return emptyMonth(m, '자산');
   const edA = canEdit();
-  const d = (cur, prev, kind) => A.prevOk ? `<div class="d ${dir(cur-prev)}">${signed(cur-prev)}${prev? ' ('+pct((cur-prev)/prev)+')' : ''}</div>` : `<div class="d muted">전월 데이터 없음</div>`;
   const list = S.model.assets;
   const ms = Array.from({length:12},(_,i)=>aMonth(i+1));
   // 1월 대비 현재 — 엑셀과 같은 기준: 오늘 날짜의 월, 그 달이 미입력이면 그 이전 마지막 입력월
@@ -421,35 +403,16 @@ function viewAsset(){
   if (!opt.some(o=>o[0]===S.assetPick)) S.assetPick = '__net';
 
   let html = `${edA ? `<div class="ebtnrow"><button class="btn" data-act="editAsset">✎ ${m}월 말 잔액 입력</button></div>` : ''}
-  <section class="card hero">
-    <div class="label">${m}월 말 순자산</div>
+  <section class="card hero"><div class="label">${m}월 말 순자산</div>
     <div class="big num">${money(c.net)}</div>
-    <div class="sub">${A.prevOk ? `전월 대비 <span class="${dir(A.dNet)}"><b>${signed(A.dNet)}</b> (${A.rNet!=null?pct(A.rNet,2):'-'})</span>` : '전월 자산 데이터가 없어 비교할 수 없어요'}</div>
+    ${A.prevOk ? `<div class="sub">${m === 1 ? '지난달' : (m - 1) + '월'}보다 <span class="num ${dir(A.dNet)}">${signed(A.dNet)}</span></div>` : ''}
+    <div class="heq num">총자산 <b>${money(c.total)}</b>${c.debt ? ` − 부채 <b>${money(c.debt)}</b>` : ''}</div>
   </section>
-  <div class="tiles two">
-    <div class="tile"><div class="t">총자산</div><div class="v num">${money(c.total)}</div>${d(c.total,p.total)}</div>
-    <div class="tile"><div class="t">부채</div><div class="v num">${money(c.debt)}</div>${d(c.debt,p.debt)}</div>
-    <div class="tile"><div class="t">유동자산</div><div class="v num">${money(c.liquid)}</div>${d(c.liquid,p.liquid)}</div>
-    <div class="tile"><div class="t">비유동자산</div><div class="v num">${money(c.fixedA)}</div>${d(c.fixedA,p.fixedA)}</div>
-  </div>
-  ${ytd ? `<section class="card"><h3>1월 대비 현재 <small>1월 → ${L}월</small></h3>
-    <div class="stats">${ytd.map(([n,a,b,note])=>`
-      <div class="stat"><div class="t">${n}</div><div class="v num ${dir(b-a)}" style="font-size:22px">${a?pct((b-a)/Math.abs(a),2):'-'}</div>
-        <div class="h" style="color:var(--sub)"><span class="${dir(b-a)}" style="white-space:nowrap">${signed(b-a)}</span> · <span style="white-space:nowrap">${money(a)}</span> → <span style="white-space:nowrap">${money(b)}</span></div>
-        ${note?`<div class="h">${note}</div>`:''}</div>`).join('')}
-    </div></section>` : ''}
-  <section class="card"><h3>${m}월 자산 분석 <small>전월 대비</small></h3>
-    ${A.prevOk ? `<div class="stats">
-      <div class="stat"><div class="t">순자산 증감</div><div class="v num ${dir(A.dNet)}">${signed(A.dNet)}</div></div>
-      <div class="stat"><div class="t">순자산 증가율</div><div class="v num ${dir(A.dNet)}">${A.rNet!=null?pct(A.rNet,2):'-'}</div><div class="h">순자산 증감 ÷ 전월 순자산</div></div>
-      <div class="stat"><div class="t">총자산 증감</div><div class="v num ${dir(A.dTotal)}">${signed(A.dTotal)}</div></div>
-      <div class="stat"><div class="t">총자산 증감률</div><div class="v num ${dir(A.dTotal)}">${A.rTotal!=null?pct(A.rTotal,2):'-'}</div></div>
-      <div class="stat"><div class="t"><i class="dot" style="background:var(--saving)"></i> 저축</div><div class="v num">${A.saving!=null?money(A.saving):'-'}</div><div class="h">가계부에 입력한 저축</div></div>
-      <div class="stat"><div class="t">저축 외 자산 변동</div><div class="v num ${A.other!=null?dir(A.other):''}">${A.other!=null?signed(A.other):'-'}</div><div class="h">순자산 증감 − 저축 (투자손익 · 시세)</div></div>
-      <div class="stat"><div class="t">저축 제외 수익률</div><div class="v num ${A.rOther!=null?dir(A.rOther):''}">${A.rOther!=null?pct(A.rOther,2):'-'}</div><div class="h">저축 외 변동 ÷ 전월 순자산</div></div>
-      <div class="stat"><div class="t">부채비율</div><div class="v num">${pctPlain(A.debtRatio)}</div><div class="h">부채 ÷ 총자산</div></div>
-    </div>` : `<div class="stats"><div class="stat"><div class="t">부채비율</div><div class="v num">${pctPlain(A.debtRatio)}</div></div></div><p class="note">전월 자산을 입력하면 증감·수익률이 표시돼요.</p>`}
-  </section>
+  ${A.prevOk && A.saving != null && A.dNet ? (() => { const parts = [['저축', A.saving, '--saving'], ['투자·시세', A.other, '--accent']], pos = parts.filter(x => x[1] > 0), tp = pos.reduce((t, x) => t + x[1], 0) || 1;
+    return `<section class="card"><h3>${m === 1 ? '지난달' : (m - 1) + '월'}보다 ${A.dNet > 0 ? '늘어난' : '줄어든'} ${money(Math.abs(A.dNet))}</h3>
+    <div class="flow">${pos.map(x => `<i style="width:${x[1] / tp * 100}%;background:var(${x[2]})"></i>`).join('')}</div>
+    <div class="hmix">${parts.map(x => `<div><i class="dot" style="background:var(${x[2]})"></i><span>${x[0]}</span><b class="num ${x[1] < 0 ? 'down' : ''}">${x[1] < 0 ? signed(x[1]) : money(x[1])}</b><em></em></div>`).join('')}</div>
+    ${ytd ? `<div class="heq num">1월부터 순자산 <b class="${dir(ytd[1][2] - ytd[1][1])}">${signed(ytd[1][2] - ytd[1][1])}</b>${ytd[1][1] ? ` (${pct((ytd[1][2] - ytd[1][1]) / Math.abs(ytd[1][1]), 1)})` : ''}</div>` : ''}</section>`; })() : ''}
   <section class="card alist"><h3>항목별 자산 <small>${A.prevOk?'전월 대비':''}</small></h3>
     ${BIGS.map(big=>{
       const its = list.filter(a=>a.big===big); if (!its.length) return '';

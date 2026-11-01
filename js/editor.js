@@ -179,18 +179,18 @@ function editAssetMonth(m, bigSel){
   const net = () => { let t = 0; for (const a of list){ const v = V.get(a) ?? 0; t += a.big === '부채' ? -v : v; } return t; };
   const changed = () => list.filter(a => V.get(a) !== a.v[m - 1]).length;
   openEd(`<h4>${m}월 말 잔액 <button class="ex" id="edX">닫기</button></h4>
-    <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
+    ${big === '부채' ? '<div class="esub">남은 금액을 양수로 적어요</div>' : ''}
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
     ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? (homeGroupOf({big, mid: md}) ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})]}</span>` : '<span class="hg none">없음</span>') : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
       <div class="agb">${its.filter(a => a.mid === md).map(rowH).join('')}</div></div>`).join('') || '<div class="ecard"><p class="note" style="margin:0">항목이 없어요</p></div>'}
     <button class="eadd agadd" id="adA">+ ${big} 항목 추가</button>
     <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>
-    <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
+    <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">${S.meta.source === 'google' ? '시트에 저장' : '저장'}</button></div>`, {tall: true});
   const upd = () => { const n = net(), d = pv.has ? n - pv.net : null;
     $('#ed').querySelectorAll('[data-sum]').forEach(e => { const s = its.filter(a => a.mid === e.dataset.sum).reduce((t, a) => t + (V.get(a) || 0), 0); e.textContent = s ? money(s) : ''; });
     $('#aNet').textContent = money(n); $('#aDiff').innerHTML = d == null ? '-' : `<span class="${dir(d)}">${signed(d)}</span>`;
     const c = changed(), left = list.filter(a => V.get(a) == null && (pv.has ? pv.val(a) : 0)).length;
-    $('#fSum').innerHTML = `${c}개 항목 변경${left ? ` · ${left}개 비어 있음` : ''}<b>${cur.has || c ? '저장하면 시트에 반영돼요' : '처음 입력하는 달이에요'}</b>`; };
+    $('#fSum').innerHTML = c || left ? `${left ? `${left}개 비어 있음` : ''}<b>${c ? `${c}개 바뀜` : ''}</b>` : ''; };
   $('#ed').querySelectorAll('.frow').forEach(r => {
     const a = list[+r.dataset.k], inp = r.querySelector('input');
     bindWon(inp, v => { V.set(a, Number.isNaN(v) ? null : v); r.classList.toggle('edited', V.get(a) !== a.v[m - 1]); upd(); });
@@ -237,7 +237,6 @@ const groupNotice = (big, g, ok = '그대로 저장', cancel = '선택하기', h
 function addAssetItem(m, big){
   const y = S.year, mids = assetMids(y, big);
   openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
-    <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
     <div class="etitle">중분류</div><div class="echips" id="adMid"></div>
     ${big !== '부채' ? '<div class="etitle">분류</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>

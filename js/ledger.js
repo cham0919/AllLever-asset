@@ -129,7 +129,7 @@ function viewCal(){
   <section class="card calcard"><div class="cal num">${cells}</div></section>
   <section class="card">
     <div class="dayhead"><b>${m}월 ${d0}일 ${WD[new Date(y, m - 1, d0).getDay()]}요일</b><span class="num">${dayT.length ? (dSum > 0 ? '+' : '') + fmtWon(dSum) + '원' : ''}</span></div>
-    ${dayT.map(t => txRowHtml(t, ed)).join('') || `<p class="note" style="margin:6px 0">${ed ? '거래가 없어요. + 버튼으로 입력하세요.' : '거래가 없어요.'}</p>`}
+    ${dayT.map(t => txRowHtml(t, ed)).join('') || '<p class="note" style="margin:6px 0">거래 없음</p>'}
   </section>
   ${ed ? `<div class="ltools"><button data-act="addRep">+ 반복 거래 추가</button><button data-act="cats">분류 관리</button></div>
   <button class="fab" data-act="addTx" aria-label="거래 추가">+</button><div style="height:64px"></div>` : `<p class="note" style="text-align:center">${esc(editNote(y))}</p>`}`;
@@ -173,7 +173,7 @@ function viewBud(){
   const y = S.year, m = S.month.budget, bs = budState(y, m), ed = canEdit();
   let html = bsegHtml();
   if (!bs.total){
-    $('#view').innerHTML = html + `<section class="card bempty"><b>${m}월 예산을 정해 보세요</b><p>항목마다 한 달에 쓸 금액을 정하면, 남은 돈과 하루에 쓸 수 있는 금액, 월말 예상 지출을 알려줘요.</p>
+    $('#view').innerHTML = html + `<section class="card bempty"><b>${m}월 예산</b>
       ${ed ? `<button class="btn" data-act="budEdit">예산 정하기</button>` : `<p class="note">${esc(editNote(y))}</p>`}</section>`; return; }
   const rem = bs.total - bs.spent, r = bs.spent / bs.total;
   const tops = bs.rows.filter(x => !x.fixed && x.it.amt > x.exp).sort((a, z) => (z.it.amt - z.exp) - (a.it.amt - a.exp)).slice(0, 2).map(x => x.it.name);
@@ -220,7 +220,7 @@ function budRef(y, m, i){
 }
 const budUp = v => v > 0 ? Math.ceil(v / 1e4) * 1e4 : null;
 const budSuggest = (i, R) => i.kind === '고정비' && R.repAmt ? R.repAmt : budUp(R.avgN >= 2 ? R.avg : R.last) || R.pbud || null;
-const budHint = (i, R) => [R.repAmt && i.kind === '고정비' ? `반복 · 매달 ${R.repDays.join('·')}일 ${shortAmt(R.repAmt)}` : '', R.last != null ? `지난달 ${shortAmt(R.last)}` : '', R.avgN >= 2 ? `${R.avgN}개월 평균 ${shortAmt(R.avg)}` : ''].filter(Boolean).join(' · ') || '지난 기록 없음';
+const budHint = (i, R) => [R.repAmt && i.kind === '고정비' ? `반복 · 매달 ${R.repDays.join('·')}일 ${shortAmt(R.repAmt)}` : '', R.last != null ? `지난달 ${shortAmt(R.last)}` : '', R.avgN >= 2 ? `${R.avgN}개월 평균 ${shortAmt(R.avg)}` : ''].filter(Boolean).join(' · ');
 const budAddable = (y, m) => (S.years[y]?.budget?.[m] || []).filter(i => EXP_KINDS.includes(i.kind) && !(i.bud > 0));
 function budOps(y, m, i, v){   // 이번 달~12월에 같은 예산
   const ops = [];
@@ -288,7 +288,7 @@ function openBudEdit(){
     const sc = $('#ed').scrollTop, tot = total(), off = items.filter((_, x) => !ed[x].on);
     const has = k => ref.some(R => (k === 'pbud' ? R.pbud : R[k]) != null);
     openEd(`<h4>${m}월 예산 <button class="ex" id="edX">닫기</button></h4>
-      <div class="btot"><div class="lab">지출 예산 합계 (항목 합계로 자동)</div><div class="v num" id="bdTot">${tot ? money(tot) : '0원'}</div>${prevSpent != null ? `<small>지난달 실제 지출 ${money(prevSpent)}</small>` : ''}</div>
+      <div class="btot"><div class="lab">지출 예산 합계</div><div class="v num" id="bdTot">${tot ? money(tot) : '0원'}</div>${prevSpent != null ? `<small>지난달 실제 지출 ${money(prevSpent)}</small>` : ''}</div>
       ${has('last') || has('pbud') ? `<div class="bqf"><span>빠르게 채우기</span>${has('last') ? '<button data-f="last">지난달 지출</button>' : ''}${ref.some(R => R.avgN >= 2) ? '<button data-f="avg">최근 3개월 평균</button>' : ''}${has('pbud') ? '<button data-f="pbud">지난달 예산 그대로</button>' : ''}</div>` : ''}
       ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
         return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기">빼기</button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
@@ -343,7 +343,6 @@ function statInto(host){
   const wmax = wd.indexOf(Math.max(...wd)); ins.push(`가장 많이 쓴 요일은 <b>${WD[wmax]}요일</b>이에요 (${money(wd[wmax])}).`);
   const big = [...E].sort((a, z) => z.amt - a.amt)[0]; ins.push(`가장 큰 지출은 ${big.d}일 <b>${esc(big.memo && big.memo !== '반복' ? big.memo : groupKey(big))}</b> ${money(big.amt)}이에요.`);
   html += `<section class="card"><h3>달라진 점</h3><ul class="ins">${ins.map(s => `<li>${s}</li>`).join('')}</ul></section>`;
-  html += `<section class="card"><h3>큰 지출 TOP 5</h3>${[...E].sort((a, z) => z.amt - a.amt).slice(0, 5).map(t => txRowHtml(t, canEdit())).join('')}</section>`;
   host.innerHTML = html;
   donut('cSub', top.map(g => g.n), top.map(g => g.a), top.map((_, k) => PALETTE[k % PALETTE.length]));
   const n = daysIn(y, m), cum = arr => { const o = Array(32).fill(0); for (const t of arr) o[t.d] += t.amt; let s = 0; return Array.from({length: n}, (_, i) => (s += o[i + 1])); };

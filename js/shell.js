@@ -99,7 +99,7 @@ function syncSheet(){
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세금 15.4%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
-  appVersion().then(v => { $('#sVer').textContent = v; });
+  appVersion().then(v => { $('#sVer').textContent = v; $('#sVerRow').hidden = !v || v === '-'; });
   syncNativeSheet();
 }
 // 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요

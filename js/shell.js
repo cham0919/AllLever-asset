@@ -50,12 +50,47 @@ function shift(n){
   else S.month[key] = m;
   render();
 }
-$('#prevM').onclick = () => shift(-1); $('#nextM').onclick = () => shift(1);
+// 월 넘김 애니메이션: 손가락을 따라 움직이고, 놓으면 지금 화면은 밀려나고 새 달이 반대쪽에서 들어와요 (위쪽 탭 버튼은 고정)
+const RMOT = window.matchMedia('(prefers-reduced-motion: reduce)');
+const slideEls = () => [...$('#view').children].filter(el => !el.matches('.bseg,.rseg'));
+const slideSet = (els, x, op, tr) => els.forEach(el => { el.style.transition = tr || 'none'; el.style.transform = x ? `translate3d(${x}px,0,0)` : ''; el.style.opacity = op == null ? '' : op; });
+let sliding = false;
+function slideTo(n, fromX = 0){
+  if (!S.model || !canShift(n) || sliding) return;
+  if (RMOT.matches){ slideSet(slideEls(), 0); return shift(n); }
+  sliding = true;
+  const W = Math.min(innerWidth, 640), d = n > 0 ? -1 : 1, out = slideEls();   // 다음 달 → 왼쪽으로 밀려나요
+  slideSet(out, fromX); void $('#view').offsetWidth;
+  slideSet(out, d * W * .4, 0, 'transform .17s cubic-bezier(.4,0,1,1), opacity .17s linear');
+  setTimeout(() => {
+    shift(n);
+    const inn = slideEls();
+    slideSet(inn, -d * W * .4, 0); void $('#view').offsetWidth;
+    slideSet(inn, 0, 1, 'transform .34s cubic-bezier(.2,.8,.2,1), opacity .24s ease-out');
+    setTimeout(() => { slideSet(inn, 0); sliding = false; }, 360);
+  }, 170);
+}
+$('#prevM').onclick = () => slideTo(-1); $('#nextM').onclick = () => slideTo(1);
 // 좌우 스와이프로 월 이동
-(() => { let x0=null, y0=null;
-  document.addEventListener('touchstart', e => { if (e.target.closest('canvas,.sheet,select,input')) return; x0=e.touches[0].clientX; y0=e.touches[0].clientY; }, {passive:true});
-  document.addEventListener('touchend', e => { if (x0==null) return; const dx=e.changedTouches[0].clientX-x0, dy=e.changedTouches[0].clientY-y0; x0=null;
-    if (S.model && S.tab!=='home' && S.tab!=='analysis' && Math.abs(dx)>70 && Math.abs(dy)<40) shift(dx<0?1:-1); }, {passive:true});
+(() => { let x0 = null, y0 = 0, t0 = 0, dx = 0, lock = '', els = [];
+  const on = () => S.model && (S.tab === 'budget' || S.tab === 'asset') && !$('#ed').classList.contains('on') && !sliding;
+  document.addEventListener('touchstart', e => { x0 = null;
+    if (e.touches.length > 1 || !on() || e.target.closest('canvas,.sheet,select,input,textarea,.swrap,#ed')) return;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); dx = 0; lock = ''; }, {passive: true});
+  document.addEventListener('touchmove', e => { if (x0 == null) return;
+    dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
+    if (!lock){ if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; if (lock === 'x') els = slideEls(); }
+    if (lock !== 'x') return;
+    if (e.cancelable) e.preventDefault();
+    const n = dx < 0 ? 1 : -1;
+    slideSet(els, canShift(n) ? dx : dx * .25);   // 더 갈 달이 없으면 고무줄처럼 덜 따라와요
+  }, {passive: false});
+  const end = () => { if (x0 == null) return; x0 = null; if (lock !== 'x') return;
+    const W = Math.min(innerWidth, 640), n = dx < 0 ? 1 : -1, v = Math.abs(dx) / Math.max(1, Date.now() - t0);
+    if (canShift(n) && (Math.abs(dx) > W * .25 || (v > .45 && Math.abs(dx) > 30))) slideTo(n, dx);
+    else { slideSet(els, 0, null, 'transform .3s cubic-bezier(.2,.8,.2,1)'); setTimeout(() => { if (!sliding) slideSet(els, 0); }, 320); }
+  };
+  document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
 })();
 
 /* ───────── 테마 ───────── */

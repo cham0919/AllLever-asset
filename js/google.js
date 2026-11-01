@@ -402,6 +402,7 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   else if (a === 'homeLedger' || a === 'homeBud' || a === 'homeAddTx'){ const P = homeLedgerPos(); if (!P) return; setYear(P.y); S.month.budget = P.m;
     if (a === 'homeAddTx') return editTx(null);
     S.bview = a === 'homeBud' ? 'bud' : 'cal'; LS.set('bview', S.bview); go('budget'); if (a === 'homeBud') openBudEdit(); }
-  else if (a === 'homeGoal') go('analysis'); else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
+  else if (a === 'homeGoal') go('analysis');
+  else if (a === 'homeAsset'){ const c = assetPoints().at(-1); if (c){ setYear(c.y); S.month.asset = c.m; } go('asset'); } else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind);
   else if (a === 'zeroItems'){ S.showZero = !S.showZero; render(); } });

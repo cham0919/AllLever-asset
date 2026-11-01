@@ -57,34 +57,26 @@ function viewHome(){
   const list = S.years[cur.y].assets;
   const loose = list.filter(a => a.big !== '부채' && !Object.values(G).some(g => g.match(a)));
   const looseSum = loose.reduce((s, a) => s + cur.val(a), 0);
-  const rTotal = cagr(pts, x => x.total), rNet = cagr(pts, x => x.net),
-        rInv = cagr(pts, x => grpSum(G.invest, x)), rEst = cagr(pts, x => grpSum(G.estate, x));
-  const span = rTotal || rNet;
-  const foot = (r) => r ? `<div class="f"><span>연평균 증가</span><b class="num ${dir(r.rate)}">${pct(r.rate, 2)}</b></div>`
-                        : `<div class="f"><span>연평균 증가</span><span>-</span></div>`;
-  const tot = Math.max(cur.total, 1);
+  const rTotal = cagr(pts, x => x.total), rNet = cagr(pts, x => x.net), rInv = cagr(pts, x => grpSum(G.invest, x));
+  const span = rNet || rTotal, tot = Math.max(cur.total, 1);
   const prevX = pts.length > 1 ? pts.at(-2) : null;
+  // 총자산 구성: 큰 금액부터, 0원은 빼요
+  const mix = [['부동산', est, 'var(--fixed)'], ['금융투자', inv, 'var(--accent)'], ['현금', cash, 'var(--saving)'], ['기타', looseSum, 'var(--faint)']]
+    .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+  const rate = (n, r) => `<div><span>${n}</span><b class="num ${r ? dir(r.rate) : ''}">${r ? pct(r.rate, 1) : '-'}</b></div>`;
   $('#view').innerHTML = led + `
-  <section class="card hero">
-    <div class="label">${cur.y}년 ${cur.m}월 말 순자산</div>
+  <section class="card hero hnet" data-act="homeAsset" role="button" tabindex="0">
+    <div class="hl-top"><span class="label">${cur.m}월 말 순자산</span><span class="go">›</span></div>
     <div class="big num">${money(cur.net)}</div>
-    <div class="sub">${prevX ? `${prevX.y !== cur.y ? prevX.y + '년 ' : ''}${prevX.m}월 대비 <span class="${dir(cur.net - prevX.net)}">${signed(cur.net - prevX.net)}</span>` : '첫 기록이에요'}</div>
-    <div class="sub" style="font-size:12px;margin-top:14px">총자산 구성</div>
-    <div class="flow" style="margin-top:6px"><i style="width:${inv/tot*100}%;background:var(--accent)"></i><i style="width:${est/tot*100}%;background:var(--fixed)"></i><i style="width:${cash/tot*100}%;background:var(--saving)"></i>${looseSum?`<i style="width:${looseSum/tot*100}%;background:var(--faint)"></i>`:''}</div>
-    <div class="flow-lg"><span>금융투자 ${pctPlain(inv/tot,0)}</span><span>부동산 ${pctPlain(est/tot,0)}</span><span>현금 ${pctPlain(cash/tot,0)}</span></div>
+    <div class="sub">${prevX ? `${prevX.y !== cur.y ? prevX.y + '년 ' : ''}${prevX.m}월보다 <span class="num ${dir(cur.net - prevX.net)}">${signed(cur.net - prevX.net)}</span>` : '첫 기록이에요'}</div>
+    <div class="heq num">총자산 <b>${money(cur.total)}</b>${cur.debt ? ` − 부채 <b>${money(cur.debt)}</b>` : ''}</div>
+    <div class="flow">${mix.map(x => `<i style="width:${x[1] / tot * 100}%;background:${x[2]}"></i>`).join('')}</div>
+    <div class="hmix">${mix.map(x => `<div><i class="dot" style="background:${x[2]}"></i><span>${x[0]}</span><b class="num">${money(x[1])}</b><em class="num">${pctPlain(x[1] / tot, 0)}</em></div>`).join('')}</div>
   </section>${homeGoal(pts)}
-  <div class="home-grid">
-    <div class="hc"><div class="t">총자산</div><div class="v num">${money(cur.total)}</div>${foot(rTotal)}</div>
-    <div class="hc"><div class="t">순자산</div><div class="v num">${money(cur.net)}</div>${foot(rNet)}</div>
-    <div class="hc"><div class="t"><i class="dot" style="background:var(--expense)"></i>부채</div><div class="v num">${money(cur.debt)}</div>
-      <div class="f"><span>총자산 대비</span><b class="num">${pctPlain(cur.total ? cur.debt / cur.total : 0)}</b></div></div>
-    <div class="hc"><div class="t"><i class="dot" style="background:var(--accent)"></i>금융투자</div><div class="v num">${money(inv)}</div>${foot(rInv)}</div>
-    <div class="hc"><div class="t"><i class="dot" style="background:var(--fixed)"></i>부동산</div><div class="v num">${money(est)}</div>${foot(rEst)}</div>
-    <div class="hc"><div class="t"><i class="dot" style="background:var(--saving)"></i>현금비중</div><div class="v num">${cur.net > 0 ? pctPlain(cash / cur.net) : '-'}</div>
-      <div class="f"><span>현재 현금</span><b class="num">${money(cash)}</b></div></div>
-  </div>
-  <p class="note" style="margin:0 4px 12px">${span ? `연평균 증가율: ${span.from.y}년 ${span.from.m}월 → ${cur.y}년 ${cur.m}월 (${span.n}개월) 잔액 기준 연환산${span.n < 12 ? ' · <b>1년 미만 기간이라 실제보다 크게 보일 수 있어요</b>' : ''}. 저축·추가 납입도 포함돼요.` : '연평균 수익률은 두 달 이상 기록이 쌓이면 표시돼요.'}
-  현금비중은 순자산 대비예요.</p>${fab}${fab ? '<div style="height:64px"></div>' : ''}`;
+  ${span ? `<section class="card hrate"><div class="hl-top"><span class="label">연평균 증가</span><span class="num">${span.n}개월 기준</span></div>
+    <div class="hr3">${rate('순자산', rNet)}${rate('총자산', rTotal)}${rate('금융투자', rInv)}</div>
+    ${span.n < 12 ? '<p class="note">1년 미만 기록이라 실제보다 크게 보일 수 있어요</p>' : ''}</section>` : ''}
+  ${fab}${fab ? '<div style="height:64px"></div>' : ''}`;
 }
 
 /* ───────── 화면: 분석 ───────── */

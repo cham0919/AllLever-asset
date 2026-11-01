@@ -191,6 +191,7 @@ function syncNativeSheet(){
 }
 function nativeInit(){
   if (!NATIVE) return;
+  try { console.log('[alv] native plugins: ' + (window.Capacitor.PluginHeaders || []).map(h => h.name).join(',')); } catch(e){}
   document.documentElement.classList.add('native');
   lockInit();
   $('#lkOn').onclick = () => lockToggle();

@@ -173,7 +173,7 @@ function editAssetMonth(m, bigSel){
     <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
     ${pv.has ? '<div class="echips"><button id="fillSame">빈 칸 모두 지난달 값으로</button></div>' : ''}
-    ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})] || '홈 묶음 없음'}</span>` : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
+    ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? (homeGroupOf({big, mid: md}) ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})]}</span>` : '<span class="hg need">묶음 필요</span>') : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
       <div class="agb">${its.filter(a => a.mid === md).map(rowH).join('')}</div></div>`).join('') || '<div class="ecard"><p class="note" style="margin:0">항목이 없어요</p></div>'}
     <button class="eadd agadd" id="adA">+ ${big} 항목 추가</button>
     <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>

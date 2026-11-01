@@ -1,7 +1,7 @@
 {
   "name": "moneymuscle-app",
   "private": true,
-  "version": "1.0.17",
+  "version": "1.0.18",
   "description": "머니머슬 - 가계부, 자산관리 (웹앱을 아이폰·안드로이드 앱으로 감싸는 프로젝트)",
   "scripts": {
     "build:web": "node tools/build-www.mjs",

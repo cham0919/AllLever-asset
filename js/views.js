@@ -399,6 +399,7 @@ function viewTrend(){
 }
 
 /* ───────── 화면: 자산 ───────── */
+const assetOpen = new Set();   // 항목별 자산에서 펼친 중분류 (앱을 다시 열면 접혀요)
 function viewAsset(){
   const m = S.month.asset, A = analysis(m), c = A.c, p = A.p;
   if (!c.has) return emptyMonth(m, '자산');
@@ -455,17 +456,17 @@ function viewAsset(){
       <div class="stat"><div class="t">부채비율</div><div class="v num">${pctPlain(A.debtRatio)}</div><div class="h">부채 ÷ 총자산</div></div>
     </div>` : `<div class="stats"><div class="stat"><div class="t">부채비율</div><div class="v num">${pctPlain(A.debtRatio)}</div></div></div><p class="note">전월 자산을 입력하면 증감·수익률이 표시돼요.</p>`}
   </section>
-  <section class="card"><h3>항목별 자산 <small>${A.prevOk?'괄호: 전월 대비':''}</small></h3>
+  <section class="card alist"><h3>항목별 자산 <small>${A.prevOk?'전월 대비':''}</small></h3>
     ${BIGS.map(big=>{
       const its = list.filter(a=>a.big===big); if (!its.length) return '';
-      const tot = big==='유동자산'?c.liquid:big==='비유동자산'?c.fixedA:c.debt, ptot = big==='유동자산'?p.liquid:big==='비유동자산'?p.fixedA:p.debt;
-      return `<div class="group"><div class="gh"><span><span class="tag">${big}</span></span><span class="num" style="text-align:right">${money(tot)}${A.prevOk&&tot!==ptot?`<span class="${dir(tot-ptot)}" style="display:block;font-size:12px;font-weight:500">${signed(tot-ptot)}</span>`:''}</span></div>
-      ${midsOf(big).map(md=>{
+      const tot = big==='유동자산'?c.liquid:big==='비유동자산'?c.fixedA:c.debt;
+      return `<div class="agp"><div class="agh2"><span>${big}</span><b class="num">${money(tot)}</b></div>
+      ${midsOf(big).map((md,k)=>{
         const sub = its.filter(a=>a.mid===md), st = sub.reduce((s,a)=>s+c.val(a),0), sp = sub.reduce((s,a)=>s+(p.val?p.val(a):0),0);
-        return `<div class="mgrp"><div class="mh"><div class="n">${esc(md)}</div><div class="a num">${money(st)}${A.prevOk&&st!==sp?`<span class="d ${dir(st-sp)}">${signed(st-sp)}</span>`:''}</div></div>
-        <div class="mitems">${sub.map(a=>{ const v=c.val(a), pv=A.prevOk? p.val(a):null, dd = pv!=null? v-pv : 0;
-          return `<div class="row sub-row"><div class="n">${esc(a.small)}<div class="bar"><i style="width:${tot? Math.abs(v)/Math.abs(tot)*100:0}%;background:${big==='부채'?'var(--expense)':'var(--accent)'}"></i></div></div>
-          <div class="a num">${money(v)}${dd?`<span class="d ${dir(dd)}">${signed(dd)}</span>`:''}</div></div>`;}).join('')}</div></div>`;
+        const shown = sub.filter(a=>c.val(a)), multi = shown.length > 1, key = big+'|'+md, open = multi && assetOpen.has(key);
+        return `<button class="amid"${multi?` aria-expanded="${open}" data-k="${esc(key)}"`:''}><i class="dot" style="background:${big==='부채'?'var(--expense)':PALETTE[k%PALETTE.length]}"></i><span class="n">${esc(md)}</span>
+          <span class="v num">${money(st)}${A.prevOk&&st!==sp?`<span class="d ${dir(st-sp)}">${signed(st-sp)}</span>`:''}</span><span class="chev">${multi?'›':''}</span></button>
+          ${multi?`<div class="aits">${shown.map(a=>`<div class="ait"><span>${esc(a.small)}</span><span class="num">${money(c.val(a))}</span></div>`).join('')}</div>`:''}`;
       }).join('')}</div>`;
     }).join('')}
   </section>
@@ -474,6 +475,10 @@ function viewAsset(){
   <section class="card"><h3>항목별 추이 <select class="pick" id="pick">${opt.map(o=>`<option value="${esc(o[0])}"${o[0]===S.assetPick?' selected':''}>${esc(o[1])}</option>`).join('')}</select></h3>
     <div class="chart"><canvas id="cPick"></canvas></div><div id="pickInfo" class="note"></div></section>`;
   $('#view').innerHTML = html;
+  $('#view').querySelectorAll('.amid[data-k]').forEach(b => b.onclick = () => {   // 중분류를 누르면 항목 펼치기·접기
+    const k = b.dataset.k, on = b.getAttribute('aria-expanded') !== 'true';
+    b.setAttribute('aria-expanded', on); on ? assetOpen.add(k) : assetOpen.delete(k);
+  });
 
   const leg = {position:'bottom', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:7, boxHeight:7, padding:14}};
   const line = (label, data, color, fill) => ({label, data, borderColor:color, backgroundColor:fill||color, tension:.35, pointRadius:3, pointHoverRadius:5, spanGaps:true, fill:!!fill, borderWidth:2.2});

@@ -171,7 +171,7 @@ function budStrip(bs){
 }
 function viewBud(){
   const y = S.year, m = S.month.budget, bs = budState(y, m), ed = canEdit();
-  if (!bs.total) setTimeout(() => budCarry(y, m), 0);
+  if (!bs.total && !S.ghost) setTimeout(() => budCarry(y, m), 0);
   let html = bsegHtml();
   if (!bs.total){
     $('#view').innerHTML = html + `<section class="card bempty"><b>${m}월 예산</b>

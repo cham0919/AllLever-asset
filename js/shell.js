@@ -4,7 +4,13 @@
 const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표', settings:'설정'};
 const isYearView = () => S.tab === 'budget' && effView() === 'rep' && S.rview === 'y';   // 가계부 › 리포트 › 올해 (예전 월별추이)
 function render(){
-  killCharts();
+  ghostClear(); killCharts();
+  renderHead();
+  if (S.tab === 'settings'){ syncSheet(); sPage(S.spage || 'main'); return; }
+  if (!S.model) return emptyMonth(null, '');
+  ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
+}
+function renderHead(){
   document.body.classList.remove('onboarding');
   document.body.classList.toggle('tab-settings', S.tab === 'settings');
   $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
@@ -21,9 +27,6 @@ function render(){
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }
   updateStatus();
-  if (S.tab === 'settings'){ syncSheet(); sPage(S.spage || 'main'); return; }
-  if (!S.model) return emptyMonth(null, '');
-  ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
 function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings'){ S.spage = 'main'; hPop(); } S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
@@ -42,33 +45,70 @@ function canShift(n){
   const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
   return (m >= 1 && m <= 12) || adjYear(n) != null;
 }
-function shift(n){
-  if (!S.model || !canShift(n)) return;
-  if (isYearView()){ setYear(adjYear(n)); return render(); }
+function stepState(n){
+  if (isYearView()) return setYear(adjYear(n));
   const key = S.tab==='asset'?'asset':'budget', m = S.month[key] + n;
   if (m < 1 || m > 12){ setYear(adjYear(n)); S.month[key] = m < 1 ? 12 : 1; }   // 연도 넘어가기
   else S.month[key] = m;
-  render();
 }
-// 월 넘김 애니메이션: 손가락을 따라 움직이고, 놓으면 지금 화면은 밀려나고 새 달이 반대쪽에서 들어와요 (위쪽 탭 버튼은 고정)
+function shift(n){
+  if (!S.model || !canShift(n)) return;
+  stepState(n); render();
+}
+// 월 넘김: 아이폰처럼 옆 달 화면이 미리 붙어 있다가 손가락을 따라 함께 움직여요 (위쪽 탭 버튼은 고정)
+// 옆 달 화면(GH)은 #view 바로 앞에 따로 그려 두고, 넘기면 그 화면을 그대로 #view로 옮겨요 → 다시 그리지 않아서 깜빡임이 없어요
+const vw = () => document.documentElement.clientWidth;
 const RMOT = window.matchMedia('(prefers-reduced-motion: reduce)');
-const slideEls = () => [...$('#view').children].filter(el => !el.matches('.bseg,.rseg'));
-const slideSet = (els, x, op, tr) => els.forEach(el => { el.style.transition = tr || 'none'; el.style.transform = x ? `translate3d(${x}px,0,0)` : ''; el.style.opacity = op == null ? '' : op; });
+const GH = {el: null, n: 0, st: null};
+const dropCharts = keep => { for (let i = charts.length - 1; i >= 0; i--) if (!keep(charts[i])){ charts[i].destroy(); charts.splice(i, 1); } };
+function ghostClear(){
+  if (!GH.el) return;
+  const g = GH.el; dropCharts(c => !g.contains(c.canvas));
+  GH.el.remove(); GH.el = null; GH.n = 0;
+}
+function ghostBuild(n){
+  if (GH.el && GH.n === n) return GH.el;
+  ghostClear();
+  const view = $('#view'), snap = {year: S.year, model: S.model, month: {...S.month}, sel: S.sel};
+  const el = document.createElement('main'); el.className = 'vghost'; el.setAttribute('aria-hidden', 'true'); el.inert = true;
+  view.before(el);   // 앞에 둬야 같은 id의 차트 캔버스를 이쪽에서 먼저 찾아요
+  stepState(n); S.ghost = true; view.id = 'viewCur'; el.id = 'view';
+  try { ({budget: viewBudget, asset: viewAsset})[S.tab](); } catch (e){ console.error(e); }
+  el.id = ''; view.id = 'view'; S.ghost = false;
+  GH.st = {year: S.year, month: {...S.month}};
+  S.year = snap.year; S.model = snap.model; S.month = snap.month; S.sel = snap.sel; LS.set('year', snap.year);
+  el.style.top = (view.getBoundingClientRect().top + scrollY) + 'px';
+  GH.el = el; GH.n = n;
+  return el;
+}
+function ghostAdopt(){
+  const el = GH.el, view = $('#view');
+  dropCharts(c => el.contains(c.canvas));
+  S.year = GH.st.year; S.model = S.years[S.year]; S.month = GH.st.month; LS.set('year', S.year);
+  view.replaceChildren(...el.childNodes); el.remove(); GH.el = null; GH.n = 0;
+  renderHead();
+  if (S.tab === 'budget' && effView() === 'bud') setTimeout(() => budCarry(S.year, S.month.budget), 0);
+}
+const curEls = () => [...$('#view').children].filter(el => !el.matches('.bseg,.rseg'));
+const tx = (el, x, tr) => { el.style.transition = tr || 'none'; el.style.transform = x ? `translate3d(${x}px,0,0)` : ''; };
 let sliding = false;
-function slideTo(n, fromX = 0){
+function dragTo(n, dx, els){   // n: 넘어갈 방향(1 다음 달, -1 이전 달), dx: 손가락 이동
+  if (!canShift(n)){ ghostClear(); els.forEach(e => tx(e, dx * .25)); return; }   // 더 갈 달이 없으면 고무줄처럼
+  const g = ghostBuild(n); els.forEach(e => tx(e, dx)); tx(g, n * vw() + dx);
+}
+function slideTo(n, fromX = 0, els = curEls()){
   if (!S.model || !canShift(n) || sliding) return;
-  if (RMOT.matches){ slideSet(slideEls(), 0); return shift(n); }
+  if (RMOT.matches){ els.forEach(e => tx(e, 0)); return shift(n); }
   sliding = true;
-  const W = Math.min(innerWidth, 640), d = n > 0 ? -1 : 1, out = slideEls();   // 다음 달 → 왼쪽으로 밀려나요
-  slideSet(out, fromX); void $('#view').offsetWidth;
-  slideSet(out, d * W * .4, 0, 'transform .17s cubic-bezier(.4,0,1,1), opacity .17s linear');
-  setTimeout(() => {
-    shift(n);
-    const inn = slideEls();
-    slideSet(inn, -d * W * .4, 0); void $('#view').offsetWidth;
-    slideSet(inn, 0, 1, 'transform .34s cubic-bezier(.2,.8,.2,1), opacity .24s ease-out');
-    setTimeout(() => { slideSet(inn, 0); sliding = false; }, 360);
-  }, 170);
+  const g = ghostBuild(n), W = vw(), ms = fromX ? 300 : 360, ease = `transform ${ms}ms cubic-bezier(.25,.85,.3,1)`;
+  els.forEach(e => tx(e, fromX)); tx(g, n * W + fromX); void g.offsetWidth;
+  els.forEach(e => tx(e, -n * W, ease)); tx(g, 0, ease);
+  setTimeout(() => { ghostAdopt(); [...$('#view').children].forEach(e => tx(e, 0)); sliding = false; }, ms + 20);
+}
+function slideBack(els, n){
+  sliding = true; const ease = 'transform 280ms cubic-bezier(.25,.85,.3,1)';
+  els.forEach(e => tx(e, 0, ease)); if (GH.el) tx(GH.el, n * vw(), ease);
+  setTimeout(() => { els.forEach(e => tx(e, 0)); ghostClear(); sliding = false; }, 300);
 }
 $('#prevM').onclick = () => slideTo(-1); $('#nextM').onclick = () => slideTo(1);
 // 좌우 스와이프로 월 이동
@@ -79,16 +119,15 @@ $('#prevM').onclick = () => slideTo(-1); $('#nextM').onclick = () => slideTo(1);
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); dx = 0; lock = ''; }, {passive: true});
   document.addEventListener('touchmove', e => { if (x0 == null) return;
     dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
-    if (!lock){ if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; if (lock === 'x') els = slideEls(); }
+    if (!lock){ if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return; lock = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'; if (lock === 'x') els = curEls(); }
     if (lock !== 'x') return;
     if (e.cancelable) e.preventDefault();
-    const n = dx < 0 ? 1 : -1;
-    slideSet(els, canShift(n) ? dx : dx * .25);   // 더 갈 달이 없으면 고무줄처럼 덜 따라와요
+    dragTo(dx < 0 ? 1 : -1, dx, els);
   }, {passive: false});
   const end = () => { if (x0 == null) return; x0 = null; if (lock !== 'x') return;
-    const W = Math.min(innerWidth, 640), n = dx < 0 ? 1 : -1, v = Math.abs(dx) / Math.max(1, Date.now() - t0);
-    if (canShift(n) && (Math.abs(dx) > W * .25 || (v > .45 && Math.abs(dx) > 30))) slideTo(n, dx);
-    else { slideSet(els, 0, null, 'transform .3s cubic-bezier(.2,.8,.2,1)'); setTimeout(() => { if (!sliding) slideSet(els, 0); }, 320); }
+    const n = dx < 0 ? 1 : -1, v = Math.abs(dx) / Math.max(1, Date.now() - t0);
+    if (canShift(n) && (Math.abs(dx) > vw() * .3 || (v > .45 && Math.abs(dx) > 30))) slideTo(n, dx, els);
+    else slideBack(els, n);
   };
   document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
 })();

@@ -436,7 +436,7 @@ function viewAsset(){
       data = ms.map(x=> x.has ? list.filter(a=>a.big===b&&a.mid===md).reduce((s,a)=>s+x.val(a),0) : null); }
     else { const a = list[+k.slice(5)]; if (a.big==='부채') color = css('--expense'); data = a.v.map(v=>v); }
     const label = opt.find(o=>o[0]===k)[1];
-    const ch = charts.find(c=>c.canvas.id==='cPick'); if (ch){ ch.destroy(); charts.splice(charts.indexOf(ch),1); }
+    const ch = charts.find(c=>c.canvas.id==='cPick' && $('#view').contains(c.canvas)); if (ch){ ch.destroy(); charts.splice(charts.indexOf(ch),1); }
     mk('cPick', {type:'line', data:{labels:monthLabels(), datasets:[line(label, data, color, color+'22')]},
       options:{plugins:{legend:{display:false}, tooltip:{...baseTip, ...tipWon}}, scales:{x:scaleX, y:scaleWon()}}});
     const pts = data.map((v,i)=>[i+1,v]).filter(x=>x[1]!=null);

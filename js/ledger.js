@@ -66,7 +66,7 @@ const txOf = (m, y = S.year) => { [m, y] = wrapYM(m, y); return S.years?.[y]?.tx
 const shortAmt = n => { const a = Math.abs(n); return a >= 1e5 ? Math.round(a / 1e4) + '만' : a >= 1e4 ? (+(a / 1e4).toFixed(1)) + '만' : a.toLocaleString('ko-KR'); };
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_OPTS = ['신용카드', '체크카드', '현금'];
-S.payOff = LS.get('payOff', []);   // 설정에서 끈 결제수단 (거래 입력 화면에서 숨김)
+S.payOff = []; LS.del('payOff');   // 결제수단 끄기 설정은 없앴어요 (예전에 끈 값도 정리)
 const payChips = (id, cur) => `<div class="elbl">결제수단</div><div class="echips" id="${id}">${[...PAY_OPTS.filter(p => !S.payOff.includes(p) || p === cur), ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div>`;
 const bindPay = (id, st) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st.pay = st.pay === b.dataset.p ? '' : b.dataset.p;
   document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x.dataset.p === st.pay)); });
@@ -468,61 +468,69 @@ function editRep(ri, direct){
   draw();
 }
 
-/* 분류 · 예산 (그 달 시트의 세부분류·월 예산 칸) */
-let catKinds = KINDS;   // 분류 관리에 보일 구분 (설정의 수입 항목 / 지출 항목)
-function openCats(kinds){
-  if (Array.isArray(kinds)) catKinds = kinds; else if (kinds === undefined) catKinds = KINDS;
+/* 분류 관리: 구분 탭(수입·고정비·변동비·저축) → 항목 목록 → 항목 하나(세부분류·이름·삭제)
+   세부분류·이름은 그해 모든 달 시트에 같이 적용돼요. */
+const KIND_COL = {'수입': 'var(--income)', '고정비': 'var(--fixed)', '변동비': 'var(--expense)', '저축': 'var(--saving)'};
+let catTab = '변동비';
+function openCats(kind){
+  if (KINDS.includes(kind)) catTab = kind;
   const y = S.year, m = S.month.budget, Y = S.years[y]; if (!canEdit(y)) return toast(editNote(y));
   const items = Y.budget[m] || [];
-  const ed = items.map(i => ({subs: [...(i.subs || [])], bud: i.bud ?? null}));   // 저장 전 고친 내용
-  const months = Array.from({length: 12}, (_, i) => i + 1);   // 세부분류는 그해 모든 달에 같이 적용
+  openEd(`<h4>분류 관리 <button class="ex" id="edX">닫기</button></h4>
+    <div class="ctabs">${KINDS.map(x => `<button data-ck="${x}" style="--k:${KIND_COL[x]}">${x}<small>${items.filter(i => i.kind === x).length}</small></button>`).join('')}</div>
+    <div class="clist" id="clist"></div><button class="cadd2" id="ciAdd"></button>`, {tall: true});
+  const list = () => {   // 탭을 바꾸면 목록만 다시 그려요 (화면 전환 없이)
+    const k = catTab, its = items.filter(i => i.kind === k);
+    $('#ed').querySelectorAll('[data-ck]').forEach(b => b.classList.toggle('on', b.dataset.ck === k));
+    const el = $('#clist'); el.style.setProperty('--k', KIND_COL[k]);
+    el.innerHTML = its.map(i => `<button class="citem" data-ci="${items.indexOf(i)}"><span class="n"><i></i>${esc(i.name)}</span>
+      <span class="s${i.subs?.length ? '' : ' none'}">${i.subs?.length ? i.subs.map(esc).join(' · ') : '세부분류 없음'}</span><span class="chev">›</span></button>`).join('')
+      || '<p class="note" style="margin:14px 0">항목이 없어요</p>';
+    el.querySelectorAll('[data-ci]').forEach(b => b.onclick = () => itemMenu(items[+b.dataset.ci]));
+    $('#ciAdd').textContent = `+ ${k} 항목 추가`; $('#ciAdd').onclick = () => addBudgetItem(m, k, true);
+  };
+  $('#edX').onclick = closeEd;
+  $('#ed').querySelectorAll('[data-ck]').forEach(b => b.onclick = () => { if (catTab === b.dataset.ck) return; catTab = b.dataset.ck; haptic(); list(); });
+  list();
+}
+// 항목 하나: 세부분류 추가·삭제(바로 저장), 이름 바꾸기, 삭제 (거래가 있는 달은 지우지 않아요)
+function itemMenu(it){
+  const y = S.year, Y = S.years[y], months = Array.from({length: 12}, (_, i) => i + 1);
+  const hasTx = mm => (Y.tx?.[mm] || []).some(t => !t.skip && t.kind === it.kind && t.name === it.name);
+  const txMonths = months.filter(hasTx);
+  const subsNow = () => [...(findBudget(Y, S.month.budget, it.kind, it.name, 0)?.subs || it.subs || [])];
+  const saveSubs = subs => {
+    const ops = []; for (const mm of months){ const f = findBudget(Y, mm, it.kind, it.name, 0); if (f) ops.push({t: 'cat', y, m: mm, kind: it.kind, name: it.name, subs: [...subs], bud: f.bud ?? null}); }
+    if (ops.length) commit(ops); draw(); };
+  const back = () => { edDir = 'back'; openCats(); };
   const draw = () => {
-    const sc = $('#ed').scrollTop;
-    openEd(`<h4>${catKinds.length === 2 ? '지출 항목' : catKinds.length === 1 ? catKinds[0] + ' 항목' : '분류 관리'} <button class="ex" id="edX">닫기</button></h4>
-      ${catKinds.map(k => { const its = items.filter(i => i.kind === k); return `<div class="ecard"><div class="etitle">${k}</div>${its.map(i => { const x = items.indexOf(i), e = ed[x];
-        return `<div class="crow" data-k="${x}"><div class="n"><button class="cname">${esc(i.name)} <span aria-hidden="true">›</span></button></div>
-          <div class="echips sm">${e.subs.map((s, j) => `<button class="csub" data-j="${j}">${esc(s)} <b aria-label="삭제">×</b></button>`).join('')}<button class="add cadd">+ 세부분류</button></div></div>`; }).join('')}
-        <button class="eadd" data-kind="${k}">+ ${k} 항목 추가</button></div>`; }).join('')}
-      <div class="ebar"><div class="t"></div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
-    $('#ed').scrollTop = sc;
-    $('#ed').querySelectorAll('.crow').forEach(r => { const x = +r.dataset.k, e = ed[x], it = items[x];
-      r.querySelectorAll('.csub').forEach(b => b.onclick = () => { e.subs.splice(+b.dataset.j, 1); draw(); });
-      r.querySelector('.cadd').onclick = async () => { const v = ((await askText(`${it.name}에 추가할 세부분류`, {placeholder: '예: 점심', ok: '추가'})) || '').trim().replace(/,/g, ' ');
-        if (!v) return; if (e.subs.includes(v)) return toast('이미 있는 세부분류예요'); e.subs.push(v); draw(); };
-      r.querySelector('.cname').onclick = () => itemMenu(it); });
-    $('#edX').onclick = closeEd;
-    $('#ed').querySelectorAll('.eadd').forEach(b => b.onclick = () => addBudgetItem(m, b.dataset.kind, true));
-    $('#edSave').onclick = () => {
-      const ops = [];
-      items.forEach((it, x) => { const e = ed[x];
-        if (e.subs.join(',') === (it.subs || []).join(',')) return;
-        for (const mm of months){ const f = findBudget(Y, mm, it.kind, it.name, 0); if (f) ops.push({t: 'cat', y, m: mm, kind: it.kind, name: it.name, subs: [...e.subs], bud: f.bud ?? null}); } });
-      closeEd(); if (ops.length) commit(ops); else toast('바뀐 내용이 없어요');
-    };
+    const subs = subsNow();
+    openEd(`<h4>${esc(it.name)} <button class="ex" id="edX">뒤로</button></h4>
+      <div class="cdet" style="--k:${KIND_COL[it.kind]}"><div class="ct"><i></i>${esc(it.name)}</div>
+      <div class="esub">${it.kind} · ${y}년 모든 달에 적용돼요${txMonths.length ? ` · 거래 있는 달: ${txMonths.join(', ')}월` : ''}</div>
+      <div class="etitle">세부분류</div>
+      <div class="ccard">${subs.map((s, j) => `<button class="csub2" data-j="${j}" aria-label="${esc(s)} 삭제">${esc(s)}<b>×</b></button>`).join('')}<button class="csub2 plus" id="csAdd">+ 추가</button></div>
+      <div class="etitle">이름</div>
+      <input id="imName" class="ememo" maxlength="30" value="${esc(it.name)}" placeholder="항목 이름">
+      <button class="btn" id="imRen">이름 바꾸기</button>
+      <button class="btn ghost danger" id="imDel" style="margin-top:8px">항목 삭제</button></div>`);
+    $('#edX').onclick = back;
+    $('#ed').querySelectorAll('.csub2[data-j]').forEach(b => b.onclick = () => { const s = subsNow(); s.splice(+b.dataset.j, 1); saveSubs(s); });
+    $('#csAdd').onclick = async () => {
+      const v = ((await askText(`${it.name}에 추가할 세부분류`, {placeholder: '예: 점심', ok: '추가'})) || '').trim().replace(/,/g, ' ');
+      if (!v) return; const s = subsNow(); if (s.includes(v)) return toast('이미 있는 세부분류예요'); saveSubs([...s, v]); };
+    $('#imRen').onclick = () => { const to = $('#imName').value.trim().replace(/\|/g, ' ');
+      if (!to || to === it.name) return toast('새 이름을 넣어 주세요');
+      if (Object.values(Y.budget).some(L => L.some(i => i.kind === it.kind && i.name === to))) return toast(`'${to}' 항목이 이미 있어요`);
+      const ms = months.filter(mm => findBudget(Y, mm, it.kind, it.name, 0));
+      commit([{t: 'renB', y, kind: it.kind, name: it.name, to, months: ms}]); back(); };
+    $('#imDel').onclick = async () => {
+      const ms = months.filter(mm => findBudget(Y, mm, it.kind, it.name, 0) && !hasTx(mm));
+      if (!ms.length) return toast('모든 달에 거래가 있어 지울 수 없어요. 거래를 다른 항목으로 옮겨 주세요');
+      if (!(await ask(txMonths.length ? `거래가 있는 ${txMonths.join(', ')}월은 남겨 둬요.` : '', {title: `'${it.name}' 항목을 지울까요?`, ok: '지우기', danger: true}))) return;
+      commit([{t: 'delB', y, kind: it.kind, name: it.name, months: ms}]); back(); };
   };
   draw();
-}
-// 항목 이름 바꾸기 · 지우기 (그 해 모든 달 시트에 적용, 거래가 있는 달은 지우지 않아요)
-function itemMenu(it){
-  const y = S.year, Y = S.years[y], m = S.month.budget;
-  const hasTx = mm => (Y.tx?.[mm] || []).some(t => !t.skip && t.kind === it.kind && t.name === it.name);
-  const txMonths = Array.from({length: 12}, (_, i) => i + 1).filter(hasTx);
-  openEd(`<h4>${esc(it.name)} <button class="ex" id="edX">뒤로</button></h4>
-    <div class="esub">${it.kind} · ${y}년 모든 달에 적용돼요${txMonths.length ? ` · 거래 있는 달: ${txMonths.join(', ')}월` : ''}</div>
-    <input id="imName" class="ememo" maxlength="30" value="${esc(it.name)}" placeholder="항목 이름">
-    <button class="btn" id="imRen">이름 바꾸기</button>
-    <button class="btn ghost danger" id="imDel">항목 삭제</button>`);
-  $('#edX').onclick = () => openCats(null);
-  $('#imRen').onclick = () => { const to = $('#imName').value.trim().replace(/\|/g, ' ');
-    if (!to || to === it.name) return toast('새 이름을 넣어 주세요');
-    if (Object.values(Y.budget).some(L => L.some(i => i.kind === it.kind && i.name === to))) return toast(`'${to}' 항목이 이미 있어요`);
-    const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0));
-    commit([{t: 'renB', y, kind: it.kind, name: it.name, to, months}]); openCats(null); };
-  $('#imDel').onclick = async () => {
-    const months = Array.from({length: 12}, (_, i) => i + 1).filter(mm => findBudget(Y, mm, it.kind, it.name, 0) && !hasTx(mm));
-    if (!months.length) return toast('모든 달에 거래가 있어 지울 수 없어요. 거래를 다른 항목으로 옮겨 주세요');
-    if (!(await ask(txMonths.length ? `거래가 있는 ${txMonths.join(', ')}월은 남겨 둬요.` : '', {title: `'${it.name}' 항목을 지울까요?`, ok: '지우기', danger: true}))) return;
-    commit([{t: 'delB', y, kind: it.kind, name: it.name, months}]); openCats(null); };
 }
 
 /* 항목 하나: 이 달 거래 목록 */
@@ -537,6 +545,6 @@ function openItemTx(m, idx){
     ${ed ? `<input id="itMemo" class="ememo" maxlength="80" placeholder="이 달 메모 (선택)" value="${esc(it.memo)}"><button class="btn" id="itSave">메모 저장</button><button class="btn ghost" id="itCat">세부분류 관리</button>` : ''}`, {tall: T.length > 6});
   $('#edX').onclick = closeEd;
   $('#ed').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => { closeEd(); editTx(el.dataset.tx); });
-  if (ed){ $('#itCat').onclick = () => openCats([it.kind]);
+  if (ed){ $('#itCat').onclick = () => openCats(it.kind);
     $('#itSave').onclick = () => { const v = $('#itMemo').value.trim(); closeEd(); if (v !== str(it.memo)) commit([{t: 'b', y, m, kind: it.kind, name: it.name, idx: occ(Y.budget[m], it, bKey), f: 'memo', v, o: str(it.memo)}]); }; }
 }

@@ -96,19 +96,6 @@ function syncSheet(){
   $('#svSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '';
   renderG();
   $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
-  // 가계부 (올해 거래 양식 파일이 있을 때만)
-  const ly = ledgerYear(), LY = ly && S.years[ly], lm = ly && ledgerMonth(ly), its = LY ? (LY.budget[lm] || []) : [];
-  $('#shdLedger').hidden = $('#slLedger').hidden = !LY;
-  if (LY){ $('#svInc').textContent = `${its.filter(i => i.kind === '수입').length}개`; $('#svExp').textContent = `${its.filter(i => EXP_KINDS.includes(i.kind)).length}개`; $('#svSav').textContent = `${its.filter(i => i.kind === '저축').length}개`;
-    $('#svReps').textContent = `${(LY.reps[lm] || []).length}개`; const bt = its.filter(i => i.bud > 0).reduce((a, i) => a + i.bud, 0); $('#svBud').textContent = bt ? `${lm}월 ${money(bt)}` : '없음'; }
-  // 결제수단: 거래 입력 화면에 보일 수단
-  const payOn = PAY_OPTS.filter(p => !S.payOff.includes(p));
-  $('#svPay').textContent = payOn.length === PAY_OPTS.length ? '전체' : payOn.join(' · ');
-  $('#slPay').innerHTML = PAY_OPTS.map(p => `<button class="srow${S.payOff.includes(p) ? '' : ' on'}" data-pay="${p}"><span>${p}</span><b class="chk">✓</b></button>`).join('');
-  $('#slPay').querySelectorAll('[data-pay]').forEach(b => b.onclick = () => {
-    const p = b.dataset.pay, off = S.payOff.includes(p) ? S.payOff.filter(x => x !== p) : [...S.payOff, p];
-    if (off.length === PAY_OPTS.length) return toast('결제수단을 하나 이상 골라 두세요');
-    S.payOff = off; LS.set('payOff', off); syncSheet(); });
   $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
   $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세금 15.4%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
@@ -117,9 +104,6 @@ function syncSheet(){
 }
 // 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요
 const appVersion = () => window.ALV_APP_VERSION ? Promise.resolve(window.ALV_APP_VERSION) : (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
-// 가계부 설정 대상: 올해(없으면 보고 있는 해)의 거래 양식 파일, 이번 달(없으면 보고 있는 달)
-const ledgerYear = () => { const cy = new Date().getFullYear(); return [cy, S.year].find(y => y && S.years?.[y]?.txMode && canEdit(y)) || null; };
-const ledgerMonth = y => y === new Date().getFullYear() ? new Date().getMonth() + 1 : (S.month.budget || 1);
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
   S.spage = key; if (key !== 'main') hPush(); else if (!$('#ed').classList.contains('on')) hPop();
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
@@ -128,9 +112,6 @@ function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
 function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
-  const a = e.target.closest('[data-sa]'); if (!a) return;
-  const y = ledgerYear(); if (!y) return; setYear(y); S.month.budget = ledgerMonth(y);
-  ({catInc: () => openCats(['수입']), catExp: () => openCats(['고정비', '변동비']), catSav: () => openCats(['저축']), reps: openReps, bud: openBudEdit})[a.dataset.sa]();
 });
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();

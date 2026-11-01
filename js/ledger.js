@@ -171,6 +171,7 @@ function budStrip(bs){
 }
 function viewBud(){
   const y = S.year, m = S.month.budget, bs = budState(y, m), ed = canEdit();
+  if (!bs.total) setTimeout(() => budCarry(y, m), 0);
   let html = bsegHtml();
   if (!bs.total){
     $('#view').innerHTML = html + `<section class="card bempty"><b>${m}월 예산</b>
@@ -187,12 +188,12 @@ function viewBud(){
   const L = S.model.budget[m] || [], ORD = {over: 0, warn: 1, fit: 2, ok: 3};
   const left = i => i.amt > i.bud ? `<span class="up">${money(i.amt - i.bud)} 넘음</span>` : `${money(i.bud - i.amt)} 남음`;
   const varRow = x => { const i = x.it, rr = i.amt / i.bud;
-    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit" data-bi="${L.indexOf(i)}">
+    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 빼기"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button><button class="bit" data-bi="${L.indexOf(i)}">
       <div class="r1"><span class="nm">${esc(i.name)}</span><span class="lf num">${left(i)}</span></div>
       <div class="btrack sm"><i class="${bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
       <div class="bsub num"><span>${money(i.amt)} 씀</span><span>예산 ${money(i.bud)}</span></div></button></div>`; };
   const fixRow = x => { const i = x.it, paid = i.amt >= i.bud;
-    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit bfx${paid ? ' paid' : ''}" data-bi="${L.indexOf(i)}">
+    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 빼기"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button><button class="bit bfx${paid ? ' paid' : ''}" data-bi="${L.indexOf(i)}">
       <span class="ck" aria-label="${paid ? '냈어요' : '아직 안 냈어요'}">${paid ? '✓' : ''}</span><span class="nm">${esc(i.name)}${paid ? '' : `<small>${i.amt ? `${money(i.amt)} 냈어요` : '아직 안 냈어요'}</small>`}</span>
       <span class="am num">${i.amt > i.bud ? `<span class="up">${money(i.amt - i.bud)} 넘음</span>` : money(i.bud)}</span></button></div>`; };
   const V = bs.rows.filter(x => x.it.kind === '변동비').sort((a, z) => ORD[a.st] - ORD[z.st] || z.it.amt / z.it.bud - a.it.amt / a.it.bud);
@@ -222,7 +223,19 @@ function budOps(y, m, i, v){   // 이번 달~12월에 같은 예산
   for (let mm = m; mm <= 12; mm++){ const f = findBudget(S.years[y], mm, i.kind, i.name, 0); if (f && (f.bud ?? null) !== v) ops.push({t: 'cat', y, m: mm, kind: i.kind, name: i.name, subs: [...(f.subs || [])], bud: v}); }
   return ops;
 }
-function budDrop(y, m, i){ const ops = budOps(y, m, i, null); if (!ops.length) return render(); commit(ops, true); toast(`${i.name} 예산을 지웠어요 · '+ 예산 항목 추가'로 다시 넣을 수 있어요`); }
+// 예산이 하나도 없는 달(이번 달부터)은 지난달 예산을 그대로 이어받아요. 달마다 한 번만, 사용자가 직접 비운 달은 다시 채우지 않아요.
+function budCarry(y, m){
+  const Y = S.years?.[y], now = new Date(); if (!Y?.txMode || !canEdit(y) || S.meta.source === 'demo') return;
+  if (y * 12 + m < now.getFullYear() * 12 + now.getMonth() + 1) return;
+  const L = Y.budget?.[m] || []; if (L.some(i => EXP_KINDS.includes(i.kind) && i.bud > 0)) return;
+  const done = LS.get('budCarry', []); if (done.includes(`${y}-${m}`)) return;
+  const [pm, py] = wrapYM(m - 1, y), src = (S.years?.[py]?.budget?.[pm] || []).filter(i => EXP_KINDS.includes(i.kind) && i.bud > 0); if (!src.length) return;
+  const ops = src.flatMap(i => { const t = L.find(x => x.kind === i.kind && x.name === i.name); return t ? budOps(y, m, t, i.bud) : []; });
+  LS.set('budCarry', [...done, `${y}-${m}`].slice(-48));
+  if (ops.length){ commit(ops, true); toast(`${pm}월 예산을 ${m}월에도 적용했어요`); }
+}
+const budCleared = (y, m) => { const done = LS.get('budCarry', []); LS.set('budCarry', [...new Set([...done, ...Array.from({length: 13 - m}, (_, k) => `${y}-${m + k}`)])].slice(-48)); };
+function budDrop(y, m, i){ const ops = budOps(y, m, i, null); if (!ops.length) return render(); budCleared(y, m); commit(ops, true); toast(`${i.name} 예산을 지웠어요 · '+ 예산 항목 추가'로 다시 넣을 수 있어요`); }
 
 // 손가락으로 왼쪽으로 밀면 삭제: 조금 밀면 '삭제' 버튼, 절반 넘게 밀면 바로 삭제
 function swipeDel(wrap, onDel){
@@ -286,7 +299,7 @@ function openBudEdit(){
       <div class="btot"><div class="lab">지출 예산 합계</div><div class="v num" id="bdTot">${tot ? money(tot) : '0원'}</div>${prevSpent != null ? `<small>지난달 실제 지출 ${money(prevSpent)}</small>` : ''}</div>
       ${has('last') || has('pbud') ? `<div class="bqf"><span>빠르게 채우기</span>${has('last') ? '<button data-f="last">지난달 지출</button>' : ''}${ref.some(R => R.avgN >= 2) ? '<button data-f="avg">최근 3개월 평균</button>' : ''}${has('pbud') ? '<button data-f="pbud">지난달 예산 그대로</button>' : ''}</div>` : ''}
       ${['고정비', '변동비'].map(k => { const L = items.filter(i => i.kind === k && ed[items.indexOf(i)].on); return L.length ? `<div class="etitle" style="margin:12px 2px 6px">${k}</div>` + L.map(i => { const x = items.indexOf(i), e = ed[x];
-        return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기">빼기</button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
+        return `<div class="swrap ber-w"><button class="sdel" aria-label="${esc(i.name)} 빼기"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12h8"/></svg></button><div class="ber"><div class="n"><b>${esc(i.name)}</b><small>${esc(budHint(i, ref[x]))}</small></div><input class="bin${e.rep ? ' rep' : ''}" data-x="${x}" inputmode="numeric" placeholder="금액" value="${e.v ? fmtWon(e.v) : ''}"></div></div>`; }).join('') : ''; }).join('')
         || ''}
       ${off.length ? `<div class="elbl" style="margin-top:14px">+ 예산 항목 추가</div><div class="echips">${off.map(i => `<button class="badd-c" data-x="${items.indexOf(i)}">+ ${esc(i.name)}</button>`).join('')}</div>` : ''}
       <div class="ebar"><div class="t"></div><button class="btn" id="edSave">저장</button></div>`, {tall: true});
@@ -302,6 +315,7 @@ function openBudEdit(){
       if (ed.some(e => e.on && Number.isNaN(e.v))) return toast('예산은 숫자로 넣어 주세요');
       const ops = items.flatMap((i, x) => budOps(y, m, i, ed[x].on && ed[x].v > 0 ? ed[x].v : null));
       closeEd(); if (!ops.length) return toast('바뀐 내용이 없어요');
+      if (ops.some(o => o.bud == null)) budCleared(y, m);
       S.bview = 'bud'; LS.set('bview', 'bud'); commit(ops);
     };
   };

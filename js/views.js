@@ -30,6 +30,7 @@ function homeLedger(){
   const Y = S.years[P.y], b = bMonth(P.m, P.y), TX = Y?.txMode, ed = canEdit(P.y) && TX;
   const now = new Date(), today = P.cur ? (Y.tx?.[P.m] || []).filter(t => !t.skip && t.d === now.getDate() && EXP_KINDS.includes(t.kind)).reduce((a, t) => a + t.amt, 0) : 0;
   const bs = TX ? budState(P.y, P.m) : null, rem = bs ? bs.total - bs.spent : 0, r = bs?.total ? bs.spent / bs.total : 0;
+  if (TX && bs && !bs.total) setTimeout(() => budCarry(P.y, P.m), 0);
   return `<section class="card hledger" data-act="homeLedger" role="button" tabindex="0">
     <div class="hl-top"><span class="label">${P.cur ? '이번 달' : `${P.y}년 ${P.m}월`} 가계부</span><span class="go">›</span></div>
     ${bs?.total ? `<div class="big num">${rem >= 0 ? `${money(rem)} <em>남았어요</em>` : `${money(-rem)} <em class="up">넘었어요</em>`}</div>

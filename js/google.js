@@ -169,7 +169,7 @@ function gAdd(list){
 // 목록에 없는 시트는 구글 선택 창(Picker)으로 추가해요. 홈 화면 앱에서는 Picker가 막힐 수 있어서 이 순서로 해요.
 const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
 const leaveLocalOk = async () => S.meta.source !== 'local' || !yearsList().length ||
-  ask('구글 시트를 연결하면 이 기기에만 저장된 데이터 대신 시트 데이터를 보여줘요.\n먼저 설정 → 엑셀로 내보내기로 백업하세요.', {title: '구글 시트로 바꿀까요?', ok: '계속'});
+  ask('구글 시트를 연결하면 이 기기에만 저장된 데이터 대신 시트 데이터를 보여줘요.\n먼저 설정 → 백업 파일 만들기로 백업하세요.', {title: '구글 시트로 바꿀까요?', ok: '계속'});
 async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!(await leaveLocalOk())) return;

@@ -58,7 +58,7 @@ function viewOnboard(){
 }
 function finishOb(){ S.ob = {step: 'done', path: S.ob.path}; saveOb(); document.body.classList.remove('onboarding'); }
 async function restartOb(){
-  if (S.meta.source === 'local' && yearsList().length && !(await ask('이 기기에만 저장된 가계부·자산 데이터가 지워져요.\n먼저 엑셀로 내보내기를 권해요.', {title: '처음 화면으로 갈까요?', ok: '지우고 처음으로', danger: true}))) return;
+  if (S.meta.source === 'local' && yearsList().length && !(await ask('이 기기에만 저장된 가계부·자산 데이터가 지워져요.\n먼저 백업 파일 만들기를 권해요.', {title: '처음 화면으로 갈까요?', ok: '지우고 처음으로', danger: true}))) return;
   S.years = {}; S.meta = {}; LS.set('years', {}); LS.set('meta', {}); setYear(null);
   S.ob = {step: 'intro', path: null}; saveOb(); closeSheet(); go('home');
 }
@@ -96,7 +96,8 @@ async function addLocalYear(){
   toast(`${y}년을 추가했어요${y - 1 in S.years ? ' (전년도 항목 구성을 가져왔어요)' : ''}`);
 }
 
-/* ───────── 엑셀로 내보내기 (백업·다른 기기로 옮기기) ─────────
+/* ───────── 백업 파일 만들기 (앱만 사용하기: 백업·다른 기기로 옮기기) ─────────
+   구글 시트를 쓰는 경우는 exportGoogle()이 시트를 구글이 엑셀로 바꾼 파일(서식·수식·그래프 그대로)을 받아요.
    앱이 다시 읽을 수 있는 형식(설정·1~12월·자산관리)으로 연도별 파일을 만들어요. 서식·수식·그래프는 없어요. */
 function exportYear(y){   // → {name, wb}
   const M = S.years[y]; if (!M) return null;
@@ -143,7 +144,26 @@ function exportYear(y){   // → {name, wb}
   return {name: `머니머슬_${y}_백업.xlsx`, wb};
 }
 async function exportAll(){
+  if (S.meta.source === 'google' && S.gfiles.length) return exportGoogle();
   const ys = yearsList(); if (!ys.length) return toast('내보낼 데이터가 없어요');
-  try { if (await saveFiles(ys.map(exportYear).filter(Boolean))) toast(`${ys.length}개 연도를 엑셀 파일로 내보냈어요`); }
+  try { if (await saveFiles(ys.map(exportYear).filter(Boolean))) toast(`${ys.length}개 연도 백업 파일을 만들었어요`); }
   catch(e){ toast('파일을 만들지 못했어요: ' + e.message); }
+}
+// 구글 시트 → 엑셀: 구글이 바꿔 주는 파일이라 시트와 서식·수식·그래프가 같아요
+async function exportGoogle(){
+  const files = S.gfiles.filter(f => !f.gone).sort((a, z) => (z.year || 0) - (a.year || 0));
+  if (!files.length) return toast('내보낼 시트가 없어요');
+  try {
+    const tok = await gToken(true, 'sync'); if (!tok) return;
+    busy('엑셀 파일을 만드는 중이에요', `구글 시트 ${files.length}개를 엑셀로 바꾸고 있어요`);
+    const out = [];
+    for (const f of files){
+      const base = 'https://www.googleapis.com/drive/v3/files/' + encodeURIComponent(f.id);
+      const url = f.mime === MIME_SHEET || !f.mime ? `${base}/export?mimeType=${encodeURIComponent(MIME_XLSX)}` : `${base}?alt=media`;
+      const buf = await (await gFetch(url, {cache: 'no-store'}, tok)).arrayBuffer();
+      out.push({name: `${String(f.name || '시트').replace(/[\\/:*?"<>|]/g, ' ').trim()}.xlsx`, buf});
+    }
+    busy();
+    if (await saveFiles(out)) toast(`구글 시트 ${out.length}개를 엑셀 파일로 내보냈어요`);
+  } catch(e){ busy(); toast('엑셀 파일을 만들지 못했어요: ' + e.message); }
 }

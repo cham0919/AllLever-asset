@@ -91,7 +91,8 @@ function syncSheet(){
   seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
   const ys = yearsList().slice().reverse().join(', '), src = S.meta.source, g = S.goal;
   $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트 · ${ys}년` : src === 'local' ? `이 기기에 저장 · ${ys}년` : src === 'file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
-  $('#btnAddYear').hidden = src !== 'local'; $('#btnExport').hidden = !S.model || src === 'demo'; $('#btnSync').hidden = src !== 'google';
+  $('#btnAddYear').hidden = src !== 'local'; $('#btnExport').hidden = !S.model || src === 'demo';
+  $('#btnExport').querySelector('span').textContent = src === 'google' && S.gfiles.length ? '엑셀로 내보내기' : '백업 파일 만들기'; $('#btnSync').hidden = src !== 'google';
   $('#svSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '';
   renderG();
   $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');

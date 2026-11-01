@@ -14,7 +14,7 @@ let storageWarnAt = 0;
 function storageFail(k){
   if (!['years', 'queue', 'meta', 'model'].includes(k) || Date.now() - storageWarnAt < 10000) return;
   storageWarnAt = Date.now();
-  setTimeout(() => { try { toast('기기 저장 공간이 부족해 저장하지 못했어요. 설정 › 엑셀로 내보내기로 먼저 백업해 주세요'); } catch(e){} }, 0);
+  setTimeout(() => { try { toast('기기 저장 공간이 부족해 저장하지 못했어요. 설정 › 백업 파일 만들기로 먼저 백업해 주세요'); } catch(e){} }, 0);
 }
 const S = {
   tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis','settings'].includes(t) ? t : 'home')(LS.get('tab','home')),

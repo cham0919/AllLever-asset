@@ -49,14 +49,22 @@ if (NATIVE) document.addEventListener('click', e => {
 }, true);
 
 /* ───────── 엑셀 파일 내보내기: 웹은 다운로드, 앱은 공유 창(파일 앱 저장·메시지·메일) ───────── */
-async function saveFiles(list){   // list: [{name, wb}]
-  if (!NATIVE){ list.forEach(({name, wb}, i) => setTimeout(() => XLSX.writeFile(wb, name), i * 400)); return true; }
+const b64Of = buf => { let s = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode(...u.subarray(i, i + 0x8000)); return btoa(s); };
+async function saveFiles(list){   // list: [{name, wb}] (앱에서 만든 엑셀) 또는 [{name, buf}] (받은 파일 그대로)
+  if (!NATIVE){
+    list.forEach(({name, wb, buf}, i) => setTimeout(() => {
+      if (wb) return XLSX.writeFile(wb, name);
+      const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([buf], {type: MIME_XLSX})); a.download = name;
+      document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    }, i * 400));
+    return true;
+  }
   const FS = nativePlugin('Filesystem'), Share = nativePlugin('Share'), files = [];
-  for (const {name, wb} of list){
-    const r = await FS.writeFile({path: name, data: XLSX.write(wb, {type: 'base64', bookType: 'xlsx'}), directory: 'CACHE'});
+  for (const {name, wb, buf} of list){
+    const r = await FS.writeFile({path: name, data: wb ? XLSX.write(wb, {type: 'base64', bookType: 'xlsx'}) : b64Of(buf), directory: 'CACHE'});
     files.push(r.uri);
   }
-  try { await holdLock(() => Share.share({title: '머니머슬 백업', files})); return true; }
+  try { await holdLock(() => Share.share({title: '머니머슬', files})); return true; }
   catch(e){ return false; }   // 공유 창을 닫은 경우
 }
 

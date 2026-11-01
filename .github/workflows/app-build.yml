@@ -88,14 +88,15 @@ jobs:
           xcrun simctl install "$DEV" build/Build/Products/Debug-iphonesimulator/App.app
           xcrun simctl ui "$DEV" appearance light
           xcrun simctl launch --console-pty "$DEV" com.alllever.asset > shots/app-console.log 2>&1 &
-          sleep 15
+          sleep 35
           xcrun simctl io "$DEV" screenshot shots/ios-light.png
           xcrun simctl spawn "$DEV" log show --last 2m --style compact --predicate 'process == "App"' 2>/dev/null | grep -iE "plugin|alv|⚡|error" | head -120 > shots/app-log.txt || true
           for f in $(ls -t ~/Library/Logs/DiagnosticReports/App-*.ips 2>/dev/null | head -1); do head -c 60000 "$f" > shots/crash.ips; done
           xcrun simctl spawn "$DEV" log show --last 2m --style compact --predicate 'process == "App" AND (messageType == error OR messageType == fault OR eventMessage CONTAINS "Terminating" OR eventMessage CONTAINS "exception")' 2>/dev/null | tail -60 > shots/app-errors.txt || true
           xcrun simctl terminate "$DEV" com.alllever.asset || true
           xcrun simctl ui "$DEV" appearance dark
-          xcrun simctl launch "$DEV" com.alllever.asset; sleep 10
+          xcrun simctl launch --console-pty "$DEV" com.alllever.asset > shots/app-console2.log 2>&1 &
+          sleep 20
           xcrun simctl io "$DEV" screenshot shots/ios-dark.png
       - uses: actions/upload-artifact@v4
         if: always()

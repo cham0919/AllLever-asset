@@ -204,7 +204,7 @@ function viewBud(){
   ${F.length ? `<section class="card"><h3>고정비 <small>${F.length}개 중 ${nPaid}개 냈어요</small></h3>${F.map(fixRow).join('')}</section>` : ''}`;
   $('#view').innerHTML = html;
   $('#view').querySelectorAll('.swrap').forEach(w => { const el = w.querySelector('[data-bi]'), it = (S.model.budget[m] || [])[+el.dataset.bi];
-    el.onclick = () => openItemTx(m, +el.dataset.bi);
+    el.onclick = () => ed ? openBudItem(m, +el.dataset.bi) : openItemTx(m, +el.dataset.bi);
     if (ed) swipeDel(w, () => budDrop(y, m, it)); else w.querySelector('.sdel').remove(); });
 }
 // 예산 참고값: 지난달 지출 · 최근 3개월 평균 · 지난달 예산 · 반복 거래
@@ -277,6 +277,26 @@ function openBudAdd(){
         closeEd(); commit(budOps(y, m, sel, v), true); toast(`${sel.name} 예산 ${money(v)}을 추가했어요`); }; }
   };
   draw();
+}
+
+// 예산 항목 하나 고치기: 금액 바꾸기(이번 달~12월), 예산 빼기. 이번 달 거래는 아래 링크로
+function openBudItem(m, idx){
+  const y = S.year, it = (S.years[y].budget[m] || [])[idx]; if (!it) return;
+  const R = budRef(y, m, it), hint = budHint(it, R);
+  openEd(`<h4>${esc(it.name)} 예산 <button class="ex" id="edX">닫기</button></h4>
+    <div class="esub">${it.kind} · ${m < 12 ? `${m}~12월` : '12월'}에 적용돼요</div>
+    <div class="elbl">한 달 예산</div><div class="ewon"><input id="biAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${it.bud ? fmtWon(it.bud) : ''}"><span>원</span></div>
+    <div class="ehint">${m}월 쓴 돈 ${money(it.amt || 0)}${hint ? ' · ' + esc(hint) : ''}</div>
+    <button class="btn" id="edSave">저장</button>
+    <button class="btn ghost danger" id="biDrop" style="margin-top:8px">예산 빼기</button>
+    <button class="elink" id="biTx" style="margin-top:14px">${m}월 ${esc(it.name)} 거래 보기 ›</button>`);
+  bindWon($('#biAmt'));
+  $('#edX').onclick = closeEd;
+  $('#edSave').onclick = () => { const v = parseWon($('#biAmt').value); if (!(v > 0)) return toast('금액을 넣어 주세요');
+    if (v === it.bud) return closeEd();
+    closeEd(); commit(budOps(y, m, it, v), true); toast(`${it.name} 예산을 ${money(v)}으로 바꿨어요`); };
+  $('#biDrop').onclick = () => { closeEd(); budDrop(y, m, it); };
+  $('#biTx').onclick = () => openItemTx(m, idx);
 }
 
 // 예산 편집: 예산이 있는 항목만 보여주고, 밀어서 빼고, 아래에서 다시 추가

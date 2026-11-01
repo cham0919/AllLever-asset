@@ -31,13 +31,14 @@ function homeLedger(){
   const now = new Date(), today = P.cur ? (Y.tx?.[P.m] || []).filter(t => !t.skip && t.d === now.getDate() && EXP_KINDS.includes(t.kind)).reduce((a, t) => a + t.amt, 0) : 0;
   const bs = TX ? budState(P.y, P.m) : null, rem = bs ? bs.total - bs.spent : 0, r = bs?.total ? bs.spent / bs.total : 0;
   if (TX && bs && !bs.total) setTimeout(() => budCarry(P.y, P.m), 0);
+  const three = `<div class="hl3 num"><div><span>수입</span><b class="i">${money(b.income)}</b></div><div><span>지출</span><b class="e">${money(b.expense)}</b></div><div><span>저축</span><b class="s">${money(b.save)}</b></div></div>`;
   return `<section class="card hledger" data-act="homeLedger" role="button" tabindex="0">
-    <div class="hl-top"><span class="label">${P.cur ? '이번 달' : `${P.y}년 ${P.m}월`} 가계부</span><span class="go">›</span></div>
+    <div class="hl-top"><span class="label">${P.cur ? '' : `${P.y}년 `}${P.m}월 가계부</span>${P.cur && TX ? `<span class="hl-tday num">오늘 ${money(today)} ›</span>` : '<span class="go">›</span>'}</div>
     ${bs?.total ? `<div class="big num">${rem >= 0 ? `${money(rem)} <em>남았어요</em>` : `${money(-rem)} <em class="up">넘었어요</em>`}</div>
       <div class="btrack sm"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%"></b>` : ''}</div>
       <div class="hl-row"><span>예산 ${money(bs.total)} 중 ${Math.round(r * 100)}%</span><span>${bs.cur ? `오늘까지 적정 <b>${money(bs.okLine)}</b>` : ''}</span></div>`
-    : `<div class="big num">${money(b.expense)} <em>썼어요</em></div><div class="hl-row"><span>수입 ${money(b.income)} · 저축 ${money(b.save)}</span>${ed ? '<button class="hl-link" data-act="homeBud">예산 정하기 ›</button>' : ''}</div>`}
-    ${P.cur && TX ? `<div class="hl-today"><span>오늘</span><b class="num">${today ? money(today) + ' 썼어요' : '아직 지출이 없어요'}</b></div>` : ''}
+    : `<div class="big num">${money(b.expense)} <em>썼어요</em></div>${ed ? '<div class="hl-row"><span></span><button class="hl-link" data-act="homeBud">예산 정하기 ›</button></div>' : ''}`}
+    ${three}
   </section>`;
 }
 // 홈: 목표 진척 한 줄

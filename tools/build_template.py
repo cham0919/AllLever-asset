@@ -390,4 +390,16 @@ aw.freeze_panes = f"D{A0}"
 wb._sheets = [wb["월별추이"], wb["자산관리"]] + [wb[f"{m}월"] for m in range(1, 13)] + [wb["설정"]]
 wb.active = 0
 wb.save(OUT)
+
+# openpyxl은 수식 칸에 빈 결과값(<v></v>)을 함께 저장해요. 구글 시트는 이 빈 값을 그대로 믿고 다시 계산하지 않는 경우가 있어서
+# (예: 달력 날짜처럼 입력이 바뀌지 않는 수식은 계속 빈 칸), 빈 결과값을 지워 열 때 반드시 계산하게 해요.
+import zipfile, re as _re, shutil, os
+tmp = OUT + ".tmp"
+with zipfile.ZipFile(OUT) as zi, zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zo:
+    for it in zi.infolist():
+        data = zi.read(it.filename)
+        if it.filename.startswith("xl/worksheets/sheet") and it.filename.endswith(".xml"):
+            data = _re.sub(rb"(</f>)<v\s*/?>(</v>)?", rb"\1", data)
+        zo.writestr(it, data)
+shutil.move(tmp, OUT)
 print("rows", A0, A_END, S0, SUM_END, M0)

@@ -6,6 +6,8 @@
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>ko</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>가계부와 자산 정보를 보호하기 위해 앱을 열 때 Face ID로 확인해요.</string>
 	<key>CFBundleDisplayName</key>

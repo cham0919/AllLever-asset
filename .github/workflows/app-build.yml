@@ -62,7 +62,7 @@ jobs:
           git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-android
 
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write   # 시뮬레이터 캡처를 ci-screens 브랜치에 올리기 위해서만 써요
     steps:

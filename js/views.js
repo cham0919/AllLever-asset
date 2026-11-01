@@ -126,20 +126,16 @@ function viewAnalysis(){
   if (pts.length < 2){   // 기록이 한 달 이하: 진행률만 (예상 시점은 두 달부터)
     const T0 = S.goal.target, c0 = pts.at(-1), d0 = c0 ? Math.min(1, Math.max(0, c0.net / T0)) : 0;
     $('#view').innerHTML = `<section class="card hero"><div class="label">목표 ${T0 / 1e8}억까지</div>
-      <div class="big num" style="color:${c0 ? 'var(--accent)' : 'var(--faint)'}">${c0 ? pctPlain(d0, 0) : '—'}</div><div class="prog"><i style="width:${d0 * 100}%"></i></div>
-      ${c0 ? `<div class="heq num">순자산 <b>${money(c0.net)}</b></div>` : '<button class="btn" data-act="homeAsset">잔액 입력하기</button>'}</section>`; return; }
+      ${c0 ? `<div class="gtop"><b class="num">${pctPlain(d0, 0)}</b><span class="num"><b>${money(c0.net)}</b> / ${T0 / 1e8}억</span></div>` : '<div class="big num" style="color:var(--faint)">—</div>'}<div class="prog"><i style="width:${d0 * 100}%"></i></div>
+      ${c0 ? '' : '<button class="btn" data-act="homeAsset">잔액 입력하기</button>'}</section>`; return; }
   const g = S.goal, cur = pts.at(-1), curI = ymIdx(cur.y, cur.m), T = g.target;
   const inp = analysisInputs(pts);
   const base = g.planBase ?? pts[0].net;
   const plan = planCurve(base, g);
   const proj = project(cur.net, inp.rate, inp.save, T);
   const projHit = proj.months != null ? curI + proj.months : null;
-  // 계획 대비: 계획 곡선이 현재 순자산에 도달하는 시점과 오늘(기록 기준) 비교
-  let planReach = null; for (let i = plan.start; i < plan.start + 12 * plan.ends.length; i++){ const v = plan.at(i); if (v != null && v >= cur.net){ planReach = i; break; } }
-  const ahead = planReach != null ? planReach - curI : null;   // + 빠름, − 늦음
-  const planNow = plan.at(curI);
+  const planNow = plan.at(curI), gap = planNow != null ? cur.net - planNow : null;   // 계획상 지금 순자산과 차이
   const pctDone = Math.min(1, Math.max(0, cur.net / T));
-  const aheadTxt = ahead == null ? '-' : ahead === 0 ? '계획과 같은 속도' : ahead > 0 ? `${durText(ahead)} 빠름` : `${durText(-ahead)} 늦음`;
 
   // 마일스톤
   const nice = v => { const u = v >= 1e9 ? 1e8 : v >= 1e8 ? 5e7 : 1e7; return Math.max(u, Math.round(v / u) * u); };
@@ -163,40 +159,27 @@ function viewAnalysis(){
   const cover = inp.expense ? divMonth / inp.expense : null;
 
   $('#view').innerHTML = `
-  <section class="card hero">
-    <div class="label">목표 ${T / 1e8}억 · 현재 순자산</div>
-    <div class="big num">${money(cur.net)}</div>
-    <div class="stats" style="margin-top:12px">
-      <div class="stat"><div class="t">연평균 수익률</div><div class="v num ${dir(inp.rate)}">${pct(inp.rate, 2)}</div><div class="h">저축 제외 · ${inp.rateMonths}개월 기록</div></div>
-      <div class="stat"><div class="t">월 저축 (최근 평균)</div><div class="v num">${money(inp.save)}</div><div class="h">가계부 저축 · ${inp.saveMonths}개월</div></div>
-      <div class="stat"><div class="t">목표까지</div><div class="v num">${proj.months != null ? durText(proj.months) : '60년 이상'}</div><div class="h">${projHit != null ? ymText(projHit) + ' 예상' : ''}</div></div>
-      <div class="stat"><div class="t">계획 대비</div><div class="v num ${ahead > 0 ? 'down' : ahead < 0 ? 'up' : ''}">${aheadTxt}</div><div class="h">계획 달성 ${plan.hitYear ?? '-'}년</div></div>
-    </div>
+  <section class="card hero"><div class="label">목표 ${T / 1e8}억까지</div>
+    <div class="gtop"><b class="num">${pctPlain(pctDone, 0)}</b><span class="num"><b>${money(cur.net)}</b> / ${T / 1e8}억</span></div>
+    <div class="prog"><i style="width:${pctDone * 100}%"></i></div>
+    <div class="gwhen"><b>${projHit != null ? `${ymText(projHit)} 달성 예상` : '60년 안에 달성하기 어려워요'}</b></div>
+    <div class="kv grate"><span>연평균 수익률 <small>저축 제외 · ${inp.rateMonths}개월</small></span><b class="num ${dir(inp.rate)}">${pct(inp.rate, 1)}</b></div>
   </section>
 
-  <section class="card"><h3>순자산 경로 <small>${pts[0].y}년 ${pts[0].m}월 ~</small></h3>
+  ${gap != null ? `<section class="card gplan"><h3>계획 대비 <small>연 ${pct(g.planRate, 0).replace('+', '')} · 매년 ${money(g.planSave)}</small></h3>
+    <div class="gbig num ${gap >= 0 ? 'down' : 'up'}">${money(Math.abs(gap))} ${gap >= 0 ? '앞서요' : '부족해요'}</div>
+    <div class="kv"><span>계획상 지금</span><b class="num">${money(planNow)}</b></div>
+    ${plan.hitYear ? `<div class="kv"><span>${T / 1e8}억 달성</span><b class="num">계획 ${plan.hitYear}년 → 예상 ${projHit != null ? idxYM(projHit)[0] + '년' : '-'}</b></div>` : ''}
+  </section>` : ''}
+
+  <section class="card"><h3>순자산 경로</h3>
     <div class="chart tall"><canvas id="cPath"></canvas></div>
     <div class="lgd"><span><i style="border-color:var(--accent)"></i>실제</span><span><i style="border-color:var(--accent);border-top-style:dashed"></i>예상</span>
       <span><i style="border-color:#A0A7B1"></i>계획</span><span id="lgSim" style="display:none"><i style="border-color:var(--repay);border-top-style:dashed"></i>시뮬레이션</span>
       <span><i style="border-color:var(--expense);border-top-style:dotted"></i>목표 ${T / 1e8}억</span></div>
   </section>
 
-  <section class="card"><h3>계획 대비 실제 <small>연 ${pct(g.planRate, 0).replace('+','')} + ${money(g.planSave)}/년</small></h3>
-    <div class="big2 num ${ahead > 0 ? 'down' : ahead < 0 ? 'up' : ''}">${aheadTxt}</div>
-    <div class="stats" style="margin-top:12px">
-      <div class="stat"><div class="t">계획상 지금 순자산</div><div class="v num">${planNow != null ? money(planNow) : '-'}</div><div class="h">${cur.y}년 ${cur.m}월 기준</div></div>
-      <div class="stat"><div class="t">실제와 차이</div><div class="v num ${planNow != null ? dir(cur.net - planNow) : ''}">${planNow != null ? signed(cur.net - planNow) : '-'}</div></div>
-      <div class="stat"><div class="t">계획 ${T / 1e8}억 달성</div><div class="v num">${plan.hitYear ?? '-'}년</div><div class="h">${plan.ends.length - 1}년 차</div></div>
-      <div class="stat"><div class="t">현재 추세 달성</div><div class="v num">${projHit != null ? idxYM(projHit)[0] + '년' : '-'}</div><div class="h">${projHit != null && plan.hitIdx != null ? (projHit > plan.hitIdx ? `계획보다 ${durText(projHit - plan.hitIdx)} 늦음` : `계획보다 ${durText(plan.hitIdx - projHit)} 빠름`) : ''}</div></div>
-    </div>
-    <p class="note">계획: ${g.planYear - 1}년 말 순자산 ${money(base)}${g.planBase == null ? '(첫 기록값)' : ''}에서 시작, 매년 × ${(1 + g.planRate).toFixed(2)} + ${money(g.planSave)}. 빠름/늦음 = 계획 곡선이 지금 순자산에 닿는 시점과 오늘의 차이.</p>
-  </section>
-
-  <section class="card"><h3>목표 진척도 <small>${pctPlain(pctDone, 1)}</small></h3>
-    <div class="prog"><i style="width:${pctDone * 100}%"></i></div>
-    <div class="flow-lg" style="margin-bottom:6px"><span>${money(cur.net)}</span><span>${T / 1e8}억</span></div>
-    ${MS.map(msRow).join('')}
-  </section>
+  <section class="card"><h3>중간 목표</h3>${MS.map(msRow).join('')}</section>
 
   <section class="card"><h3>목표 시뮬레이터 <button id="simReset" style="font-size:13px;color:var(--accent);font-weight:600">초기화</button></h3>
     <div class="rng"><div class="lab"><span>월 저축액</span><b class="num" id="simSaveV"></b></div><input type="range" id="simSave" min="0" max="20000000" step="100000"></div>
@@ -204,18 +187,11 @@ function viewAnalysis(){
     <div class="res" id="simRes"></div>
   </section>
 
-  <section class="card"><h3>FIRE · 배당 전환 시 <small>연 ${+(DR * 100).toFixed(2)}% · 배당소득세 15.4% 차감</small></h3>
+  <section class="card"><h3>FIRE · 배당으로 바꾸면 <small>연 ${+(DR * 100).toFixed(2)}% · 배당소득세 15.4%만 반영</small></h3>
     <div class="seg" id="segFire" style="margin-bottom:14px"><button data-v="fin">금융자산</button><button data-v="net">순자산 전체</button></div>
-    <div class="t" style="font-size:13px;color:var(--sub);font-weight:600">지금 ${useNet ? '순자산을 모두' : '금융자산을 모두'} 배당에 넣으면 매달</div>
+    <div class="label">${useNet ? '순자산' : '금융자산'} ${money(principal)} 기준 매달</div>
     <div class="big2 num" style="color:var(--saving);margin-top:4px">${money(divMonth)}</div>
-    <div class="stats" style="margin-top:12px">
-      <div class="stat"><div class="t">${useNet ? '순자산 원금' : '금융자산 원금'}</div><div class="v num">${money(principal)}</div>
-        <div class="h">${useNet ? `총자산 ${money(cur.total)} − 부채 ${money(cur.debt)}` : `금융투자 ${money(inv)} + 현금 ${money(cash)}`}</div></div>
-      <div class="stat"><div class="t">연 실수령 배당</div><div class="v num">${money(divYear)}</div><div class="h">원금 × ${+(DR * 100).toFixed(2)}% × ${+(DN * 100).toFixed(1)}%</div></div>
-      <div class="stat"><div class="t">월 지출 대비</div><div class="v num">${cover != null ? pctPlain(cover, 0) : '-'}</div><div class="h">최근 평균 지출 ${money(inp.expense)}</div></div>
-      <div class="stat"><div class="t">${money(T)} 달성 시 월 배당</div><div class="v num">${money(goalMonth)}</div><div class="h">목표액 전부 배당 가정</div></div>
-    </div>
-    <p class="note">${useNet ? '아파트를 팔고 대출을 모두 갚은 뒤 남는 돈 전부를 배당에 넣는 가정이에요. 매각 비용·양도세와 이후 주거비는 빠져 있어요.' : '부동산은 제외한 계산이에요.'} 퇴직금(퇴직연금)은 55세 전 인출에 제한이 있을 수 있어요.</p>
+    ${cover != null ? `<div class="heq num" style="border:0;padding:0;margin-top:4px">한 달 지출의 <b>${pctPlain(cover, 0)}</b> · ${T / 1e8}억 달성 시 매달 <b>${money(goalMonth)}</b></div>` : ''}
   </section>`;
   seg('#segFire', S.fireBase, v => { S.fireBase = v; LS.set('fireBase', v); const y = window.scrollY; render(); window.scrollTo(0, y); });
 
@@ -255,7 +231,7 @@ function viewAnalysis(){
     if (hit2 != null && projHit != null && changed){ const d = projHit - hit2; diff = d > 0 ? `현재 추세보다 <b class="down">${durText(d)} 단축</b>` : d < 0 ? `현재 추세보다 <b class="up">${durText(-d)} 지연</b>` : '현재 추세와 같아요'; }
     $('#simRes').innerHTML = `<div style="font-size:13px;color:var(--sub)">${T / 1e8}억 달성</div>
       <div class="big2 num" style="margin:2px 0">${hit2 != null ? ymText(hit2) : '60년 내 달성 어려워요'}</div>
-      <div style="font-size:13px;color:var(--sub)">${hit2 != null ? durText(p2.months) + ' 후' : ''}${diff ? ' · ' + diff : ''}${plan.hitIdx != null && hit2 != null ? ` · 계획(${plan.hitYear}년) 대비 ${hit2 > plan.hitIdx ? durText(hit2 - plan.hitIdx) + ' 늦음' : durText(plan.hitIdx - hit2) + ' 빠름'}` : ''}</div>`;
+      <div style="font-size:13px;color:var(--sub)">${hit2 != null ? durText(p2.months) + ' 후' : ''}${diff ? ' · ' + diff : ''}</div>`;
     if (anaChart){
       const d3 = anaChart.data.datasets[3];
       d3.data = lab.map(i => i >= curI && i - curI < p2.vals.length ? p2.vals[i - curI] : null);

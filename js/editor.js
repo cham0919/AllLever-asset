@@ -164,7 +164,7 @@ function editAssetMonth(m, bigSel){
     <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
     ${pv.has ? '<div class="echips"><button id="fillSame">빈 칸 모두 지난달 값으로</button></div>' : ''}
-    <div class="ecard">${mids.map(md => `<span class="tag">${esc(md)}</span>${its.filter(a => a.mid === md).map(rowH).join('')}`).join('') || '<p class="note" style="margin:0">항목이 없어요</p>'}
+    <div class="ecard">${mids.map(md => `<button class="tag mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리">${esc(md)} ›</button>${its.filter(a => a.mid === md).map(rowH).join('')}`).join('') || '<p class="note" style="margin:0">항목이 없어요</p>'}
       <button class="eadd" id="adA">+ ${big} 항목 추가</button></div>
     <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>
     <div class="ebar"><div class="t" id="fSum"></div><button class="btn" id="edSave">시트에 저장</button></div>`, {tall: true});
@@ -181,6 +181,7 @@ function editAssetMonth(m, bigSel){
   $('#ed').querySelectorAll('.eseg button').forEach(b => b.onclick = () => editAssetMonth(m, b.dataset.b));
   if (pv.has) $('#fillSame').onclick = () => { for (const a of list) if (V.get(a) == null && pv.val(a)) V.set(a, pv.val(a)); editAssetMonth(m, big); toast('빈 칸을 지난달 값으로 채웠어요 (모든 분류)'); };
   $('#adA').onclick = () => addAssetItem(m, big);
+  $('#ed').querySelectorAll('.mtag').forEach(b => b.onclick = () => midMenu(m, big, b.dataset.mid));
   $('#edX').onclick = () => { editAssetMonth.state = null; closeEd(); };
   $('#edSave').onclick = () => {
     if ([...$('#ed').querySelectorAll('.frow input')].some(i => Number.isNaN(parseWon(i.value)))) return toast('숫자가 아닌 칸이 있어요');
@@ -220,6 +221,43 @@ function addAssetItem(m, big){
     commit([{t: 'addA', y, big, mid, small}]);
     editAssetMonth.state = null; editAssetMonth(m, big);
   };
+}
+// 중분류 관리: 이름 바꾸기(속한 항목 모두), 삭제(다른 중분류로 옮기거나 항목까지 삭제)
+function midMenu(m, big, mid){
+  const y = S.year, Y = S.years[y], its = Y.assets.filter(a => a.big === big && a.mid === mid);
+  const months = its.reduce((n, a) => n + a.v.filter(v => v != null).length, 0);
+  // 같은 이름 항목이 여러 개일 수 있어서 뒤에서부터 (앞 항목의 순번이 바뀌지 않게)
+  const opsFor = (t, to) => its.map(a => ({a, idx: occ(Y.assets, a, aKey)})).reverse()
+    .map(({a, idx}) => t === 'delA' ? {t, y, big, mid, small: a.small, idx} : {t, y, big, mid, small: a.small, idx, to: {mid: to, small: a.small}});
+  const clash = to => its.some(a => findAsset(Y, big, to, a.small));
+  const others = assetMids(y, big).filter(x => x !== mid);
+  const ro = w => { const c = w.charCodeAt(w.length - 1) - 0xAC00, j = c >= 0 && c < 11172 ? c % 28 : 0; return j && j !== 8 ? '으로' : '로'; };   // '주식으로', '코인으로', '저축으로'
+  openEd(`<h4>중분류 · ${esc(mid)} <button class="ex" id="edX">뒤로</button></h4>
+    <div class="esub">${big} · 항목 ${its.length}개${months ? ` · 잔액 ${months}개월 입력됨` : ''}</div>
+    <div class="etitle">이름 바꾸기</div>
+    <input id="mmName" class="ememo" maxlength="20" value="${esc(mid)}" placeholder="중분류 이름">
+    <button class="btn" id="mmRen">이름 바꾸기</button>
+    <div class="etitle" style="margin-top:22px">삭제 · 항목을 옮길 중분류</div>
+    <div class="echips" id="mmTo"></div>
+    <button class="btn ghost" id="mmMove">항목을 위 중분류로 옮기고 삭제</button>
+    <button class="btn ghost danger" id="mmDel">항목까지 모두 삭제</button>`);
+  const mp = midPicker($('#mmTo'), others.length ? others : ['기타']);
+  const back = () => editAssetMonth(m, big);
+  $('#edX').onclick = back;
+  $('#mmRen').onclick = () => {
+    const to = $('#mmName').value.trim(); if (!to) return toast('중분류 이름을 넣어 주세요');
+    if (to === mid) return back();
+    if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
+    commit(opsFor('renA', to)); back(); };
+  $('#mmMove').onclick = async () => {
+    const to = mp.get(); if (!to || to === mid) return toast('옮길 중분류를 골라 주세요');
+    if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
+    if (!(await ask(`항목 ${its.length}개와 잔액은 '${to}'${ro(to)} 옮겨져요.`, {title: `'${mid}' 중분류를 삭제할까요?`, ok: '옮기고 삭제'}))) return;
+    commit(opsFor('renA', to)); back(); };
+  $('#mmDel').onclick = async () => {
+    if (!(await ask(`항목 ${its.length}개${months ? `와 입력된 잔액 ${months}개월이` : '가'} 함께 지워져요.`, {title: `'${mid}' 중분류를 모두 삭제할까요?`, ok: '모두 삭제', danger: true}))) return;
+    its.forEach(a => editAssetMonth.state?.val?.delete(a));
+    commit(opsFor('delA')); back(); };
 }
 // 자산 항목 고치기: 이름(소분류)·중분류 바꾸기, 삭제. 시트의 '자산관리' 줄을 그대로 고쳐요 (월별 잔액은 유지)
 function assetItemMenu(m, big, a){

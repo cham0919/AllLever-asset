@@ -251,10 +251,6 @@ main{padding:4px 16px calc(96px + env(safe-area-inset-bottom));max-width:640px;m
 .lg .p{color:var(--sub);font-size:13px;width:48px;text-align:right}
 .lg .a{font-weight:650;text-align:right;min-width:92px}
 
-.group{border-top:1px solid var(--line);padding-top:12px;margin-top:12px}
-.group:first-of-type{border-top:0;padding-top:0;margin-top:0}
-.gh{display:flex;justify-content:space-between;align-items:center;font-weight:700;margin-bottom:8px}
-.gh .tag{font-size:12px;font-weight:700;padding:3px 8px;border-radius:8px;background:var(--chip);color:var(--sub)}
 .row{display:flex;align-items:center;gap:10px;padding:7px 0}
 .row .n{flex:1;min-width:0}
 .row .n .memo{display:block;font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -386,10 +382,8 @@ nav.tabs button.on{color:var(--ink)}
 .balert.bad{background:var(--bad-soft);color:var(--bad-ink)}.balert.good{background:var(--good-soft);color:var(--good-ink)}
 .bedit{flex:none;background:var(--accent-soft);color:var(--accent);font-weight:700;border-radius:10px;padding:6px 10px;font-size:12.5px}
 .bedit{background:none;padding:2px 0;font-size:13px}
-.bkind{font-size:11.5px;color:var(--sub);font-weight:700;margin:10px 0 0}
 .bit{display:block;width:100%;text-align:left;padding:10px 0;background:var(--card)}
 .swrap{position:relative;overflow:hidden;border-top:1px solid var(--line);transition:max-height .2s,opacity .2s;max-height:200px}
-.bkind + .swrap{border-top:0}.bkind + .swrap .bit{padding-top:6px}
 .swrap > :not(.sdel){position:relative;z-index:1;touch-action:pan-y;transition:transform .2s cubic-bezier(.2,.8,.2,1);user-select:none;-webkit-user-select:none}
 .swrap .sdel{position:absolute;top:0;right:0;bottom:0;width:84px;background:var(--expense);color:#fff;font-weight:700;font-size:14px;visibility:hidden}
 .swrap.sw .sdel{visibility:visible}
@@ -400,10 +394,22 @@ nav.tabs button.on{color:var(--ink)}
 .bit .r1{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .bit .nm{font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:6px}
 .bit .am{font-size:13px;color:var(--sub)}.bit .am b{color:var(--ink);font-size:14px}
+.dk{padding:12px 0 6px;border-top:1px solid var(--line)}.dlist h3+.dk{border-top:0;padding-top:4px}
+.dkh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:2px}
+.dkh span{font-size:13px;font-weight:650;color:var(--sub);display:flex;align-items:center;gap:6px}
+.dkh span small{font-size:12px;font-weight:500;color:var(--faint)}
+.dkh b{font-size:19px;font-weight:800}
+.dit{padding:8px 0}.dit .n{font-size:15px;font-weight:600}.dit .a{font-size:15px;font-weight:700}
+.dch{font-size:11.5px;font-weight:650;padding:2px 7px;border-radius:99px;background:var(--chip);white-space:nowrap;flex:none}
+.dit .go{color:var(--faint);font-size:16px;margin-left:2px}
+.bit .nm{font-size:15.5px}.bit .lf{font-size:15.5px;font-weight:750}
+.bit .bsub{margin-top:5px;font-size:12px}
+.bfx{display:flex;align-items:center;gap:10px;padding:12px 0}
+.bfx .ck{width:22px;height:22px;border-radius:50%;border:1.5px solid var(--faint);display:grid;place-items:center;font-size:12px;font-weight:800;flex:none;color:#fff}
+.bfx.paid .ck{background:var(--accent);border-color:var(--accent)}
+.bfx .nm{flex:1;min-width:0;font-size:15px;font-weight:650}.bfx .nm small{font-size:12px;color:var(--sub);font-weight:500;margin-left:6px}
+.bfx .am{font-size:15px;font-weight:650;color:var(--ink)}.bfx.paid .nm,.bfx.paid .am{color:var(--sub)}
 .bsub{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--sub)}.bsub .up{color:var(--expense)}
-.btag{font-size:10.5px;font-weight:800;border-radius:6px;padding:2px 6px}
-.btag.t-ok,.btag.t-fit{background:var(--good-soft);color:var(--good-ink)}.btag.t-warn{background:var(--warn-soft);color:var(--warn-ink)}
-.btag.t-over{background:var(--bad-soft);color:var(--bad-ink)}.btag.t-done,.btag.t-plan{background:var(--chip);color:var(--sub)}
 .bempty{text-align:center;padding:26px 20px}.bempty b{font-size:17px}.bempty p{color:var(--sub);font-size:13.5px;margin:8px 0 16px}
 .bstrip{display:block;width:100%;text-align:left;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .bstrip .l{display:flex;justify-content:space-between;font-size:12.5px;color:var(--sub)}.bstrip .l b{color:var(--ink)}.bstrip .l b.up{color:var(--expense)}

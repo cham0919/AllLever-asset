@@ -188,21 +188,24 @@ function viewBud(){
     <div class="btrack"><i class="${bClass(r)}" style="width:${Math.min(r, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${Math.min(bs.okLine / bs.total, 1) * 100}%" data-l="적정선"></b>` : ''}</div>
     <div class="bmeta2"><span>${bs.unbAmt ? '예산 항목에서 ' : ''}쓴 돈 ${money(bs.spent)}</span><span>${bs.cur ? `남은 날 ${bs.left}일 (오늘 포함)` : bs.ended ? '지난 달' : '아직 시작 전'}</span></div>
     <div class="bg3 num">${g3.map(([k, v, c]) => `<div>${k}<b${c ? ` class="${c}"` : ''}>${v}</b></div>`).join('')}</div>${alert}</section>`;
-  const TAG = {ok: '여유', fit: '적정', warn: '주의', over: '초과', done: '완료', plan: '예정'};
-  const rowHtml = x => { const i = x.it, rr = i.amt / i.bud, idx = (S.model.budget[m] || []).indexOf(i);
-    let l = '', rt = '';
-    if (x.st === 'over'){ const subs = {}; for (const t of (S.model.tx[m] || []).filter(t => !t.skip && t.kind === i.kind && t.name === i.name)) subs[t.sub || '기타'] = (subs[t.sub || '기타'] || 0) + t.amt;
-      l = `<span class="up">${money(i.amt - i.bud)} 초과</span>`; rt = Object.entries(subs).sort((a, z) => z[1] - a[1]).slice(0, 2).map(([k, v]) => `${esc(k)} ${shortAmt(v)}`).join(' · '); }
-    else if (x.fixed) l = x.st === 'done' ? '이번 달 냈어요' : `남은 ${money(i.bud - i.amt)}`;
-    else { const d = i.amt - x.exp; l = bs.cur ? (Math.abs(d) < 1e4 ? '적정선에 맞게 쓰는 중' : d > 0 ? `적정선보다 ${money(d)} 더 씀` : `적정선보다 ${money(-d)} 덜 씀`) : `${Math.round(rr * 100)}% 사용`;
-      rt = `남은 ${money(i.bud - i.amt)}${bs.cur && bs.left ? ` · 하루 ${money((i.bud - i.amt) / bs.left)}` : ''}`; }
-    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit" data-bi="${idx}"><div class="r1"><span class="nm">${esc(i.name)} <span class="btag t-${x.st}">${TAG[x.st]}</span></span><span class="am num"><b>${money(i.amt)}</b> / ${money(i.bud)}</span></div>
-      <div class="btrack sm"><i class="${x.st === 'done' ? 'bf-done' : bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur && !x.fixed ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
-      <div class="bsub"><span>${l}</span><span>${rt}</span></div></button></div>`; };
-  const grp = k => { const R = bs.rows.filter(x => x.it.kind === k); return R.length ? `<div class="bkind">${k}</div>` + R.sort((a, z) => z.it.bud - a.it.bud).map(rowHtml).join('') : ''; };
-  const nAdd = budAddable(y, m).length;
-  html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${grp('변동비')}${grp('고정비')}
-    ${ed && nAdd ? '<button class="badd" data-act="budAdd">+ 예산 항목 추가</button>' : ''}</section>`;
+  // 변동비: 오른쪽에 남은 돈(넘으면 빨간 '넘음'), 넘은 항목부터. 고정비: 냈는지만 체크 목록으로
+  const L = S.model.budget[m] || [], ORD = {over: 0, warn: 1, fit: 2, ok: 3};
+  const left = i => i.amt > i.bud ? `<span class="up">${money(i.amt - i.bud)} 넘음</span>` : `${money(i.bud - i.amt)} 남음`;
+  const varRow = x => { const i = x.it, rr = i.amt / i.bud;
+    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit" data-bi="${L.indexOf(i)}">
+      <div class="r1"><span class="nm">${esc(i.name)}</span><span class="lf num">${left(i)}</span></div>
+      <div class="btrack sm"><i class="${bClass(rr)}" style="width:${Math.min(rr, 1) * 100}%"></i>${bs.cur ? `<b class="bpace" style="left:${bs.frac * 100}%"></b>` : ''}</div>
+      <div class="bsub num"><span>${money(i.amt)} 씀</span><span>예산 ${money(i.bud)}</span></div></button></div>`; };
+  const fixRow = x => { const i = x.it, paid = i.amt >= i.bud;
+    return `<div class="swrap"><button class="sdel" aria-label="${esc(i.name)} 예산 삭제">삭제</button><button class="bit bfx${paid ? ' paid' : ''}" data-bi="${L.indexOf(i)}">
+      <span class="ck" aria-label="${paid ? '냈어요' : '아직 안 냈어요'}">${paid ? '✓' : ''}</span><span class="nm">${esc(i.name)}${paid ? '' : `<small>${i.amt ? `${money(i.amt)} 냈어요` : '아직 안 냈어요'}</small>`}</span>
+      <span class="am num">${i.amt > i.bud ? `<span class="up">${money(i.amt - i.bud)} 넘음</span>` : money(i.bud)}</span></button></div>`; };
+  const V = bs.rows.filter(x => x.it.kind === '변동비').sort((a, z) => ORD[a.st] - ORD[z.st] || z.it.amt / z.it.bud - a.it.amt / a.it.bud);
+  const F = bs.rows.filter(x => x.it.kind === '고정비').sort((a, z) => (a.it.amt >= a.it.bud) - (z.it.amt >= z.it.bud) || z.it.bud - a.it.bud);
+  const nAdd = budAddable(y, m).length, nPaid = F.filter(x => x.it.amt >= x.it.bud).length;
+  html += `<section class="card"><h3>항목별 예산 ${ed ? '<button class="bedit" data-act="budEdit">편집 ›</button>' : ''}</h3>${V.map(varRow).join('')}
+    ${ed && nAdd ? '<button class="badd" data-act="budAdd">+ 예산 항목 추가</button>' : ''}</section>
+  ${F.length ? `<section class="card"><h3>고정비 <small>${F.length}개 중 ${nPaid}개 냈어요</small></h3>${F.map(fixRow).join('')}</section>` : ''}`;
   $('#view').innerHTML = html;
   $('#view').querySelectorAll('.swrap').forEach(w => { const el = w.querySelector('[data-bi]'), it = (S.model.budget[m] || [])[+el.dataset.bi];
     el.onclick = () => openItemTx(m, +el.dataset.bi);

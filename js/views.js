@@ -314,19 +314,21 @@ function viewBudget(){
   // 그 달에 0원인 항목(금액·거래 없음)은 숨겨요. 저장 대기 중인 항목과 '0원 항목 보기'를 켰을 때는 보여요
   const pendOf = i => S.queue.some(o => o.t === 'b' && o.y === S.year && o.m === m && o.kind === i.kind && o.name === i.name);
   const zero = i => !i.amt && !pendOf(i), nZero = b.items.filter(zero).length;
-  html += `<section class="card"><h3>상세 내역${TX ? ' <small>항목을 누르면 거래가 보여요</small>' : ed ? ' <small>항목을 누르면 고칠 수 있어요</small>' : ''}</h3>${KINDS.map(k=>{
-    const all = b.items.filter(i=>i.kind===k), its = S.showZero ? all : all.filter(i => !zero(i)); if (!all.length || (!its.length && !ed)) return '';
-    const tot = its.reduce((a,i)=>a+i.amt,0), color = k==='수입'?'--income':k==='고정비'?'--fixed':k==='저축'?'--saving':'--expense';
-    const max = Math.max(...its.map(i=>Math.abs(i.amt)),1);
+  // 구분마다 합계(+ 수입 대비 비중), 항목은 큰 금액부터 한 줄. 지난달보다 바뀐 항목에만 ▲▼
+  const KC = {'수입': '--income', '고정비': '--fixed', '변동비': '--expense', '저축': '--saving'};
+  let anyD = false;
+  const groups = KINDS.map(k=>{
+    const all = b.items.filter(i=>i.kind===k), its = (S.showZero ? all : all.filter(i => !zero(i))).slice().sort((a,z)=>z.amt-a.amt); if (!all.length || (!its.length && !ed)) return '';
+    const tot = its.reduce((a,i)=>a+i.amt,0);
     const prevMap = {}; pb.items.filter(i=>i.kind===k).forEach(i=>prevMap[i.name]=(prevMap[i.name]||0)+i.amt);
-    return `<div class="group"><div class="gh"><span><span class="tag">${k}</span></span><span class="num">${money(tot)}</span></div>
-      ${its.map(i=>{ const d = pb.has && prevMap[i.name]!=null ? i.amt - prevMap[i.name] : null;
-        const pend = pendOf(i);
-        return `<div class="row${ed || TX ? ' tap' : ''}${i.filled ? '' : ' unfilled'}"${ed || TX ? ` data-act="eb" data-k="${m}|${b.items.indexOf(i)}" role="button" tabindex="0"` : ''}><div class="n">${esc(i.name)}${pend ? '<span class="memo pend">저장 대기</span>' : i.memo?`<span class="memo">${esc(i.memo)}</span>`:''}
-          <div class="bar"><i style="width:${Math.abs(i.amt)/max*100}%;background:var(${color})"></i></div></div>
-          <div class="a num">${i.filled ? money(i.amt) : TX ? '-' : '입력 안 함'}${d && i.filled?`<span class="d ${dir(d)}">${signed(d)}</span>`:''}</div>${ed ? '<span class="pen" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>' : ''}</div>`;}).join('')}
+    return `<div class="dk"><div class="dkh"><span><i class="dot" style="background:var(${KC[k]})"></i>${k}${k !== '수입' && b.income > 0 ? `<small>수입의 ${pctPlain(tot / b.income, 0)}</small>` : ''}</span><b class="num">${money(tot)}</b></div>
+      ${its.map(i=>{ const d = pb.has && prevMap[i.name]!=null ? i.amt - prevMap[i.name] : null, pend = pendOf(i);
+        if (d && i.filled) anyD = true;
+        return `<div class="row dit${ed || TX ? ' tap' : ''}${i.filled ? '' : ' unfilled'}"${ed || TX ? ` data-act="eb" data-k="${m}|${b.items.indexOf(i)}" role="button" tabindex="0"` : ''}><div class="n">${esc(i.name)}${pend ? '<span class="memo pend">저장 대기</span>' : i.memo?`<span class="memo">${esc(i.memo)}</span>`:''}</div>
+          ${d && i.filled ? `<span class="dch ${dir(d)} num">${d > 0 ? '▲' : '▼'} ${money(Math.abs(d))}</span>` : ''}<div class="a num">${i.filled ? money(i.amt) : TX ? '-' : '입력 안 함'}</div>${ed ? '<span class="pen" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span>' : TX ? '<span class="go" aria-hidden="true">›</span>' : ''}</div>`;}).join('')}
       ${ed ? `<button class="eadd" data-act="addB" data-kind="${k}">+ ${k} 항목 추가</button>` : ''}</div>`;
-  }).join('')}${nZero ? `<button class="zt" data-act="zeroItems">${S.showZero ? '0원 항목 숨기기' : `0원 항목 ${nZero}개 보기`}</button>` : ''}</section>`;
+  }).join('');
+  html += `<section class="card dlist"><h3>상세 내역${anyD ? ' <small>▲▼ 지난달 대비</small>' : ''}</h3>${groups}${nZero ? `<button class="zt" data-act="zeroItems">${S.showZero ? '0원 항목 숨기기' : `0원 항목 ${nZero}개 보기`}</button>` : ''}</section>`;
   $('#view').innerHTML = html;
   donut('cFlow', ['고정비','변동비','저축','남은 돈'], [b.fixed,b.variable,b.save,Math.max(b.left,0)], [css('--fixed'),css('--expense'),css('--saving'),css('--faint')]);
   if (TX) statInto($('#rpStat'));

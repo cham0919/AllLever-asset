@@ -6,7 +6,7 @@ let edNoClose = false;
 function openEd(html, opt = {}){
   edNoClose = !!opt.noClose;
   const el = $('#ed'), was = el.classList.contains('on');
-  el.className = 'sheet ed page on' + (opt.tall ? ' tall' : '') + (was ? ' swap' : '');
+  el.className = 'sheet ed page on' + (opt.tall ? ' tall' : '') + (was ? ' swap' : '') + (was && edDir === 'back' ? ' back' : ''); edDir = null;
   el.innerHTML = `<div class="phead"><button class="pback" id="edBack"${edNoClose ? ' hidden' : ''}>‹ 뒤로</button><b id="edTitle"></b><span></span></div>` + html;
   const h = el.querySelector('h4'); if (h) $('#edTitle').textContent = (h.childNodes[0]?.textContent || '').trim();
   $('#edBack').onclick = goBack;
@@ -18,7 +18,9 @@ function closeEd(){
   if (S.tab === 'settings') syncSheet();
   if (!(S.tab === 'settings' && S.spage && S.spage !== 'main')) hPop();
 }
-const edBackAction = () => { const x = $('#edX'); x ? x.click() : closeEd(); };
+let edDir = null;   // 'back'이면 다음 화면 전환을 뒤로 가는 모양으로
+const edNested = () => ($('#edX')?.textContent || '').trim() === '뒤로';   // 편집 화면 안의 하위 화면 (뒤로 가면 상위 편집 화면)
+const edBackAction = () => { const x = $('#edX'); if (x){ if (edNested()) edDir = 'back'; x.click(); } else closeEd(); };
 /* 뒤로 가기: 화면을 열 때 브라우저 기록을 하나 쌓아서, 안드로이드 뒤로 버튼·사파리 뒤로 밀기·나중에 앱으로 감쌀 때도 같은 동작을 해요 */
 const H = {open: !!(history.state && history.state.alv), skip: false};   // 새로고침 전에 쌓인 기록이 남아 있으면 다음에 여는 화면이 그대로 써요
 function hPush(){ if (H.open) return; try { history.pushState({alv: 1}, ''); H.open = true; } catch(e){} }
@@ -34,12 +36,19 @@ window.addEventListener('popstate', () => { if (H.skip){ H.skip = false; return;
   const target = () => $('#ed').classList.contains('on') ? (edNoClose ? null : $('#ed')) : S.tab === 'settings' && S.spage && S.spage !== 'main' ? $('#sheet .spage.on') : null;
   document.addEventListener('touchstart', e => { x0 = null; if (e.touches.length > 1 || e.touches[0].clientX > 40) return; tgt = target(); if (!tgt) return;
     x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; dx = 0; drag = false; }, {passive: true});
+  let nested = false;
+  const move = (t, v, anim) => { if (nested){ t.classList.toggle('kanim', !!anim); t.style.setProperty('--kdx', v); } else { t.style.transition = anim ? 'transform .18s ease-out' : 'none'; t.style.transform = `translateX(${v})`; } };
+  const reset = t => { t.classList.remove('kdrag', 'kanim'); t.style.removeProperty('--kdx'); t.style.transition = ''; t.style.transform = ''; };
   document.addEventListener('touchmove', e => { if (x0 == null) return; dx = e.touches[0].clientX - x0; const dy = e.touches[0].clientY - y0;
-    if (!drag){ if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){ x0 = null; return; } if (dx < 10) return; drag = true; tgt.style.transition = 'none'; }
-    tgt.style.transform = `translateX(${Math.max(0, dx)}px)`; if (e.cancelable) e.preventDefault(); }, {passive: false});
+    if (!drag){ if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 8){ x0 = null; return; } if (dx < 10) return; drag = true;
+      nested = tgt.id === 'ed' && edNested(); if (nested) tgt.classList.add('kdrag'); }
+    move(tgt, Math.max(0, dx) + 'px'); if (e.cancelable) e.preventDefault(); }, {passive: false});
   const end = () => { if (x0 == null) return; x0 = null; const t = tgt;
-    if (drag && dx > 80){ t.style.transition = 'transform .18s ease-out'; t.style.transform = 'translateX(100%)'; setTimeout(() => { t.style.transition = ''; t.style.transform = ''; goBack(); }, 170); }
-    else { t.style.transition = ''; t.style.transform = ''; } drag = false; };
+    if (drag && dx > 80){
+      if (nested){ move(t, '40%', true); setTimeout(() => { reset(t); edBackAction(); }, 120); }   // 하위 화면 → 상위 편집 화면 (기록은 그대로)
+      else { move(t, '100%', true); setTimeout(() => { reset(t); goBack(); }, 170); }
+    } else reset(t);
+    drag = false; };
   document.addEventListener('touchend', end); document.addEventListener('touchcancel', end);
 })();
 function bindWon(inp, onChange){
@@ -242,19 +251,13 @@ function midMenu(m, big, mid){
   const opsFor = (t, to) => its.map(a => ({a, idx: occ(Y.assets, a, aKey)})).reverse()
     .map(({a, idx}) => t === 'delA' ? {t, y, big, mid, small: a.small, idx} : {t, y, big, mid, small: a.small, idx, to: {mid: to, small: a.small}});
   const clash = to => its.some(a => findAsset(Y, big, to, a.small));
-  const others = assetMids(y, big).filter(x => x !== mid);
-  const ro = w => { const c = w.charCodeAt(w.length - 1) - 0xAC00, j = c >= 0 && c < 11172 ? c % 28 : 0; return j && j !== 8 ? '으로' : '로'; };   // '주식으로', '코인으로', '저축으로'
   openEd(`<h4>중분류 · ${esc(mid)} <button class="ex" id="edX">뒤로</button></h4>
     <div class="esub">${big} · 항목 ${its.length}개${months ? ` · 잔액 ${months}개월 입력됨` : ''}</div>
     <div class="etitle">이름 바꾸기</div>
     <input id="mmName" class="ememo" maxlength="20" value="${esc(mid)}" placeholder="중분류 이름">
     <button class="btn" id="mmRen">이름 바꾸기</button>
     ${big !== '부채' ? '<div class="etitle" style="margin-top:22px">홈 묶음</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
-    <div class="etitle" style="margin-top:22px">삭제 · 항목을 옮길 중분류</div>
-    <div class="echips" id="mmTo"></div>
-    <button class="btn ghost" id="mmMove">항목을 위 중분류로 옮기고 삭제</button>
-    <button class="btn ghost danger" id="mmDel">항목까지 모두 삭제</button>`);
-  const mp = midPicker($('#mmTo'), others.length ? others : ['기타']);
+    <button class="btn ghost danger" id="mmDel" style="margin-top:22px">중분류 삭제</button>`);
   const back = () => editAssetMonth(m, big);
   const hp = homePicker($('#mmHome'), big, mid);
   $('#mmHome').addEventListener('click', e => { if (!e.target.closest('button')) return; setMidHome(big, mid, hp.get()); haptic(); toast(`'${mid}'은(는) 홈의 ${HOME_KEYS[hp.get()]}에 들어가요`); render(); });
@@ -265,13 +268,9 @@ function midMenu(m, big, mid){
     if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
     if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}));   // 이름을 바꿔도 홈 묶음은 그대로
     commit(opsFor('renA', to)); back(); };
-  $('#mmMove').onclick = async () => {
-    const to = mp.get(); if (!to || to === mid) return toast('옮길 중분류를 골라 주세요');
-    if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
-    if (!(await ask(`항목 ${its.length}개와 잔액은 '${to}'${ro(to)} 옮겨져요.`, {title: `'${mid}' 중분류를 삭제할까요?`, ok: '옮기고 삭제'}))) return;
-    commit(opsFor('renA', to)); back(); };
   $('#mmDel').onclick = async () => {
-    if (!(await ask(`항목 ${its.length}개${months ? `와 입력된 잔액 ${months}개월이` : '가'} 함께 지워져요.`, {title: `'${mid}' 중분류를 모두 삭제할까요?`, ok: '모두 삭제', danger: true}))) return;
+    const names = its.map(a => a.small).join(', ');
+    if (!(await ask(`이 중분류에 속한 항목 ${its.length}개가 모두 삭제돼요.\n(${names})${months ? `\n\n입력된 잔액 ${months}개월도 함께 지워지고 되돌릴 수 없어요.` : '\n\n되돌릴 수 없어요.'}`, {title: `'${mid}' 중분류를 삭제할까요?`, ok: '모두 삭제', danger: true}))) return;
     its.forEach(a => editAssetMonth.state?.val?.delete(a));
     commit(opsFor('delA')); back(); };
 }

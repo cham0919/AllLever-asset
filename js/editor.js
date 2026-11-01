@@ -181,7 +181,7 @@ function editAssetMonth(m, bigSel){
   openEd(`<h4>${m}월 말 잔액 <button class="ex" id="edX">닫기</button></h4>
     <div class="esub">${y}년 · 매월 말 기준 잔액${big === '부채' ? ' (부채는 남은 금액을 양수로)' : ''}</div>
     <div class="eseg">${BIGS.map(b => `<button data-b="${b}"${b === big ? ' class="on"' : ''}>${b}</button>`).join('')}</div>
-    ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? (homeGroupOf({big, mid: md}) ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})]}</span>` : '<span class="hg need">묶음 필요</span>') : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
+    ${mids.map(md => `<div class="agrp"><button class="agh mtag" data-mid="${esc(md)}" aria-label="중분류 ${esc(md)} 관리"><b>${esc(md)}</b>${big !== '부채' ? (homeGroupOf({big, mid: md}) ? `<span class="hg">${HOME_KEYS[homeGroupOf({big, mid: md})]}</span>` : '<span class="hg none">없음</span>') : ''}<em class="num" data-sum="${esc(md)}"></em><i>›</i></button>
       <div class="agb">${its.filter(a => a.mid === md).map(rowH).join('')}</div></div>`).join('') || '<div class="ecard"><p class="note" style="margin:0">항목이 없어요</p></div>'}
     <button class="eadd agadd" id="adA">+ ${big} 항목 추가</button>
     <div class="ecard"><div class="kv"><span>순자산 (입력 반영)</span><b class="num" id="aNet"></b></div><div class="kv"><span>전월 대비</span><b class="num" id="aDiff"></b></div></div>
@@ -222,7 +222,7 @@ function midPicker(el, mids, cur, onChange){
   };
   draw(); return {get: () => mid};
 }
-// 묶음(금융투자·현금·부동산) 고르기. 다시 누르면 선택 해제. 부채는 묶음이 없어요
+// 분류(금융투자·현금·부동산) 고르기. 다시 누르면 선택 해제. 부채는 분류가 없어요
 function homePicker(el, big, mid, onChange){
   if (big === '부채'){ el.hidden = true; return {get: () => null, set(){}}; }
   let g = homeGroupOf({big, mid});
@@ -231,15 +231,15 @@ function homePicker(el, big, mid, onChange){
   draw();
   return {get: () => g, set(m2){ g = homeGroupOf({big, mid: m2}); draw(); }};
 }
-// 묶음을 고르지 않으면 홈 대시보드에 표시되지 않는다고 알려요 (계속하면 true)
+// 분류를 고르지 않으면 홈 대시보드에 표시되지 않는다고 알려요 (계속하면 true)
 const groupNotice = (big, g, ok = '그대로 저장', cancel = '선택하기', hint = '') => big === '부채' || g ? Promise.resolve(true)
-  : ask('묶음을 선택하지 않으면 홈 대시보드의 금융투자·현금·부동산 어디에도 표시되지 않아요.' + hint, {title: '묶음을 선택하지 않았어요', ok, cancel});
+  : ask('분류를 선택하지 않으면 홈 대시보드의 금융투자·현금·부동산 어디에도 표시되지 않아요.' + hint, {title: '분류를 선택하지 않았어요', ok, cancel});
 function addAssetItem(m, big){
   const y = S.year, mids = assetMids(y, big);
   openEd(`<h4>${big} 항목 추가 <button class="ex" id="edX">취소</button></h4>
     <div class="esub">'자산관리' 시트의 ${big} 맨 아래(합계에 포함되는 위치)에 추가돼요</div>
     <div class="etitle">중분류</div><div class="echips" id="adMid"></div>
-    ${big !== '부채' ? '<div class="etitle">묶음</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
+    ${big !== '부채' ? '<div class="etitle">분류</div><div class="echips" id="adHome"></div>' : '<div id="adHome"></div>'}
     <input id="adName" class="ememo" maxlength="30" placeholder="항목 이름 (예: 토스증권, ISA)" autofocus>
     <button class="btn" id="edSave">추가</button>`);
   const hp = homePicker($('#adHome'), big, mids[0]), mp = midPicker($('#adMid'), mids, null, md => hp.set(md));
@@ -263,21 +263,21 @@ function midMenu(m, big, mid){
   const clash = to => its.some(a => findAsset(Y, big, to, a.small));
   openEd(`<h4>중분류 · ${esc(mid)} <button class="ex" id="edX">뒤로</button></h4>
     <div class="esub">${big} · 항목 ${its.length}개${months ? ` · 잔액 ${months}개월 입력됨` : ''}</div>
-    ${big !== '부채' ? '<div class="etitle">묶음</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
+    ${big !== '부채' ? '<div class="etitle">분류</div><div class="echips" id="mmHome"></div>' : '<div id="mmHome"></div>'}
     <div class="etitle"${big !== '부채' ? ' style="margin-top:18px"' : ''}>이름 바꾸기</div>
     <input id="mmName" class="ememo" maxlength="20" value="${esc(mid)}" placeholder="중분류 이름">
     <button class="btn" id="mmRen">이름 바꾸기</button>
-    <button class="btn ghost danger" id="mmDel" style="margin-top:22px">중분류 삭제</button>`);
+    <button class="btn ghost danger" id="mmDel" style="margin-top:8px">중분류 삭제</button>`);
   const back = () => editAssetMonth(m, big);
   const hp = homePicker($('#mmHome'), big, mid, async g => {   // 고르면 바로 저장
     setMidHome(big, mid, g || 'none'); haptic(); render();
-    if (g) toast(`'${mid}' 묶음: ${HOME_KEYS[g]}`); else await groupNotice(big, g, '확인', ''); });
+    if (g) toast(`'${mid}' 분류: ${HOME_KEYS[g]}`); else await groupNotice(big, g, '확인', ''); });
   $('#edX').onclick = back;
   $('#mmRen').onclick = () => {
     const to = $('#mmName').value.trim(); if (!to) return toast('중분류 이름을 넣어 주세요');
     if (to === mid) return back();
     if (clash(to)) return toast(`'${to}'에 같은 이름의 항목이 있어요`);
-    if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}) || 'none');   // 이름을 바꿔도 묶음은 그대로
+    if (big !== '부채') setMidHome(big, to, homeGroupOf({big, mid}) || 'none');   // 이름을 바꿔도 분류는 그대로
     commit(opsFor('renA', to)); back(); };
   $('#mmDel').onclick = async () => {
     const names = its.map(a => a.small).join(', ');
@@ -301,7 +301,7 @@ function assetItemMenu(m, big, a){
     const small = $('#aiName').value.trim(), mid = mp.get(); if (!small) return toast('항목 이름을 넣어 주세요');
     if (small === a.small && mid === a.mid) return editAssetMonth(m, big);
     if (findAsset(Y, big, mid, small)) return toast('같은 항목이 이미 있어요');
-    if (mid !== a.mid && !(await groupNotice(big, homeGroupOf({big, mid}), '그대로 옮기기', '취소', `\n\n옮긴 뒤 잔액 입력 화면에서 '${mid}' 이름을 눌러 묶음을 정할 수 있어요.`))) return;
+    if (mid !== a.mid && !(await groupNotice(big, homeGroupOf({big, mid}), '그대로 옮기기', '취소', `\n\n옮긴 뒤 잔액 입력 화면에서 '${mid}' 이름을 눌러 분류를 정할 수 있어요.`))) return;
     commit([{t: 'renA', y, big, mid: a.mid, small: a.small, idx, to: {mid, small}}]);
     editAssetMonth(m, big);
   };

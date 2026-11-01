@@ -6,7 +6,7 @@ from openpyxl.chart import PieChart, BarChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.chart.series import SeriesLabel
 from openpyxl.worksheet.datavalidation import DataValidation
-from openpyxl.formatting.rule import FormulaRule
+from openpyxl.formatting.rule import FormulaRule, CellIsRule
 from openpyxl.utils import get_column_letter as L
 
 FONT = "맑은 고딕"
@@ -106,7 +106,7 @@ cl = lambda k: L(RC + k)                     # 오른쪽 블록 k번째 열 글�
 TXR = lambda k: f"${cl(k)}${TX0}:${cl(k)}${TX_END}"   # 거래 내역 k열 범위
 SUBS = {"생활비": "식비, 카페, 장보기, 교통, 쇼핑, 생활용품, 경조사", "주거비": "월세, 대출이자", "통신": "휴대폰, 인터넷",
         "의료비": "병원, 약국", "기타": "여행, 선물, 교육", "기타수입": "이자, 환급, 중고판매"}
-CALAMT = '#,##0;-#,##0;""'
+CALAMT = '+#,##0;-#,##0;""'   # 날짜별 합계: 수입은 +, 지출·저축은 −
 WEEK = ["일", "월", "화", "수", "목", "금", "토"]
 SUN = "DC2626"; SAT = "2563EB"; CALBG = "F9FAFB"; TODAY = "DBEAFE"
 for m in range(1, 13):
@@ -117,8 +117,8 @@ for m in range(1, 13):
     rngA = f"$A${T0}:$A${T_END}"; rngC = f"$C${T0}:$C${T_END}"; rngF = f"$E${T0}:$E${T_END}"
 
     # ── 달력 보조값 (숨김 서식): 연도 · 날짜 수 · 1일 요일 칸 ──
-    ws.cell(CAL_T, 1, "달력 · 날짜별 지출").font = f(True, 12)
-    ws.cell(CAL_T, 3, "고정비·변동비만 더해요 (수입·저축 제외)").font = f(False, 9, SUB)
+    ws.cell(CAL_T, 1, "달력 · 날짜별 합계").font = f(True, 12)
+    ws.cell(CAL_T, 3, "수입 +, 지출·저축 −").font = f(False, 9, SUB)
     for col, fm in ((5, "=설정!$B$4"), (6, f"=DAY(EOMONTH(DATE($E${CAL_T},{m},1),0))"), (7, f"=WEEKDAY(DATE($E${CAL_T},{m},1))-1")):
         c = ws.cell(CAL_T, col, fm); c.number_format = ";;;"; c.font = f(False, 8, SUB)
     YR, ND, OFF = f"$E${CAL_T}", f"$F${CAL_T}", f"$G${CAL_T}"
@@ -148,12 +148,15 @@ for m in range(1, 13):
         for k in range(7):
             n = w * 7 + k + 1; col = L(1 + k)
             d = ws.cell(dr, 1 + k, f'=IF(AND({n}-{OFF}>=1,{n}-{OFF}<={ND}),{n}-{OFF},"")')
-            d.font = f(False, 9, SUN if k == 0 else SAT if k == 6 else SUB); d.fill = PatternFill("solid", fgColor=CALBG)
+            d.font = f(True, 10, SUN if k == 0 else SAT if k == 6 else INK); d.fill = PatternFill("solid", fgColor=CALBG); d.number_format = "0"
             d.alignment = Alignment(horizontal="left", vertical="top"); d.border = Border(top=thin, left=thin, right=thin)
-            a = ws.cell(ar, 1 + k, f'=IF({col}{dr}="","",SUMIFS({TXR(4)},{TXR(0)},{col}{dr},{TXR(1)},"고정비")+SUMIFS({TXR(4)},{TXR(0)},{col}{dr},{TXR(1)},"변동비"))')
+            S_ = lambda kind: f'SUMIFS({TXR(4)},{TXR(0)},{col}{dr},{TXR(1)},"{kind}")'
+            a = ws.cell(ar, 1 + k, f'=IF({col}{dr}="","",{S_("수입")}-{S_("고정비")}-{S_("변동비")}-{S_("저축")})')
             a.font = f(True, 10); a.number_format = CALAMT; a.alignment = Alignment(horizontal="right", vertical="center")
             a.border = Border(bottom=thin, left=thin, right=thin)
         ws.row_dimensions[ar].height = 22
+        ws.conditional_formatting.add(f"A{ar}:G{ar}", CellIsRule(operator="greaterThan", formula=["0"], font=Font(bold=True, color=ACC)))   # 수입이 많은 날 파랑
+        ws.conditional_formatting.add(f"A{ar}:G{ar}", CellIsRule(operator="lessThan", formula=["0"], font=Font(bold=True, color=SUN)))     # 쓴 날 빨강
         for rr in (dr, ar):   # 오늘 칸 강조
             ws.conditional_formatting.add(f"A{rr}:G{rr}", FormulaRule(formula=[f'AND(A${dr}<>"",DATE({YR},{m},A${dr})=TODAY())'],
                                                                       fill=PatternFill("solid", fgColor=TODAY, bgColor=TODAY)))

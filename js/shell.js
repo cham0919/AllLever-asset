@@ -203,7 +203,7 @@ function syncSheet(){
 // 앱 버전 = sw.js의 SHELL 이름 끝 (예: alv-shell-v40 → v40). 버전은 sw.js 한 곳에서만 올려요
 const appVersion = () => window.ALV_APP_VERSION ? Promise.resolve(window.ALV_APP_VERSION) : (window.caches ? caches.keys() : Promise.resolve([])).then(ks => (ks.find(k => /^alv-shell-v\d+$/.test(k)) || '').replace('alv-shell-', '') || '-').catch(() => '-');
 function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
-  S.spage = key; if (key !== 'main') hPush(); else if (!$('#ed').classList.contains('on')) hPop();
+  S.spage = key; if (key === 'noti' && NATIVE){ notiAsked = false; notiSoon(); } if (key !== 'main') hPush(); else if (!$('#ed').classList.contains('on')) hPop();
   $('#sheet').querySelectorAll('.spage').forEach(p => { const on = p.dataset.page === key; p.classList.toggle('on', on); p.classList.toggle('back', on && !!back); });
   window.scrollTo(0, 0);
 }

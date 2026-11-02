@@ -116,12 +116,12 @@ function lockInit(){
 
 /* ───────── 알림 (휴대폰 안에서 예약하는 알림 · 서버 없음) ───────── */
 const notiCfg = () => Object.assign({daily: false, time: '21:00'}, LS.get('noti', {}));
-const NOTI_SKIP_TODAY = false;   // 임시(알림 테스트): 입력한 날도 울리게. 테스트 끝나면 true로
+const NOTI_SKIP_TODAY = true;   // 그날 앱에서 입력했으면 그날 알림은 건너뛰어요
 const NOTI_IDS = n => n >= 1000 && n < 4000;
 let notiT = null;
 function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(e => { notiState = {err: e?.message || String(e)}; notiShow(); }), 1200); }
 // 설정 › 알림에 실제로 예약된 다음 알림을 보여줘요 (예약이 안 됐으면 이유를)
-let notiState = null;
+let notiState = null, notiAsked = false;
 const fmtNoti = d => { const t = new Date(), k = (d - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5;
   const day = k < 1 ? '오늘' : k < 2 ? '내일' : `${d.getMonth() + 1}월 ${d.getDate()}일`, h = d.getHours();
   return `${day} ${h < 12 ? '오전' : '오후'} ${(h % 12) || 12}:${String(d.getMinutes()).padStart(2, '0')}`; };
@@ -137,7 +137,10 @@ async function notiSchedule(){
   const pend = await LN.getPending().catch(() => ({notifications: []}));
   const mine = (pend.notifications || []).filter(n => NOTI_IDS(n.id)).map(n => ({id: n.id}));
   if (mine.length) await LN.cancel({notifications: mine}).catch(() => {});
-  if (perm.display !== 'granted' || !c.daily){ notiState = c.daily ? {perm: true} : null; notiShow(); return; }
+  if (perm.display !== 'granted' || !c.daily){
+    notiState = c.daily ? {perm: true} : null; notiShow();
+    if (c.daily && S.tab === 'settings' && S.spage === 'noti' && !notiAsked){ notiAsked = true; notiAskSettings(); }
+    return; }
   const now = new Date(), list = [], at = (d, h, mi) => { const x = new Date(d); x.setHours(h, mi, 0, 0); return x; };
   if (c.daily){   // 기록 알림: 앞으로 14일, 오늘 이미 입력했으면 오늘은 건너뛰어요
     const [h, mi] = c.time.split(':').map(Number), today = NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now);
@@ -150,12 +153,17 @@ async function notiSchedule(){
   notiState = {pending: (after.notifications || []).filter(n => NOTI_IDS(+n.id)).length, next: list[0]?.schedule.at, skip: NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now)};
   notiShow();
 }
+// 알림이 꺼져 있으면: 휴대폰 설정 › 머니머슬 › 알림으로 바로 가는 창
+async function notiAskSettings(){
+  const go = await ask('휴대폰 설정에서 머니머슬 알림을 허용해 주세요.', {title: '알림이 꺼져 있어요', ok: '설정으로 이동', cancel: '닫기'});
+  if (go) nativePlugin('AppSettings')?.open({page: 'notifications'}).catch(() => toast('설정 앱에서 머니머슬 › 알림을 켜 주세요'));
+}
 async function notiToggle(key){
   const c = notiCfg(), LN = nativePlugin('LocalNotifications');
   if (!c[key]){   // 켤 때: 처음이면 알림 허용 질문
     let p = await LN.checkPermissions().catch(() => ({}));
     if (p.display !== 'granted') p = await holdLock(() => LN.requestPermissions()).catch(() => ({}));
-    if (p.display !== 'granted') return ask('알림이 꺼져 있어요. 휴대폰 설정 → 머니머슬 → 알림에서 허용해 주세요.', {cancel: ''});
+    if (p.display !== 'granted') return notiAskSettings();
   }
   c[key] = !c[key]; LS.set('noti', c); haptic(); syncSheet(); notiSoon();
 }

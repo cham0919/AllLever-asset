@@ -12,6 +12,7 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(WebAuthPlugin())
         bridge?.registerPluginInstance(BiometricPlugin())
         bridge?.registerPluginInstance(SecureStorePlugin())
+        bridge?.registerPluginInstance(AppSettingsPlugin())
         let nc = NotificationCenter.default
         nc.addObserver(self, selector: #selector(hideContent), name: UIApplication.willResignActiveNotification, object: nil)
         nc.addObserver(self, selector: #selector(showContent), name: UIApplication.didBecomeActiveNotification, object: nil)
@@ -90,6 +91,24 @@ public class SecureStorePlugin: CAPPlugin, CAPBridgedPlugin {
 
 // 앱 잠금: 기기의 Face ID·Touch ID (실패하면 기기 암호). 얼굴·지문 정보는 앱이 받지 않고 성공/실패만 받아요.
 @objc(BiometricPlugin)
+// 아이폰 설정 › 머니머슬 (알림) 화면 열기
+public class AppSettingsPlugin: CAPPlugin, CAPBridgedPlugin {
+    public let identifier = "AppSettingsPlugin"
+    public let jsName = "AppSettings"
+    public let pluginMethods: [CAPPluginMethod] = [
+        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise)
+    ]
+
+    @objc func open(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            var s = UIApplication.openSettingsURLString
+            if call.getString("page") == "notifications", #available(iOS 16.0, *) { s = UIApplication.openNotificationSettingsURLString }
+            guard let url = URL(string: s) else { call.reject("설정을 열 수 없어요"); return }
+            UIApplication.shared.open(url) { ok in ok ? call.resolve() : call.reject("설정을 열 수 없어요") }
+        }
+    }
+}
+
 public class BiometricPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "BiometricPlugin"
     public let jsName = "Biometric"

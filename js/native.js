@@ -115,18 +115,18 @@ function lockInit(){
 }
 
 /* ───────── 알림 (휴대폰 안에서 예약하는 알림 · 서버 없음) ───────── */
-const notiCfg = () => Object.assign({daily: false, time: '21:00', reps: false, monthEnd: false, amounts: false}, LS.get('noti', {}));
+const notiCfg = () => Object.assign({daily: false, time: '21:00'}, LS.get('noti', {}));
 const NOTI_IDS = n => n >= 1000 && n < 4000;
 let notiT = null;
 function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(() => {}), 1200); }
 const ymdKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 async function notiSchedule(){
   const LN = nativePlugin('LocalNotifications'); if (!LN) return;
-  const c0 = notiCfg(), c = {...c0, daily: c0.daily && S.use.ledger, reps: c0.reps && S.use.ledger, monthEnd: c0.monthEnd && S.use.asset}, perm = await LN.checkPermissions().catch(() => ({}));
+  const c0 = notiCfg(), c = {...c0, daily: c0.daily && S.use.ledger}, perm = await LN.checkPermissions().catch(() => ({}));
   const pend = await LN.getPending().catch(() => ({notifications: []}));
   const mine = (pend.notifications || []).filter(n => NOTI_IDS(n.id)).map(n => ({id: n.id}));
   if (mine.length) await LN.cancel({notifications: mine}).catch(() => {});
-  if (perm.display !== 'granted' || !(c.daily || c.reps || c.monthEnd)) return;
+  if (perm.display !== 'granted' || !c.daily) return;
   const now = new Date(), list = [], at = (d, h, mi) => { const x = new Date(d); x.setHours(h, mi, 0, 0); return x; };
   if (c.daily){   // 기록 알림: 앞으로 14일, 오늘 이미 입력했으면 오늘은 건너뛰어요
     const [h, mi] = c.time.split(':').map(Number), today = LS.get('lastInput', '') === ymdKey(now);
@@ -134,31 +134,11 @@ async function notiSchedule(){
       if (t <= now || (i === 0 && today)) continue;
       list.push({id: 1000 + i, title: '머니머슬', body: '오늘 쓴 돈을 기록해 볼까요?', schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'budget'}}); }
   }
-  if (c.reps){   // 반복 거래: 이번 달·다음 달 날짜 아침 9시
-    let k = 0;
-    for (let i = 0; i < 2; i++){
-      const d0 = new Date(now.getFullYear(), now.getMonth() + i, 1), y = d0.getFullYear(), m = d0.getMonth() + 1, Y = S.years?.[y];
-      if (!Y?.txMode) continue;
-      for (const r of Y.reps?.[m] || []){
-        const t = at(new Date(y, m - 1, Math.min(r.day, daysIn(y, m))), 9, 0); if (t <= now || k >= 40) continue;
-        const what = r.memo && r.memo !== '반복' ? r.memo : r.name;
-        const ga = /[가-힣]$/.test(what) && (what.charCodeAt(what.length - 1) - 0xAC00) % 28 ? '이' : '가';   // 받침 있으면 '이'
-        list.push({id: 2000 + k++, title: '오늘 반복 거래가 있어요', body: c.amounts && r.amt ? `${what} ${money(r.amt)}이 가계부에 들어가요` : `${what}${ga} 가계부에 들어가요`,
-          schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'budget'}});
-      }
-    }
-  }
-  if (c.monthEnd){   // 월말 정리: 이번 달·다음 달 마지막 날 저녁 8시
-    for (let i = 0; i < 2; i++){
-      const t = at(new Date(now.getFullYear(), now.getMonth() + i + 1, 0), 20, 0); if (t <= now) continue;
-      list.push({id: 3000 + i, title: '이번 달 정리할 때예요', body: '이번 달 말 자산 잔액을 입력해 주세요', schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'asset'}});
-    }
-  }
   if (list.length) await LN.schedule({notifications: list});
 }
 async function notiToggle(key){
   const c = notiCfg(), LN = nativePlugin('LocalNotifications');
-  if (!c[key] && key !== 'amounts'){   // 켤 때: 처음이면 알림 허용 질문
+  if (!c[key]){   // 켤 때: 처음이면 알림 허용 질문
     let p = await LN.checkPermissions().catch(() => ({}));
     if (p.display !== 'granted') p = await holdLock(() => LN.requestPermissions()).catch(() => ({}));
     if (p.display !== 'granted') return ask('알림이 꺼져 있어요. 휴대폰 설정 → 머니머슬 → 알림에서 허용해 주세요.', {cancel: ''});
@@ -193,14 +173,14 @@ function syncNativeSheet(){
   const L = lockCfg(), N = notiCfg();
   $('#svLock').textContent = L.on ? `켜짐 · ${L.delay ? L.delay / 60 + '분 후' : '바로'}` : '꺼짐';
   const U = S.use;
-  $('#svNoti').textContent = [U.ledger && N.daily && '기록', U.ledger && N.reps && '반복 거래', U.asset && N.monthEnd && '월말'].filter(Boolean).join(' · ') || '꺼짐';
+  $('#svNoti').textContent = U.ledger && N.daily ? '기록' : '꺼짐';
   $('#lkName').textContent = `${lockName()}로 잠금`;
   $('#lkOn').setAttribute('aria-checked', L.on); $('#lkDelay').hidden = !L.on;
   $('#lkDelay').querySelectorAll('[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === L.delay));
-  for (const k of ['daily', 'reps', 'monthEnd', 'amounts']) $('#nt-' + k).setAttribute('aria-checked', N[k]);
+  for (const k of ['daily']) $('#nt-' + k).setAttribute('aria-checked', N[k]);
   $('#ntTime').hidden = !N.daily;
   $('#ntDailyH').hidden = $('#nt-daily').parentElement.hidden = !U.ledger;   // 끈 기능의 알림은 숨기고 예약도 안 해요
-  $('#nt-reps').hidden = !U.ledger; $('#nt-monthEnd').hidden = !U.asset; $('#ntTimeV').textContent = N.time.replace(/^(\d+):(\d+)$/, (_, h, m) => `${+h < 12 ? '오전' : '오후'} ${(+h % 12) || 12}:${m}`);
+  $('#ntTimeV').textContent = N.time.replace(/^(\d+):(\d+)$/, (_, h, m) => `${+h < 12 ? '오전' : '오후'} ${(+h % 12) || 12}:${m}`);
 }
 function nativeInit(){
   if (!NATIVE) return;
@@ -209,7 +189,7 @@ function nativeInit(){
   lockInit();
   $('#lkOn').onclick = () => lockToggle();
   $('#lkDelay').querySelectorAll('[data-d]').forEach(b => b.onclick = () => { LS.set('lock', {...lockCfg(), delay: +b.dataset.d}); haptic(); syncSheet(); });
-  for (const k of ['daily', 'reps', 'monthEnd', 'amounts']) $('#nt-' + k).onclick = () => notiToggle(k);
+  for (const k of ['daily']) $('#nt-' + k).onclick = () => notiToggle(k);
   $('#ntTime').onclick = () => notiTime();
   $('#btnFile').addEventListener('click', () => holdLock(() => new Promise(ok => {   // 파일 고르는 동안 (고르거나 닫으면 끝)
     const fi = $('#fileInput'); fi.addEventListener('change', ok, {once: true}); fi.addEventListener('cancel', ok, {once: true}); setTimeout(ok, 120000); })), true);

@@ -1,7 +1,7 @@
 {
   "name": "moneymuscle-app",
   "private": true,
-  "version": "1.0.47",
+  "version": "1.0.48",
   "description": "머니머슬 - 가계부, 자산관리 (웹앱을 아이폰·안드로이드 앱으로 감싸는 프로젝트)",
   "scripts": {
     "build:web": "node tools/build-www.mjs",
@@ -20,6 +20,7 @@
     "@capacitor/filesystem": "^8.1.5",
     "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.6.0",
+    "@capacitor/keyboard": "^8.0.6",
     "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/share": "^8.0.3"
   }

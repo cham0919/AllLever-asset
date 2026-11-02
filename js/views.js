@@ -169,7 +169,7 @@ function viewAnalysis(){
     <div class="kv grate"><span>연평균 수익률 <small>저축 제외 · ${inp.rateMonths}개월</small></span><b class="num ${dir(inp.rate)}">${pct(inp.rate, 1)}</b></div>
   </section>
 
-  ${gap != null ? `<section class="card gplan"><h3>계획 대비 <small>연 ${pct(g.planRate, 0).replace('+', '')} · 매년 ${money(g.planSave)}</small></h3>
+  ${gap != null ? `<section class="card gplan"><h3>계획 대비 <small>연 ${+(g.planRate * 100).toFixed(2)}% · 매년 ${money(g.planSave)}</small></h3>
     <div class="gbig num ${gap >= 0 ? 'down' : 'up'}">${money(Math.abs(gap))} ${gap >= 0 ? '앞서요' : '부족해요'}</div>
     <div class="kv"><span>계획상 지금</span><b class="num">${money(planNow)}</b></div>
     ${plan.hitYear ? `<div class="kv"><span>${T / 1e8}억 달성</span><b class="num">계획 ${plan.hitYear}년 → 예상 ${projHit != null ? idxYM(projHit)[0] + '년' : '-'}</b></div>` : ''}

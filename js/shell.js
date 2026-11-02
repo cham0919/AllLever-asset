@@ -149,20 +149,39 @@ mq.addEventListener?.('change', () => { if (S.theme==='system'){ applyTheme(); r
 
 /* ───────── 설정 시트 ───────── */
 function seg(id, val, cb){ const el = $(id); el.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v===val); b.onclick = () => cb(b.dataset.v); }); }
-function goalFields(){
-  const g = S.goal;
-  $('#gTarget').value = g.target / 1e8; $('#gRate').value = +(g.planRate * 100).toFixed(2); $('#gSave').value = g.planSave / 1e4;
-  $('#gYear').value = g.planYear; $('#gBase').value = g.planBase == null ? '' : g.planBase / 1e4;
-  $('#gDiv').value = +((g.divRate ?? 0.04) * 100).toFixed(2);
-  const save = () => {
-    const n = id => { const v = $(id).value.trim(); return v === '' ? null : +v; };
-    S.goal = {target: (n('#gTarget') || 10) * 1e8, planRate: (n('#gRate') ?? 6) / 100, planSave: (n('#gSave') ?? 2400) * 1e4,
-              planYear: n('#gYear') || new Date().getFullYear(), planBase: n('#gBase') == null ? null : n('#gBase') * 1e4,
-              divRate: (n('#gDiv') ?? 4) / 100};
-    LS.set('goal', S.goal); S.sim = null; if (S.tab === 'analysis') render();
-  };
-  ['#gTarget','#gRate','#gSave','#gYear','#gBase','#gDiv'].forEach(id => $(id).onchange = save);
+function goalFields(){   // 설정 › 목표: 목록 → 항목별 화면 (바꾸면 바로 저장)
+  const g = S.goal, pts = S.model ? assetPoints() : [], first = pts[0], cur = pts.at(-1);
+  const f = (v, d = 2) => +(+v).toFixed(d), setv = (id, v) => { const el = $(id); if (document.activeElement !== el) el.value = v; };
+  const div = g.divRate ?? 0.04;
+  $('#svGoal').textContent = `${f(g.target / 1e8)}억 · 연 ${f(g.planRate * 100)}%`;
+  $('#gvTarget').textContent = `${f(g.target / 1e8)}억`; $('#gvRate').textContent = `${f(g.planRate * 100)}%`;
+  $('#gvSave').textContent = money(g.planSave); $('#gvYear').textContent = `${g.planYear}년`;
+  $('#gvBase').textContent = g.planBase == null ? '자동' : money(g.planBase); $('#gvDiv').textContent = `${f(div * 100)}%`;
+  setv('#gTarget', f(g.target / 1e8)); setv('#gRate', f(g.planRate * 100)); setv('#gSave', f(g.planSave / 1e4, 0)); setv('#gDiv', f(div * 100));
+  setv('#gBase', g.planBase == null ? (first ? Math.round(first.net / 1e4) : '') : f(g.planBase / 1e4, 0));
+  $('#gnTarget').textContent = cur ? `지금 순자산 ${money(cur.net)} · ${pctPlain(Math.max(0, cur.net / g.target), 0)}` : '';
+  const inp = pts.length >= 2 ? analysisInputs(pts) : null;
+  $('#gnRate').textContent = '저축을 뺀 1년 수익률이에요.' + (inp?.rateMonths ? ` 내 실제 수익률은 ${pct(inp.rate, 1).replace('+', '')}예요 (${inp.rateMonths}개월)` : '');
+  $('#gnSave').textContent = '1년 동안 모을 금액이에요';
+  $('#gnDiv').textContent = '배당소득세 15.4%를 뗀 금액으로 계산해요';
+  const ys = [...new Set([...yearsList(), new Date().getFullYear(), g.planYear])].sort((a, b) => a - b);
+  $('#gYearList').innerHTML = ys.map(y => `<button class="srow${y === g.planYear ? ' on' : ''}" data-y="${y}"><span>${y}년</span><b class="chk">✓</b></button>`).join('');
+  $('#gYearList').querySelectorAll('[data-y]').forEach(b => b.onclick = () => goalSet('planYear', +b.dataset.y));
+  $('#gbAutoV').textContent = first ? `첫 기록 ${first.y}년 ${first.m}월 · ${money(first.net)}` : '첫 기록';
+  $('#gbAuto').classList.toggle('on', g.planBase == null); $('#gbDirect').classList.toggle('on', g.planBase != null); $('#gbWrap').hidden = g.planBase == null;
 }
+function goalSet(k, v){ S.goal = {...S.goal, [k]: v}; LS.set('goal', S.goal); S.sim = null; goalFields(); }
+(() => {
+  const num = el => { const v = el.value.trim(); return v === '' || !isFinite(+v) ? null : +v; };
+  const bind = (id, k, conv, ok = v => v != null) => { $(id).oninput = e => { const v = num(e.target); if (ok(v)) goalSet(k, conv(v)); }; $(id).onblur = () => goalFields(); };
+  bind('#gTarget', 'target', v => v * 1e8, v => v > 0);
+  bind('#gRate', 'planRate', v => v / 100);
+  bind('#gSave', 'planSave', v => v * 1e4);
+  bind('#gDiv', 'divRate', v => v / 100);
+  bind('#gBase', 'planBase', v => v * 1e4);
+  $('#gbAuto').onclick = () => goalSet('planBase', null);
+  $('#gbDirect').onclick = () => { if (S.goal.planBase != null) return; const p = S.model ? assetPoints()[0] : null; goalSet('planBase', p ? Math.round(p.net / 1e4) * 1e4 : 0); };
+})();
 function syncSheet(){
   goalFields();
   seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
@@ -177,8 +196,6 @@ function syncSheet(){
   $('#svSync').textContent = S.meta.syncedAt ? fmtTime(S.meta.syncedAt) : '';
   renderG();
   $('#svGoogle').textContent = S.guser || (S.gfiles.length ? '로그인 필요' : '연결 안 됨');
-  $('#svGoal').textContent = `목표 ${+(g.target / 1e8).toFixed(1)}억`;
-  $('#svFire').textContent = `배당 ${+((g.divRate ?? 0.04) * 100).toFixed(2)}% · 세금 15.4%`;
   $('#svView').textContent = `${{system: '시스템', light: '라이트', dark: '다크'}[S.theme] || '시스템'} · ${S.unit === 'full' ? '원 단위' : '억·만원'}`;
   appVersion().then(v => { $('#sVer').textContent = v; $('#sVerRow').hidden = !v || v === '-'; });
   syncNativeSheet();
@@ -192,7 +209,7 @@ function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
 }
 function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
+  const g = e.target.closest('[data-go]'); if (g){ if (g.classList.contains('sback')) return goBack(); syncSheet(); sPage(g.dataset.go); return; }
 });
 for (const k of ['ledger', 'asset']) $('#use-' + k).onclick = () => {
   const other = k === 'ledger' ? 'asset' : 'ledger';

@@ -27,7 +27,7 @@ function hPush(){ if (H.open) return; try { history.pushState({alv: 1}, ''); H.o
 function hPop(){ if (!H.open) return; H.open = false; H.skip = true; history.back(); }
 function backAction(){
   if ($('#ed').classList.contains('on')){ if (edNoClose) return; edBackAction(); if ($('#ed').classList.contains('on')) hPush(); return; }
-  if (S.tab === 'settings' && S.spage && S.spage !== 'main'){ syncSheet(); sPage('main', true); }
+  if (S.tab === 'settings' && S.spage && S.spage !== 'main'){ syncSheet(); sPage(/^g[A-Z]/.test(S.spage) ? 'goal' : 'main', true); }
 }
 function goBack(){ if (H.open) history.back(); else backAction(); }
 window.addEventListener('popstate', () => { if (H.skip){ H.skip = false; return; } H.open = false; backAction(); });

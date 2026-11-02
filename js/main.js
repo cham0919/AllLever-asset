@@ -14,7 +14,7 @@ if (gPending === 'pick') gPick();
 else if (gPending && gPending.startsWith('create:')) gCreate(+gPending.slice(7));
 const stale = () => S.gfiles.length && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
 if (S.queue.length) flushQueue(false);   // 지난번에 못 쓴 입력부터 저장
-if (gPending === 'sync' && S.gfiles.length) syncGoogle(true);
+if (gPending === 'sync' && S.gfiles.length) syncGoogle(true, true);
 else if (!gPending && S.gfiles.length && (S.meta.source !== 'file' && S.meta.source !== 'demo' || !S.model) && stale()) syncNow(false);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && S.meta.source === 'google' && stale()) syncNow(false);

@@ -141,12 +141,15 @@ async function nativeLogin(){
   if (h.get('alv_nonce') !== nonce) throw new Error('이 기기에서 시작한 로그인이 아니에요. 다시 시도해 주세요');
   if (h.has('alv_err')){ const e = h.get('alv_err');
     throw new Error(e === 'access_denied' || e === 'denied' ? '구글 권한을 허용하지 않았어요' : e === 'scope' ? '구글 드라이브 권한에 체크해야 시트를 볼 수 있어요' : '구글 로그인을 마치지 못했어요 (' + e + ')'); }
+  busy('구글 계정을 연결하는 중이에요');
+  try {
   let r, j;
   try { r = await fetch(gServer() + '/auth/exchange', {method: 'POST', headers: {'Content-Type': 'application/json'}, cache: 'no-store', body: JSON.stringify({code: h.get('alv_code'), verifier})}); j = await r.json(); }
   catch(e){ throw new Error('로그인 서버에 연결하지 못했어요'); }
   if (!r.ok || !SID_RE.test(j.sid || '')) throw new Error('구글 로그인을 마치지 못했어요. 다시 시도해 주세요');
   await sidSet(j.sid);
   if (j.email){ S.guser = j.email; LS.set('guser', j.email); }
+  } finally { busy(); }
 }
 
 // 구글 로그인에서 돌아왔을 때: 주소의 #alv_sid=… 를 저장하고 주소창에서 지운 뒤, 하려던 동작을 이어서 해요.
@@ -203,14 +206,16 @@ async function gPick(){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!(await leaveLocalOk())) return;
   try {
-    const tok = await gToken(true, 'pick'); if (!S.guser) await gWhoAmI(tok);
+    const tok = await gToken(true, 'pick');
+    busy('구글 드라이브를 확인하는 중이에요', '연결할 수 있는 시트를 찾고 있어요');
+    if (!S.guser) await gWhoAmI(tok);
     if (S.tab !== 'settings' || S.spage !== 'google') openSheet('google');
     const q = `(mimeType='${MIME_SHEET}' or mimeType='${MIME_XLSX}') and trashed=false`;
     const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, orderBy: 'modifiedTime desc', pageSize: '100',
       fields: 'files(id,name,mimeType,modifiedTime)'}), {cache: 'no-store'}, tok)).json();
     const files = (j.files || []).filter(f => !S.gfiles.some(g => g.id === f.id));
-    gChooser(files);
-  } catch(e){ toast(e.message); }
+    busy(); gChooser(files);
+  } catch(e){ busy(); toast(e.message); }
 }
 function gChooser(files){
   const el = $('#gChooser'), sa = isStandalone() && !NATIVE;
@@ -234,7 +239,7 @@ function gChooser(files){
     if (!ids.length) return toast('연결할 시트를 골라 주세요');
     el.hidden = true;
     const n = gAdd(files.filter(f => ids.includes(f.id)).map(f => ({id: f.id, name: f.name, mime: f.mimeType})));
-    if (n) syncGoogle(true);
+    if (n) syncGoogle(true, true);
   };
 }
 async function gPicker(){
@@ -251,7 +256,7 @@ async function gPicker(){
         if (d[P.Response.ACTION] !== P.Action.PICKED) return;
         const docs = d[P.Response.DOCUMENTS].map(x => ({id: x[P.Document.ID], name: x[P.Document.NAME], mime: x[P.Document.MIME_TYPE]}));
         $('#gChooser').hidden = true;
-        const n = gAdd(docs); if (n) syncGoogle(true); else toast('이미 연결된 시트예요');
+        const n = gAdd(docs); if (n) syncGoogle(true, true); else toast('이미 연결된 시트예요');
       }).build();
     picker.setVisible(true);
   } catch(e){ toast(e.message); }
@@ -268,7 +273,7 @@ async function nativePicker(){
       .map(d => ({id: d.id, name: String(d.name || '').slice(0, 200), mime: d.mime}));
     if (!docs.length) return toast('구글 시트를 골라 주세요');
     $('#gChooser').hidden = true;
-    const n = gAdd(docs); if (n) syncGoogle(true); else toast('이미 연결된 시트예요');
+    const n = gAdd(docs); if (n) syncGoogle(true, true); else toast('이미 연결된 시트예요');
   } catch(e){ if (!e.canceled) toast(e.message); }
 }
 // 앱에 들어 있는 빈 템플릿(template.xlsx)을 구글 시트로 변환해서 업로드하고, 기준 연도·전년 말 부채를 채워요.
@@ -335,12 +340,15 @@ async function gRemove(i){
 }
 async function gSignOut(){
   if (!(await ask('· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.', {title: '구글 계정 연결을 해제할까요?', ok: '해제하고 삭제', danger: true}))) return;
-  const sid = await sidGet();
-  if (sid) fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
-  await sidDel();
-  gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gfolder');
-  if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
-  syncSheet();
+  busy('연결을 해제하는 중이에요');
+  try {
+    const sid = await sidGet();
+    if (sid) await fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}, signal: AbortSignal.timeout?.(8000)}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
+    await sidDel();
+    gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gfolder');
+    if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
+  } finally { busy(); }
+  syncSheet(); toast('구글 계정 연결을 해제했어요');
 }
 function renderG(){
   const ok = gReady();
@@ -354,9 +362,10 @@ function renderG(){
   $('#gList').querySelectorAll('button').forEach(b => b.onclick = () => gRemove(+b.dataset.i));
 }
 let gSyncing = false;
-async function syncGoogle(interactive){
+async function syncGoogle(interactive, show = false){   // show: 시트를 새로 연결했을 때처럼 기다리는 화면을 띄워요
   if (gSyncing || !S.gfiles.length) return;
   gSyncing = true; $('#syncBtn').classList.add('spin');
+  if (show) busy('시트를 불러오는 중이에요', S.gfiles.length > 1 ? `연결한 시트 ${S.gfiles.length}개를 받고 있어요` : '');
   try {
     let tok;
     try { tok = await gToken(interactive); } catch(e){ if (interactive) toast(e.message); return; }
@@ -387,7 +396,7 @@ async function syncGoogle(interactive){
       toast(`${y}년 시트는 이미 연결돼 있어서 '${d.name}'${dup.length > 1 ? ` 외 ${dup.length - 1}개` : ''}는 연결하지 않았어요`); }
     else if (fail.length) toast(`${fail.length}개 시트를 불러오지 못했어요: ${fail[0].e.message}`);
     else if (interactive) toast('최신 데이터로 업데이트했어요');
-  } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); }
+  } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); if (show) busy(); }
 }
 function syncNow(interactive){ if (S.gfiles.length) return syncGoogle(interactive); if (interactive){ toast('설정에서 구글 시트를 연결하세요'); openSheet('google'); } }
 $('#gPick').onclick = gPick; $('#gCreate').onclick = () => gCreate(); $('#gOut').onclick = gSignOut;

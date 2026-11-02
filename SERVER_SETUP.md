@@ -55,7 +55,7 @@ https://alllever-asset-auth.<내 하위도메인>.workers.dev/auth/callback
 
 ## 7. 앱에 서버 주소 넣기
 
-`index.html`의 `GOOGLE.authServer`에 서버 주소를 넣으면 끝이에요. 현재 값: `https://alllever-asset-auth.alllever.workers.dev` 이후 앱에서 "구글 계정 연결 해제" 후 다시 연결하면 로그인 유지 방식으로 바뀌어요.
+`index.html`의 `GOOGLE.authServer`에 서버 주소를 넣으면 끝이에요. 현재 값: `https://auth.alllever.app` 이후 앱에서 "구글 계정 연결 해제" 후 다시 연결하면 로그인 유지 방식으로 바뀌어요.
 
 ## 8. 구글 동의 화면을 프로덕션으로
 

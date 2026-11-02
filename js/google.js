@@ -6,7 +6,7 @@ const GOOGLE = {
   clientId: '919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com',        // OAuth 클라이언트 ID (웹 애플리케이션) … .apps.googleusercontent.com
   apiKey:   'AIzaSyA737jtGTgXBmwvRO-DuAgPvxDMVWN3CZQ',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
   appId:    '919106003112',        // Google Cloud 프로젝트 번호 (숫자)
-  authServer: 'https://alllever-asset-auth.alllever.workers.dev',   // 로그인 유지 서버 (server/ 폴더)
+  authServer: 'https://auth.alllever.app',   // 로그인 유지 서버 (server/ 폴더)
   pickerPage: 'https://cham0919.github.io/AllLever-asset/picker.html',   // 앱(아이폰·안드로이드)에서 시트 선택 창을 여는 웹 페이지
 };
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';

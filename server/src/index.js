@@ -223,6 +223,7 @@ async function route(req, env){
       if (req.method === 'POST' && url.pathname === '/token') return cors(env, req, await token(req, env));
       if (req.method === 'POST' && url.pathname === '/logout') return cors(env, req, await logout(req, env));
       if (url.pathname === '/health') return json({ok: true});
+      if (req.method === 'GET' && url.pathname === '/' && env.ASSETS) return env.ASSETS.fetch(new URL('/index.html', url));   // alllever.app 홈페이지
       return json({error: 'not_found'}, 404);
     } catch (e){
       console.error(e);

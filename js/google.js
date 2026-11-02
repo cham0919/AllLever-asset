@@ -7,7 +7,7 @@ const GOOGLE = {
   apiKey:   'AIzaSyA737jtGTgXBmwvRO-DuAgPvxDMVWN3CZQ',        // Picker용 브라우저 API 키 (HTTP 리퍼러 제한)
   appId:    '919106003112',        // Google Cloud 프로젝트 번호 (숫자)
   authServer: 'https://auth.alllever.app',   // 로그인 유지 서버 (server/ 폴더)
-  pickerPage: 'https://alllever.app/picker.html',   // 앱(아이폰·안드로이드)에서 시트 선택 창을 여는 웹 페이지
+  pickerPage: 'https://cham0919.github.io/AllLever-asset/picker.html',   // 앱에서 시트 선택 창을 여는 웹 페이지 (alllever.app에서는 사파리가 구글 쿠키를 막아 실패해서 이 주소 유지)
 };
 const MIME_SHEET = 'application/vnd.google-apps.spreadsheet';
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

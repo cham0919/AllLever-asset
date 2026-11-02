@@ -11,7 +11,8 @@ function openEd(html, opt = {}){
   const h = el.querySelector('h4'); if (h) $('#edTitle').textContent = (h.childNodes[0]?.textContent || '').trim();
   $('#edBack').onclick = goBack;
   if (!was){ el.scrollTop = 0; hPush(); }
-  const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => f.focus(), 280);
+  // 밀려 들어오는 동안 입력칸에 초점을 주면 아이폰이 화면을 엉뚱하게 내려요 → 들어온 뒤, 화면을 움직이지 않고 초점만
+  const f = el.querySelector('[autofocus]'); if (f) setTimeout(() => { f.focus({preventScroll: true}); el.scrollTop = 0; }, 340);
 }
 function closeEd(){
   $('#ed').classList.remove('on', 'swap');

@@ -35,7 +35,7 @@ let lockHold = 0;
 async function holdLock(fn){ lockHold++; try { return await fn(); } finally { setTimeout(() => { lockHold = Math.max(0, lockHold - 1); }, 1500); } }
 
 /* ───────── 링크: 앱에서는 앱 안 브라우저 창으로 ───────── */
-const WEB_BASE = 'https://cham0919.github.io/AllLever-asset/';   // 앱 안의 페이지(개인정보 처리방침 등)는 웹 주소로 열어요
+const WEB_BASE = 'https://alllever.app/';   // 앱 안의 페이지(개인정보 처리방침 등)는 웹 주소로 열어요
 function openExternal(url){
   let u; try { u = new URL(url, location.href); } catch(e){ return; }
   if (u.origin === location.origin) u = new URL(u.pathname.replace(/^\//, '') + u.search + u.hash, WEB_BASE);

@@ -2,6 +2,8 @@
 // (app.js를 나눈 파일이에요. index.html의 순서대로 불러와 같은 전역 범위를 써요)
 /* ───────── 라우팅 ───────── */
 const TITLES = {home:'홈', budget:'가계부', asset:'자산', analysis:'목표', settings:'설정'};
+const TAB_USE = {budget: 'ledger', asset: 'asset', analysis: 'asset'};
+const tabOn = t => !TAB_USE[t] || S.use[TAB_USE[t]];
 const isYearView = () => S.tab === 'budget' && effView() === 'rep' && S.rview === 'y';   // 가계부 › 리포트 › 올해 (예전 월별추이)
 function render(){
   ghostClear(); killCharts();
@@ -11,7 +13,9 @@ function render(){
   ({home:viewHome, budget:viewBudget, asset:viewAsset, analysis:viewAnalysis})[S.tab]();
 }
 function renderHead(){
+  if (!tabOn(S.tab)) S.tab = 'home';
   document.body.classList.remove('onboarding');
+  document.querySelectorAll('nav.tabs button').forEach(b => b.hidden = !tabOn(b.dataset.tab));
   document.body.classList.toggle('tab-settings', S.tab === 'settings');
   $('#title').innerHTML = TITLES[S.tab] + (S.meta.source==='demo' ? '<span class="demo-badge">예시</span>' : '');
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab===S.tab));
@@ -28,7 +32,7 @@ function renderHead(){
   }
   updateStatus();
 }
-function go(tab){ if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings'){ S.spage = 'main'; hPop(); } S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
+function go(tab){ if (!tabOn(tab)) tab = 'home'; if ($('#ed').classList.contains('on')) closeEd(); if (tab !== 'settings'){ S.spage = 'main'; hPop(); } S.tab = tab; LS.set('tab', tab); window.scrollTo(0,0); render(); }
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => { if (b.dataset.tab === 'settings' && S.tab === 'settings'){ syncSheet(); sPage('main', true); return; } go(b.dataset.tab); });
 const yearsList = () => Object.keys(S.years || {}).map(Number).sort((a,b) => b-a);
 const adjYear = n => { const asc = [...yearsList()].reverse(), i = asc.indexOf(S.year); return asc[i+n] ?? null; };
@@ -163,6 +167,9 @@ function syncSheet(){
   goalFields();
   seg('#segTheme', S.theme, v => { S.theme=v; LS.set('theme',v); applyTheme(); syncSheet(); render(); });
   seg('#segUnit', S.unit, v => { S.unit=v; LS.set('unit',v); syncSheet(); render(); });
+  for (const k of ['ledger', 'asset']) $('#use-' + k).setAttribute('aria-checked', S.use[k]);
+  $('#sGoalSec').hidden = !S.use.asset;
+  $('#svUse').textContent = [S.use.ledger && '가계부', S.use.asset && '자산'].filter(Boolean).join(' · ');
   const ys = yearsList().slice().reverse().join(', '), src = S.meta.source, g = S.goal;
   $('#svData').textContent = !S.model ? '없음' : src === 'google' ? `구글 시트 · ${ys}년` : src === 'local' ? `이 기기에 저장 · ${ys}년` : src === 'file' ? `기기 파일 · ${ys}년` : `예시 데이터 · ${ys}년`;
   $('#btnAddYear').hidden = src !== 'local'; $('#btnExport').hidden = !S.model || src === 'demo';
@@ -187,6 +194,12 @@ function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
   const g = e.target.closest('[data-go]'); if (g){ if (g.dataset.go === 'main') return goBack(); syncSheet(); sPage(g.dataset.go); return; }
 });
+for (const k of ['ledger', 'asset']) $('#use-' + k).onclick = () => {
+  const other = k === 'ledger' ? 'asset' : 'ledger';
+  if (S.use[k] && !S.use[other]) return toast('하나는 켜 두어야 해요');
+  S.use[k] = !S.use[k]; LS.set('use', S.use); haptic('light');
+  syncSheet(); renderHead(); notiSoon();
+};
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();
 $('#btnSync').onclick = () => syncNow(true);

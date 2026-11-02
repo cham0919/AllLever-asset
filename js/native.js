@@ -122,7 +122,7 @@ function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeou
 const ymdKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 async function notiSchedule(){
   const LN = nativePlugin('LocalNotifications'); if (!LN) return;
-  const c = notiCfg(), perm = await LN.checkPermissions().catch(() => ({}));
+  const c0 = notiCfg(), c = {...c0, daily: c0.daily && S.use.ledger, reps: c0.reps && S.use.ledger, monthEnd: c0.monthEnd && S.use.asset}, perm = await LN.checkPermissions().catch(() => ({}));
   const pend = await LN.getPending().catch(() => ({notifications: []}));
   const mine = (pend.notifications || []).filter(n => NOTI_IDS(n.id)).map(n => ({id: n.id}));
   if (mine.length) await LN.cancel({notifications: mine}).catch(() => {});
@@ -192,12 +192,15 @@ function syncNativeSheet(){
   if (!NATIVE) return;
   const L = lockCfg(), N = notiCfg();
   $('#svLock').textContent = L.on ? `켜짐 · ${L.delay ? L.delay / 60 + '분 후' : '바로'}` : '꺼짐';
-  $('#svNoti').textContent = [N.daily && '기록', N.reps && '반복 거래', N.monthEnd && '월말'].filter(Boolean).join(' · ') || '꺼짐';
+  const U = S.use;
+  $('#svNoti').textContent = [U.ledger && N.daily && '기록', U.ledger && N.reps && '반복 거래', U.asset && N.monthEnd && '월말'].filter(Boolean).join(' · ') || '꺼짐';
   $('#lkName').textContent = `${lockName()}로 잠금`;
   $('#lkOn').setAttribute('aria-checked', L.on); $('#lkDelay').hidden = !L.on;
   $('#lkDelay').querySelectorAll('[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === L.delay));
   for (const k of ['daily', 'reps', 'monthEnd', 'amounts']) $('#nt-' + k).setAttribute('aria-checked', N[k]);
-  $('#ntTime').hidden = !N.daily; $('#ntTimeV').textContent = N.time.replace(/^(\d+):(\d+)$/, (_, h, m) => `${+h < 12 ? '오전' : '오후'} ${(+h % 12) || 12}:${m}`);
+  $('#ntTime').hidden = !N.daily;
+  $('#ntDailyH').hidden = $('#nt-daily').parentElement.hidden = !U.ledger;   // 끈 기능의 알림은 숨기고 예약도 안 해요
+  $('#nt-reps').hidden = !U.ledger; $('#nt-monthEnd').hidden = !U.asset; $('#ntTimeV').textContent = N.time.replace(/^(\d+):(\d+)$/, (_, h, m) => `${+h < 12 ? '오전' : '오후'} ${(+h % 12) || 12}:${m}`);
 }
 function nativeInit(){
   if (!NATIVE) return;

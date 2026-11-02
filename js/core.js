@@ -20,6 +20,7 @@ const S = {
   tab: (t => t === 'trend' ? (LS.set('bview', 'year'), 'budget') : ['home','budget','asset','analysis','settings'].includes(t) ? t : 'home')(LS.get('tab','home')),
   theme: LS.get('theme','system'),
   unit: LS.get('unit','short'),
+  use: Object.assign({ledger: true, asset: true}, LS.get('use', {})),   // 사용할 기능: 끈 쪽의 탭·홈 카드·알림을 숨겨요
   gfiles: LS.get('gfiles', []),          // 구글 연결 시트 [{id, name, year, mime}]
   guser: LS.get('guser', null),          // 연결된 구글 계정 이메일 (토큰은 저장하지 않음)
   years: LS.get('years', null),          // 연도 → 데이터

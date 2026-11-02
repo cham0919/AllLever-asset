@@ -51,8 +51,9 @@ function homeGoal(pts){
     <div class="prog"><i style="width:${done * 100}%"></i></div></section>`;
 }
 function viewHome(){
-  const pts = assetPoints(), led = homeLedger(), P = homeLedgerPos();
-  const fab = P && S.years[P.y]?.txMode && P.cur && canEdit(P.y) ? '<button class="fab" data-act="homeAddTx" aria-label="거래 추가">+</button>' : '';
+  const pts = assetPoints(), led = S.use.ledger ? homeLedger() : '', P = homeLedgerPos();
+  const fab = S.use.ledger && P && S.years[P.y]?.txMode && P.cur && canEdit(P.y) ? '<button class="fab" data-act="homeAddTx" aria-label="거래 추가">+</button>' : '';
+  if (!S.use.asset){ $('#view').innerHTML = led + fab + (fab ? '<div style="height:64px"></div>' : ''); return; }
   if (!pts.length){ $('#view').innerHTML = led + `<section class="card hero"><div class="label">순자산</div><button class="btn" data-act="homeAsset" style="margin-top:12px">${new Date().getMonth() + 1}월 말 잔액 입력하기</button></section>` + fab; return; }
   const cur = pts.at(-1), G = HOME_GROUPS;
   const inv = grpSum(G.invest, cur), est = grpSum(G.estate, cur), cash = grpSum(G.cash, cur);

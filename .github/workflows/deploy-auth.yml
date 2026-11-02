@@ -47,7 +47,7 @@ jobs:
       - name: Migrations
         run: npx wrangler d1 migrations apply DB --remote
       - name: Pages for the app (alllever.app)
-        run: mkdir -p site && cp ../picker.html ../picker.js ../privacy.html ../support.html ../icon-180.png site/
+        run: mkdir -p site/fonts && cp -r home/. site/ && cp ../picker.html ../picker.js ../privacy.html ../support.html ../icon-180.png site/ && cp ../fonts/PretendardVariable.subset.woff2 site/fonts/
       - name: Deploy
         run: |
           npx wrangler deploy | tee deploy.log

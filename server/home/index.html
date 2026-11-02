@@ -48,9 +48,8 @@ section.feat{padding:24px 0 40px}
 .row li{padding:5px 0 5px 18px;position:relative}
 .row li:before{content:"";position:absolute;left:2px;top:15px;width:6px;height:6px;border-radius:50%;background:var(--faint)}
 .row .phone{width:min(270px,64vw)}
-.row.wide{grid-template-columns:1fr;gap:28px}
-.row.wide ul{display:grid;grid-template-columns:1fr 1fr;column-gap:40px}
-.sheetcard{width:100%;border-radius:18px;overflow:hidden;box-shadow:var(--shadow);border:1px solid var(--line);background:#fff}
+.row.wide{grid-template-columns:.8fr 1.2fr;gap:32px}
+.sheetcard{width:calc(100% + 40px);margin:-20px}
 .sheetcard img{display:block;width:100%;height:auto}
 
 /* 데이터 */
@@ -71,9 +70,8 @@ footer .fine{color:var(--faint);font-size:12.5px;margin-top:14px}
   .hero{grid-template-columns:1fr;gap:40px;padding:20px 0 48px;text-align:left}
   .row{grid-template-columns:1fr;gap:28px;padding:36px 0}
   .row:nth-child(even) .txt{order:0}
-  .row.wide ul{grid-template-columns:1fr}
-  .sheetcard{border-radius:12px;overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .sheetcard img{width:820px;max-width:none}
+  .row.wide{grid-template-columns:1fr}
+  .sheetcard{width:calc(100% + 24px);margin:-12px}
   .data{padding:32px 22px;border-radius:22px}
   .d3{grid-template-columns:1fr;gap:20px}
   .top nav a:first-child{display:none}
@@ -109,7 +107,7 @@ footer .fine{color:var(--faint);font-size:12.5px;margin-top:14px}
           <li>시트는 내 파일이라 앱을 지워도 기록이 남아요</li>
         </ul>
       </div>
-      <div class="sheetcard"><img src="/img/sheet.jpg" alt="구글 시트의 3월 가계부: 요약, 날짜별 달력, 반복 거래와 거래 내역" width="1800" height="1349" loading="lazy"></div>
+      <div class="sheetcard"><img src="/img/sheet.webp" alt="구글 시트의 3월 가계부: 날짜별 달력과 거래 내역" width="1400" height="822" loading="lazy"></div>
     </div>
     <div class="row">
       <div class="txt">

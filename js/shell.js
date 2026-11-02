@@ -226,7 +226,7 @@ $('#btnAddYear').onclick = () => addLocalYear();
 $('#btnRestart').onclick = async () => { if (S.meta.source !== 'local' && !(await ask('연결한 구글 시트는 그대로 남아요.', {title: '처음 화면으로 돌아갈까요?', ok: '처음으로'}))) return; restartOb(); };
 $('#btnFile').onclick = () => $('#fileInput').click();
 $('#fileInput').onchange = async e => { const f = e.target.files[0]; if (!f) return; closeSheet();
-  try { const md = parseWorkbook(await f.arrayBuffer());
+  try { await xlsxReady(); const md = parseWorkbook(await f.arrayBuffer());
     if (S.meta.source === 'google' && !(await ask('구글 시트 연결은 유지돼요.', {title: '이 파일을 이 기기에 저장해서 쓸까요?', ok: '이 파일 쓰기'}))) { e.target.value=''; return; }
     if (S.meta.source === 'local' && S.years[md.year] && !(await ask('', {title: `이 기기의 ${md.year}년 데이터를 이 파일 내용으로 바꿀까요?`, ok: '바꾸기', danger: true}))) { e.target.value=''; return; }
     const ys = S.meta.source === 'local' ? {...S.years} : {}; ys[md.year] = md;   // 이 기기 저장 데이터에 연도별로 합침
@@ -247,6 +247,7 @@ function setYears(years, meta, keepView){
 async function loadDemo(){
   try {
     const ys = {};
+    await xlsxReady();
     for (const f of ['demo2025.xlsx', 'demo.xlsx']){ const r = await fetch(f); if (!r.ok) throw new Error(r.status); const md = parseWorkbook(await r.arrayBuffer()); ys[md.year] = md; }
     setYears(ys, {source:'demo'}); toast('예시 데이터를 불러왔어요 (2025 · 2026년)');
   } catch(e){ toast('예시 파일을 불러오지 못했어요'); }

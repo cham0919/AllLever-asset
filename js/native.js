@@ -103,6 +103,7 @@ function lockInit(){
   if (lockCfg().on) unlock(); else setLocked(false);
   $('#lockBtn').onclick = () => unlock();
   App.addListener('pause', () => {   // 다른 앱으로 갔을 때
+    if (persistT) persistNow();   // 저장 대기 중인 데이터 파일을 바로 써요
     if (lockHold || !lockCfg().on) return;
     bgAt = Date.now(); if (!lockCfg().delay) setLocked(true);
   });
@@ -116,8 +117,33 @@ function lockInit(){
 
 /* ───────── 알림 (휴대폰 안에서 예약하는 알림 · 서버 없음) ───────── */
 const notiCfg = () => Object.assign({daily: false, time: '21:00'}, LS.get('noti', {}));
-const NOTI_SKIP_TODAY = true;   // 그날 앱에서 입력했으면 그날 알림은 건너뛰어요
 const NOTI_IDS = n => n >= 1000 && n < 4000;
+/* ───────── 앱 데이터 보관 (앱에서만) ─────────
+   앱 화면의 저장 공간(localStorage)은 아이폰 저장 공간이 부족할 때 iOS가 지울 수 있어요.
+   그래서 바뀔 때마다 같은 내용을 기기의 앱 전용 폴더(Library) 파일에도 써 두고(아이클라우드 기기 백업에 포함),
+   앱을 열었을 때 화면 저장 공간이 비어 있으면 이 파일에서 되살려요. */
+const DATA_FILE = 'moneymuscle-data.json';
+let persistT = null;
+function persistSoon(){ if (!NATIVE) return; clearTimeout(persistT); persistT = setTimeout(persistNow, 800); }
+async function persistNow(){
+  clearTimeout(persistT); persistT = null;
+  const FS = nativePlugin('Filesystem'); if (!FS) return;
+  const d = {};
+  try { for (let i = 0; i < localStorage.length; i++){ const k = localStorage.key(i); if (k && k.startsWith(LSP)) d[k] = localStorage.getItem(k); } } catch(e){ return; }
+  try { await FS.writeFile({path: DATA_FILE, data: JSON.stringify({v: 1, at: Date.now(), d}), directory: 'LIBRARY', encoding: 'utf8'}); }
+  catch(e){ console.log('[alv] persist failed: ' + (e?.message || e)); }
+}
+async function nativeRestore(){   // 되살렸으면 true (화면을 다시 불러야 해요)
+  if (!NATIVE) return false;
+  try { for (let i = 0; i < localStorage.length; i++) if (localStorage.key(i)?.startsWith(LSP)) return false; } catch(e){ return false; }
+  const FS = nativePlugin('Filesystem'); if (!FS) return false;
+  try {
+    const r = await FS.readFile({path: DATA_FILE, directory: 'LIBRARY', encoding: 'utf8'});
+    const d = JSON.parse(r.data)?.d || {}, keys = Object.keys(d).filter(k => k.startsWith(LSP));
+    keys.forEach(k => localStorage.setItem(k, d[k]));
+    return keys.length > 0;
+  } catch(e){ return false; }   // 파일이 없으면 (처음 설치) 그대로 시작
+}
 let notiT = null;
 function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(() => {}), 1200); }
 let notiAsked = false;   // 알림 화면에 들어올 때마다 한 번만 '설정으로 이동' 창
@@ -133,7 +159,7 @@ async function notiSchedule(){
     return; }
   const now = new Date(), list = [], at = (d, h, mi) => { const x = new Date(d); x.setHours(h, mi, 0, 0); return x; };
   if (c.daily){   // 기록 알림: 앞으로 14일, 오늘 이미 입력했으면 오늘은 건너뛰어요
-    const [h, mi] = c.time.split(':').map(Number), today = NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now);
+    const [h, mi] = c.time.split(':').map(Number), today = LS.get('lastInput', '') === ymdKey(now);   // 오늘 거래를 입력했으면 오늘 알림은 건너뛰어요
     for (let i = 0; i < 14; i++){ const d = new Date(now); d.setDate(d.getDate() + i); const t = at(d, h, mi);
       if (t <= now || (i === 0 && today)) continue;
       list.push({id: 1000 + i, title: '머니머슬', body: '오늘 쓴 돈을 기록해 볼까요?', schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'budget'}}); }

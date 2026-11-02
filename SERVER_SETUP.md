@@ -50,21 +50,22 @@
 Google Cloud Console → 웹 클라이언트 → **승인된 리디렉션 URI**에 5번에서 나온 주소를 넣고 저장하세요.
 
 ```
-https://alllever-asset-auth.<내 하위도메인>.workers.dev/auth/callback
+https://auth.alllever.app/auth/callback
 ```
+(예전 빌드용 `https://alllever-asset-auth.alllever.workers.dev/auth/callback`도 남아 있어요. 예전 TestFlight 빌드가 모두 만료되면 지워도 돼요.)
 
 ## 7. 앱에 서버 주소 넣기
 
-`index.html`의 `GOOGLE.authServer`에 서버 주소를 넣으면 끝이에요. 현재 값: `https://auth.alllever.app` 이후 앱에서 "구글 계정 연결 해제" 후 다시 연결하면 로그인 유지 방식으로 바뀌어요.
+`js/google.js`의 `GOOGLE.authServer`에 서버 주소를 넣으면 끝이에요. 현재 값: `https://auth.alllever.app` (클라우드플레어 맞춤 도메인, `server/wrangler.toml`의 routes). 이후 앱에서 "구글 계정 연결 해제" 후 다시 연결하면 로그인 유지 방식으로 바뀌어요.
 
 ## 8. 구글 동의 화면을 프로덕션으로
 
 동의 화면이 "테스트" 상태면 갱신 토큰이 **7일 뒤 만료**돼서, 일주일마다 다시 로그인해야 해요.
 
-1. Google 인증 플랫폼 → **브랜딩**에 홈페이지 `https://cham0919.github.io/AllLever-asset/`와 개인정보처리방침 `https://cham0919.github.io/AllLever-asset/privacy.html`을 넣으세요.
+1. Google 인증 플랫폼 → **브랜딩**에 홈페이지 `https://alllever.app`와 개인정보처리방침 `https://alllever.app/privacy.html`을 넣으세요.
 2. **대상 → 앱 게시**를 누르세요.
 
-`drive.file`·`email`은 민감하지 않은 범위라 보안 평가(CASA)는 없어요. 다만 로그인 창에 앱 이름·로고를 보여주려면 구글의 브랜드 확인을 받아야 할 수 있어요. 이때는 승인된 도메인(`cham0919.github.io`) 소유 확인이 필요할 수 있어요.
+`drive.file`·`email`은 민감하지 않은 범위라 보안 평가(CASA)는 없어요. 로그인 창의 앱 이름·로고는 브랜드 확인을 받았어요(2026-11-02, 도메인 `alllever.app`은 구글 서치 콘솔에서 소유 확인).
 
 ## 보안 메모
 
@@ -77,3 +78,15 @@ https://alllever-asset-auth.<내 하위도메인>.workers.dev/auth/callback
 - IP당 요청 수를 제한해요: 로그인 시작·콜백 분당 20회, 토큰 발급·해제 분당 60회.
 - 모든 응답에 `nosniff`, `no-referrer`, `X-Frame-Options: DENY` 헤더를 붙여요.
 - 연결 해제 시 서버의 세션 삭제와 구글 권한 취소를 함께 해요.
+
+## 홈페이지·안내 페이지 (alllever.app)
+
+로그인 서버가 정적 페이지도 함께 보여줘요(`server/wrangler.toml`의 `[assets]`). 배포할 때 GitHub Actions가 `server/home/`(홈페이지)과
+저장소 루트의 `privacy.html`·`support.html`·`picker.html`·`picker.js`를 `server/site/`로 모아서 올려요.
+
+| 주소 | 내용 |
+|---|---|
+| `https://alllever.app` | 머니머슬 홈페이지 (`server/home/index.html`) |
+| `https://alllever.app/privacy.html` | 개인정보 처리방침 |
+| `https://alllever.app/support.html` | 고객 지원 |
+| `https://auth.alllever.app` | 로그인 서버 |

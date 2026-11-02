@@ -189,7 +189,7 @@ async function gDownload(f, tok){
   const url = f.mime === MIME_SHEET || !f.mime ? `${base}/export?mimeType=${encodeURIComponent(MIME_XLSX)}` : `${base}?alt=media`;
   const buf = await (await gFetch(url, {cache: 'no-store'}, tok)).arrayBuffer(), h = new Uint8Array(buf.slice(0, 2));
   if (h[0] !== 0x50 || h[1] !== 0x4B) throw new Error('스프레드시트 파일이 아니에요');
-  const M = parseWorkbook(buf); f.mod = f.modNext; delete f.modNext; return M;
+  await xlsxReady(); const M = parseWorkbook(buf); f.mod = f.modNext; delete f.modNext; return M;
 }
 function gSave(){ LS.set('gfiles', S.gfiles); }
 function gAdd(list){

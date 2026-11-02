@@ -55,7 +55,9 @@ function reapplyQueue(years){ for (const op of S.queue) applyOp(years, op); }
 function commit(ops, quiet){
   if (!ops.length) return;
   const snap = budgetSnap(ops);
-  setTimeout(() => { budgetCross(snap, budgetSnap(ops)); haptic(); LS.set('lastInput', ymdKey(new Date())); notiSoon(); }, 0);
+  // 기록 알림은 '그날 돈 쓴 기록을 남겼는지'만 봐요: 거래 입력(반복 거래 자동 입력·삭제 제외)이나 월 합계 금액 입력일 때만
+  const recorded = ops.some(o => (o.t === 'tx' && o.act !== 'del' && !String(o.tx?.id || '').startsWith('R')) || (o.t === 'b' && o.f !== 'memo' && o.v != null));
+  setTimeout(() => { budgetCross(snap, budgetSnap(ops)); haptic(); if (recorded){ LS.set('lastInput', ymdKey(new Date())); notiSoon(); } }, 0);
   if (S.meta.source === 'local'){   // 이 기기에만 저장
     for (const op of ops) applyOp(S.years, op);
     LS.set('years', S.years); S.meta.savedAt = Date.now(); LS.set('meta', S.meta); render(); if (!quiet) toast(withNote('저장했어요')); return;

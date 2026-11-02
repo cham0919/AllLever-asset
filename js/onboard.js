@@ -76,7 +76,7 @@ async function blankYear(y){
       for (let m = 1; m <= 12; m++){ M.tx[m] = []; M.reps[m] = lr.map(r => ({...r})); } }
   } else {
     const r = await fetch('template.xlsx'); if (!r.ok) throw new Error('템플릿을 불러오지 못했어요');
-    M = parseWorkbook(await r.arrayBuffer()); M.year = y;
+    await xlsxReady(); M = parseWorkbook(await r.arrayBuffer()); M.year = y;
   }
   return M;
 }
@@ -146,7 +146,7 @@ function exportYear(y){   // → {name, wb}
 async function exportAll(){
   if (S.meta.source === 'google' && S.gfiles.length) return exportGoogle();
   const ys = yearsList(); if (!ys.length) return toast('내보낼 데이터가 없어요');
-  try { if (await saveFiles(ys.map(exportYear).filter(Boolean))) toast(`${ys.length}개 연도 백업 파일을 만들었어요`); }
+  try { await xlsxReady(); if (await saveFiles(ys.map(exportYear).filter(Boolean))) toast(`${ys.length}개 연도 백업 파일을 만들었어요`); }
   catch(e){ toast('파일을 만들지 못했어요: ' + e.message); }
 }
 // 구글 시트 → 엑셀: 구글이 바꿔 주는 파일이라 시트와 서식·수식·그래프가 같아요

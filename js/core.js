@@ -6,8 +6,8 @@
 const LSP = 'alv.';
 const LS = {
   get(k, d){ try{ const v = localStorage.getItem(LSP+k); return v==null ? d : JSON.parse(v); }catch(e){ return d; } },
-  set(k, v){ try{ localStorage.setItem(LSP+k, JSON.stringify(v)); return true; }catch(e){ storageFail(k); return false; } },
-  del(k){ try{ localStorage.removeItem(LSP+k); }catch(e){} }
+  set(k, v){ try{ localStorage.setItem(LSP+k, JSON.stringify(v)); if (typeof persistSoon === 'function') persistSoon(); return true; }catch(e){ storageFail(k); return false; } },
+  del(k){ try{ localStorage.removeItem(LSP+k); if (typeof persistSoon === 'function') persistSoon(); }catch(e){} }
 };
 // 기기 저장 공간이 꽉 차는 등으로 저장에 실패하면 알려요 (가계부·자산·저장 대기 데이터일 때만, 같은 안내는 10초에 한 번)
 let storageWarnAt = 0;
@@ -70,6 +70,12 @@ const toNum = v => { if (v==null || v==='') return null; if (typeof v === 'numbe
   const t = String(v).replace(/[,원\s]/g,''); if (t==='' || t==='-') return null; const n = Number(t); return isFinite(n) ? n : null; };
 const str = v => v==null ? '' : String(v).trim();
 
+// 엑셀 라이브러리(약 950KB)는 앱을 켤 때 말고, 엑셀을 읽거나 만들 때 한 번만 불러와요
+let xlsxP = null;
+const xlsxReady = () => window.XLSX ? Promise.resolve() : (xlsxP = xlsxP || new Promise((ok, bad) => {
+  const s = document.createElement('script'); s.src = 'vendor/xlsx.full.min.js'; s.async = true;
+  s.onload = () => ok(); s.onerror = () => { xlsxP = null; s.remove(); bad(new Error('엑셀 기능을 불러오지 못했어요')); };
+  document.head.appendChild(s); }));
 function parseWorkbook(buf){
   const wb = XLSX.read(buf, {type:'array'});
   const rows = name => wb.Sheets[name] ? XLSX.utils.sheet_to_json(wb.Sheets[name], {header:1, raw:true, defval:null}) : null;

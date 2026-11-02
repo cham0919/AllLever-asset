@@ -214,18 +214,21 @@ async function gPick(){
 }
 function gChooser(files){
   const el = $('#gChooser'), sa = isStandalone() && !NATIVE;
+  // 아이폰 앱: 사파리의 '크로스 사이트 추적 방지'(기본 켜짐) 때문에 구글 선택 창이 열리지 않아요 → 버튼을 숨기고,
+  // 갖고 있던 시트는 PC 웹에서 한 번 고르면 같은 계정의 이 목록에 나타나요 (고객 지원 페이지 안내)
+  const noPicker = NATIVE && window.Capacitor?.getPlatform?.() === 'ios';
   const day = t => { const d = new Date(t); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} 수정`; };
   el.innerHTML = `<h5>연결할 시트 고르기</h5>
     ${files.length ? files.map(f => `<label><input type="checkbox" value="${esc(f.id)}"><span>${esc(f.name)}<small>${day(f.modifiedTime)}</small></span></label>`).join('')
-      : S.gfiles.length ? `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트는 모두 연결돼 있어요. 다른 시트는 아래 <b>구글 선택 창</b>에서 찾아 주세요.</p>`
-      : `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트가 아직 없어요. 처음엔 아래 <b>구글 선택 창</b>에서 시트를 고르거나, <b>템플릿으로 새 시트 만들기</b>를 눌러 주세요.</p>`}
+      : S.gfiles.length ? `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트는 모두 연결돼 있어요.${noPicker ? '' : ' 다른 시트는 아래 <b>구글 선택 창</b>에서 찾아 주세요.'}</p>`
+      : `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트가 아직 없어요. ${noPicker ? '' : '아래 <b>구글 선택 창</b>에서 시트를 고르거나, '}<b>템플릿으로 새 시트 만들기</b>를 눌러 주세요.</p>`}
     <div class="row2">${files.length ? '<button class="btn" id="gcOk">연결하기</button>' : ''}<button class="btn ghost" id="gcCancel">닫기</button></div>
-    <button class="btn ghost" id="gcPicker" style="margin-top:8px">목록에 없는 시트 찾기 (구글 선택 창)</button>
+    ${noPicker ? '' : '<button class="btn ghost" id="gcPicker" style="margin-top:8px">목록에 없는 시트 찾기 (구글 선택 창)</button>'}
     ${sa ? `<p class="note">홈 화면 앱에서는 구글 선택 창이 열리지 않을 수 있어요. 그럴 땐 <b>사파리</b>에서 이 주소를 열고 같은 계정으로 시트를 한 번 고르면, 이 목록에 나타나요.</p>` : ''}`;
   el.hidden = false;
   el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   $('#gcCancel').onclick = () => { el.hidden = true; };
-  $('#gcPicker').onclick = () => gPicker();
+  if (!noPicker) $('#gcPicker').onclick = () => gPicker();
   if (files.length) $('#gcOk').onclick = () => {
     const ids = [...el.querySelectorAll('input:checked')].map(i => i.value);
     if (!ids.length) return toast('연결할 시트를 골라 주세요');

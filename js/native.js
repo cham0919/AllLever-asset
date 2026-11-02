@@ -116,6 +116,7 @@ function lockInit(){
 
 /* ───────── 알림 (휴대폰 안에서 예약하는 알림 · 서버 없음) ───────── */
 const notiCfg = () => Object.assign({daily: false, time: '21:00'}, LS.get('noti', {}));
+const NOTI_SKIP_TODAY = false;   // 임시(알림 테스트): 입력한 날도 울리게. 테스트 끝나면 true로
 const NOTI_IDS = n => n >= 1000 && n < 4000;
 let notiT = null;
 function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(e => { notiState = {err: e?.message || String(e)}; notiShow(); }), 1200); }
@@ -139,14 +140,14 @@ async function notiSchedule(){
   if (perm.display !== 'granted' || !c.daily){ notiState = c.daily ? {perm: true} : null; notiShow(); return; }
   const now = new Date(), list = [], at = (d, h, mi) => { const x = new Date(d); x.setHours(h, mi, 0, 0); return x; };
   if (c.daily){   // 기록 알림: 앞으로 14일, 오늘 이미 입력했으면 오늘은 건너뛰어요
-    const [h, mi] = c.time.split(':').map(Number), today = LS.get('lastInput', '') === ymdKey(now);
+    const [h, mi] = c.time.split(':').map(Number), today = NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now);
     for (let i = 0; i < 14; i++){ const d = new Date(now); d.setDate(d.getDate() + i); const t = at(d, h, mi);
       if (t <= now || (i === 0 && today)) continue;
       list.push({id: 1000 + i, title: '머니머슬', body: '오늘 쓴 돈을 기록해 볼까요?', schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'budget'}}); }
   }
   if (list.length) await LN.schedule({notifications: list});
   const after = await LN.getPending().catch(() => ({notifications: []}));
-  notiState = {pending: (after.notifications || []).filter(n => NOTI_IDS(+n.id)).length, next: list[0]?.schedule.at, skip: LS.get('lastInput', '') === ymdKey(now)};
+  notiState = {pending: (after.notifications || []).filter(n => NOTI_IDS(+n.id)).length, next: list[0]?.schedule.at, skip: NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now)};
   notiShow();
 }
 async function notiToggle(key){

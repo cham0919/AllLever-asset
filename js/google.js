@@ -194,7 +194,7 @@ async function gDownload(f, tok){
 function gSave(){ LS.set('gfiles', S.gfiles); }
 function gAdd(list){
   let n = 0;
-  for (const d of list) if (!S.gfiles.some(f => f.id === d.id)){ S.gfiles.push({id: d.id, name: d.name, mime: d.mime, year: null}); n++; }
+  for (const d of list) if (!S.gfiles.some(f => f.id === d.id)){ S.gfiles.push({id: d.id, name: d.name, mime: d.mime, year: null, ...(d.path != null ? {path: d.path} : {})}); n++; }
   gSave(); renderG(); return n;
 }
 // 시트 고르기: 먼저 이 앱이 접근할 수 있는 시트(전에 고른 시트·앱이 만든 시트)를 드라이브에서 직접 목록으로 보여주고,
@@ -224,7 +224,7 @@ function gChooser(files){
   const noPicker = NATIVE && window.Capacitor?.getPlatform?.() === 'ios';
   const day = t => { const d = new Date(t); return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()} 수정`; };
   el.innerHTML = `<h5>연결할 시트 고르기</h5>
-    ${files.length ? files.map(f => `<label><input type="checkbox" value="${esc(f.id)}"><span>${esc(f.name)}<small>${day(f.modifiedTime)}</small></span></label>`).join('')
+    ${files.length ? files.map(f => `<label><input type="checkbox" value="${esc(f.id)}"><span>${esc(f.name)}<small>${day(f.modifiedTime)}<i data-p="${esc(f.id)}"></i></small></span></label>`).join('')
       : S.gfiles.length ? `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트는 모두 연결돼 있어요.${noPicker ? '' : ' 다른 시트는 아래 <b>구글 선택 창</b>에서 찾아 주세요.'}</p>`
       : `<p class="note" style="margin:0 0 4px">이 앱이 볼 수 있는 시트가 아직 없어요. ${noPicker ? '' : '아래 <b>구글 선택 창</b>에서 시트를 고르거나, '}<b>템플릿으로 새 시트 만들기</b>를 눌러 주세요.</p>`}
     <div class="row2">${files.length ? '<button class="btn" id="gcOk">연결하기</button>' : ''}<button class="btn ghost" id="gcCancel">닫기</button></div>
@@ -233,12 +233,13 @@ function gChooser(files){
   el.hidden = false;
   el.scrollIntoView({block: 'nearest', behavior: 'smooth'});
   $('#gcCancel').onclick = () => { el.hidden = true; };
+  gFillPaths(files, () => files.forEach(f => { const i = el.querySelector(`[data-p="${CSS.escape(f.id)}"]`); if (i && f.path) i.textContent = ' · ' + f.path; }));
   if (!noPicker) $('#gcPicker').onclick = () => gPicker();
   if (files.length) $('#gcOk').onclick = () => {
     const ids = [...el.querySelectorAll('input:checked')].map(i => i.value);
     if (!ids.length) return toast('연결할 시트를 골라 주세요');
     el.hidden = true;
-    const n = gAdd(files.filter(f => ids.includes(f.id)).map(f => ({id: f.id, name: f.name, mime: f.mimeType})));
+    const n = gAdd(files.filter(f => ids.includes(f.id)).map(f => ({id: f.id, name: f.name, mime: f.mimeType, ...(f.path != null ? {path: f.path} : {})})));
     if (n) syncGoogle(true, true);
   };
 }
@@ -300,6 +301,47 @@ async function gFolder(tok){
   if (!id) throw new Error('드라이브에 폴더를 만들지 못했어요');
   LS.set('gfolder', id); return id;
 }
+// 같은 폴더에 같은 이름의 시트가 있으면 뒤에 (2), (3)… 을 붙여요 (앱이 볼 수 있는 파일 기준)
+async function gFreeName(base, parent, tok){
+  try {
+    const q = `'${parent}' in parents and trashed=false and name contains '${base.replace(/'/g, "\\'")}'`;
+    const j = await (await gFetch('https://www.googleapis.com/drive/v3/files?' + new URLSearchParams({q, fields: 'files(name)', pageSize: '200'}), {cache: 'no-store'}, tok)).json();
+    const names = new Set((j.files || []).map(f => f.name));
+    if (!names.has(base)) return base;
+    let n = 2; while (names.has(`${base} (${n})`)) n++;
+    return `${base} (${n})`;
+  } catch(e){ return base; }
+}
+// 시트 경로 (내 드라이브 › 머니머슬): 폴더 이름은 기기에 기억해 두고, 볼 수 없는 폴더는 '…'으로
+const gDirs = LS.get('gdirs', {});
+let gRootId = LS.get('groot', null);
+async function gPathOf(id, tok){
+  const get = async (fid, fields) => { const r = await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fid)}?fields=${fields}&supportsAllDrives=true`, {cache: 'no-store'}, tok); return r.json(); };
+  if (!gRootId){   // 내 드라이브(맨 위) 폴더 id: 바로 묻고, 안 되면 앱이 맨 위에 만든 '머니머슬' 폴더의 상위 폴더로 알아내요
+    try { gRootId = (await get('root', 'id')).id || null; } catch(e){}
+    if (!gRootId && LS.get('gfolder', null)){ try { gRootId = (await get(LS.get('gfolder'), 'parents')).parents?.[0] || null; } catch(e){} }
+    if (gRootId) LS.set('groot', gRootId);
+  }
+  let p; try { p = (await get(id, 'parents')).parents?.[0]; } catch(e){ return ''; }
+  if (!p) return '공유 문서함';
+  const parts = [];
+  for (let i = 0; p && i < 6; i++){
+    if (p === gRootId){ parts.unshift('내 드라이브'); break; }
+    let d = gDirs[p];
+    if (!d){ try { const j = await get(p, 'name,parents'); d = gDirs[p] = {n: j.name, p: j.parents?.[0] || null}; } catch(e){ parts.unshift('…'); break; } }
+    parts.unshift(d.n); p = d.p;
+  }
+  LS.set('gdirs', gDirs);
+  return parts.join(' › ');
+}
+let gPathsBusy = false;
+async function gFillPaths(list, after){   // list: 경로를 채울 파일들 ({id, path?})
+  if (gPathsBusy) return; const need = list.filter(f => f.path == null); if (!need.length) return;
+  gPathsBusy = true;
+  try { const tok = await gToken(false); if (!tok) return;
+    for (const f of need){ f.path = await gPathOf(f.id, tok); after(); } }
+  catch(e){} finally { gPathsBusy = false; }
+}
 async function gCreate(year){
   if (!gReady()) return toast('개발자 설정이 필요해요');
   if (!(await leaveLocalOk())) return;
@@ -318,7 +360,8 @@ async function gCreate(year){
     busy('생성 중입니다', `구글 드라이브 '${FOLDER}' 폴더에 ${y}년 시트를 만들고 있어요`);
     const tpl = await fetch('template.xlsx'); if (!tpl.ok) throw new Error('템플릿 파일을 찾지 못했어요');
     let folder = null; try { folder = await gFolder(tok); } catch(e){}   // 폴더를 못 만들면 내 드라이브 맨 위에라도 만들어요
-    const meta = {name: `가계부_${y}`, mimeType: MIME_SHEET, ...(folder ? {parents: [folder]} : {})};
+    const name = await gFreeName(`가계부_${y}`, folder || 'root', tok);   // 같은 폴더에 같은 이름이 있으면 '가계부_2026 (2)'처럼
+    const meta = {name, mimeType: MIME_SHEET, ...(folder ? {parents: [folder]} : {})};
     const form = new FormData();
     form.append('metadata', new Blob([JSON.stringify(meta)], {type: 'application/json'}));
     form.append('file', new Blob([await tpl.arrayBuffer()], {type: MIME_XLSX}));
@@ -357,9 +400,10 @@ function renderG(){
   $('#gOut').hidden = !(S.guser || S.gfiles.length);
   const list = S.gfiles.slice().sort((a, b) => (a.year || 9999) - (b.year || 9999));
   $('#gList').innerHTML = list.length ? list.map(f => `<div class="src"><span class="y">${f.year ? f.year + '년' : '확인 전'}${f.gone ? ' · <b class="up">찾을 수 없음</b>' : f.ro ? ' · 보기 전용' : ''}</span>
-      <span class="u">${esc(f.name)}</span><a href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(f.id)}/edit" target="_blank" rel="noopener">열기</a><button data-i="${S.gfiles.indexOf(f)}">해제</button></div>`).join('')
+      <span class="u">${esc(f.name)}${f.path ? `<small>${esc(f.path)}</small>` : ''}</span><a href="https://docs.google.com/spreadsheets/d/${encodeURIComponent(f.id)}/edit" target="_blank" rel="noopener">열기</a><button data-i="${S.gfiles.indexOf(f)}">해제</button></div>`).join('')
     : '<p class="note" style="margin:0">연결된 시트가 없어요</p>';
   $('#gList').querySelectorAll('button').forEach(b => b.onclick = () => gRemove(+b.dataset.i));
+  if (S.tab === 'settings' && S.spage === 'google') gFillPaths(S.gfiles, () => { gSave(); renderG(); });
 }
 let gSyncing = false;
 async function syncGoogle(interactive, show = false){   // show: 시트를 새로 연결했을 때처럼 기다리는 화면을 띄워요

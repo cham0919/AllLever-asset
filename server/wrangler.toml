@@ -1,12 +1,13 @@
 name = "alllever-asset-auth"
 main = "src/index.js"
 compatibility_date = "2026-10-01"
-workers_dev = true
+workers_dev = true   # 예전 주소(…workers.dev): 1.0.39 이하 앱이 쓰고 있어서 당분간 유지
+routes = [{ pattern = "auth.alllever.app", custom_domain = true }]
 
 [vars]
 GOOGLE_CLIENT_ID = "919106003112-de97gm5uit7f9imrgrusrugj6t4g9v0s.apps.googleusercontent.com"
 # 로그인 후 돌아갈 수 있는 앱 주소 (쉼표로 구분)
-ALLOWED_RETURN = "https://cham0919.github.io/AllLever-asset/"
+ALLOWED_RETURN = "https://app.alllever.app/,https://cham0919.github.io/AllLever-asset/"
 # 아이폰·안드로이드 앱으로 돌아오는 주소 (정확히 일치)와 앱 화면의 출처 (아이폰 capacitor://localhost, 안드로이드 https://localhost)
 APP_RETURN = "com.alllever.asset://auth"
 APP_ORIGINS = "capacitor://localhost,https://localhost"

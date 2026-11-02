@@ -539,23 +539,40 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
 .pq-drop{flex:none;color:var(--expense);font-weight:700;font-size:13px;padding:6px 4px}
 .tico.sav{color:var(--saving)}
 
-/* ───── 가로 화면 (아이폰을 눕혔을 때): 아래 탭 → 왼쪽 세로 탭, 제목·월 이동을 한 줄로 ───── */
+/* 거래 검색 (가계부 탭, 월 이동 줄 오른쪽 돋보기) */
+#stepper{position:relative}
+#stepper .sico{position:absolute;right:0;top:50%;transform:translateY(-50%)}
+#stepper .sico[hidden]{display:none}
+.sfield{display:flex;align-items:center;gap:8px;background:var(--card);border-radius:14px;padding:0 6px 0 14px;height:48px;box-shadow:var(--shadow);margin:4px 0 12px}
+.sfield > svg{width:18px;height:18px;stroke:var(--sub);fill:none;stroke-width:2;stroke-linecap:round;flex:none}
+.sfield input{flex:1;min-width:0;border:0;background:none;font:inherit;font-size:16px;color:var(--ink);outline:none;-webkit-appearance:none}
+.sfield input::-webkit-search-cancel-button{display:none}
+.sfield button{width:36px;height:36px;color:var(--faint);font-size:17px}
+.sfil{display:flex;gap:6px;margin-bottom:14px}
+.sfil button{padding:7px 13px;border-radius:99px;background:var(--chip);font-size:13.5px;font-weight:600;color:var(--sub)}
+.sfil button.on{background:var(--ink);color:var(--card)}
+.ssum{display:flex;justify-content:space-between;align-items:baseline;margin:0 4px 10px;font-size:13.5px;color:var(--sub)}.ssum b{color:var(--ink);font-size:16px}
+.shd2{font-size:13px;color:var(--sub);font-weight:600;margin:4px 4px 8px}
+.srec{display:flex;flex-wrap:wrap;gap:8px}.srec button{padding:8px 13px;border-radius:99px;background:var(--card);box-shadow:var(--shadow);font-size:14px;font-weight:600;color:var(--ink)}
+.sres .row{cursor:pointer}.sres .row small .dd{color:var(--ink);font-weight:600}
+/* ───── 가로 화면 (아이폰을 눕혔을 때): 탭은 아래 그대로 두고 낮게, 제목·월 이동을 한 줄로 ───── */
 @media (orientation:landscape) and (max-height:520px){
-  :root{--rail:calc(76px + env(safe-area-inset-left))}
-  body{padding-left:var(--rail);padding-right:env(safe-area-inset-right)}
-  nav.tabs{top:0;right:auto;width:var(--rail);flex-direction:column;justify-content:center;gap:4px;padding:env(safe-area-inset-top) 4px env(safe-area-inset-bottom) calc(4px + env(safe-area-inset-left));border-top:0;border-right:1px solid var(--line)}
-  nav.tabs button{flex:0 0 auto;padding:7px 0}
+  body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
+  nav.tabs{padding:3px calc(8px + env(safe-area-inset-right)) calc(3px + env(safe-area-inset-bottom)) calc(8px + env(safe-area-inset-left))}
+  nav.tabs button{flex-direction:row;justify-content:center;gap:6px;font-size:12.5px;padding:7px 0}
+  nav.tabs button svg{width:20px;height:20px}
   .top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:calc(env(safe-area-inset-top) + 8px) 16px 6px}
   .top-row{display:contents}
   .top-row > :first-child{grid-column:1}
   .top-row > :last-child{grid-column:3;justify-self:end}
   .top #stepper{grid-column:2;grid-row:1;margin:0}
+  .top #stepper .sico{position:static;transform:none;margin-left:4px}
   .top h1{font-size:22px}
-  main{max-width:760px;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
-  main.vghost{left:var(--rail);right:env(safe-area-inset-right)}
-  .setpage{padding-bottom:calc(28px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
-  .fab{bottom:calc(env(safe-area-inset-bottom) + 18px);right:calc(18px + env(safe-area-inset-right))}
-  .toast{bottom:calc(20px + env(safe-area-inset-bottom))}
+  main{max-width:760px;padding-bottom:calc(64px + env(safe-area-inset-bottom))}
+  main.vghost{left:env(safe-area-inset-left);right:env(safe-area-inset-right)}
+  .setpage{padding-bottom:calc(64px + env(safe-area-inset-bottom));max-width:760px;margin:0 auto}
+  .fab{bottom:calc(env(safe-area-inset-bottom) + 56px);right:calc(18px + env(safe-area-inset-right))}
+  .toast{bottom:calc(60px + env(safe-area-inset-bottom))}
   .sheet{max-width:640px}
   .sheet.ed.page{padding-left:calc(16px + env(safe-area-inset-left));padding-right:calc(16px + env(safe-area-inset-right))}
   .sheet.ed.page > *{max-width:640px;margin-left:auto;margin-right:auto}
@@ -587,6 +604,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button id="prevM" aria-label="이전"><svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></button>
     <b class="ymlabel num" id="ymLabel" aria-live="polite"></b>
     <button id="nextM" aria-label="다음"><svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></button>
+    <button class="sico" id="searchBtn" aria-label="거래 검색" hidden><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
   </div>
 </header>
 

@@ -575,7 +575,50 @@ function openItemTx(m, idx){
     <div class="ecard">${T.map(t => `<div class="row${ed ? ' tap' : ''}" data-tx="${esc(t.id)}"><div class="n">${t.d}일 · ${esc(t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name))}<small>${esc(t.sub || '')}${t.pay ? ' · ' + esc(t.pay) : ''}</small></div><div class="a num">${fmtWon(t.amt)}</div></div>`).join('') || '<p class="note" style="margin:0">이 달 거래가 없어요</p>'}</div>
     ${ed ? `<input id="itMemo" class="ememo" maxlength="80" placeholder="이 달 메모 (선택)" value="${esc(it.memo)}"><button class="btn" id="itSave">메모 저장</button><button class="btn ghost" id="itCat">세부분류 관리</button>` : ''}`, {tall: T.length > 6});
   $('#edX').onclick = closeEd;
-  $('#ed').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => { closeEd(); editTx(el.dataset.tx); });
+  $('#ed').querySelectorAll('[data-tx]').forEach(el => el.onclick = () => editTx(el.dataset.tx));   // 닫지 않고 바로 바꿔요 (닫은 뒤 열면 뒤로 가기 기록이 꼬여요)
   if (ed){ $('#itCat').onclick = () => openCats(it.kind);
     $('#itSave').onclick = () => { const v = $('#itMemo').value.trim(); closeEd(); if (v !== str(it.memo)) commit([{t: 'b', y, m, kind: it.kind, name: it.name, idx: occ(Y.budget[m], it, bKey), f: 'memo', v, o: str(it.memo)}]); }; }
 }
+
+/* ───────── 거래 검색 (가계부 탭 · 월 이동 줄 오른쪽 돋보기) ─────────
+   모든 연도의 거래에서 메모·항목·세부분류·결제수단(숫자면 금액)으로 찾아요. 누르면 그 날짜로 가서 거래를 고쳐요. */
+const SICO = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+function openSearch(){
+  const st = {q: '', kind: ''};
+  const all = []; for (const y of yearsList()){ const Y = S.years[y]; if (!Y.txMode) continue;
+    for (let m = 1; m <= 12; m++) for (const t of Y.tx?.[m] || []) if (!t.skip) all.push({t, y, m}); }
+  const label = t => t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name);
+  const sign = t => t.kind === '수입' ? t.amt : -t.amt;
+  const isKind = (t, k) => !k || (k === '지출' ? EXP_KINDS.includes(t.kind) : t.kind === k);
+  const multiYear = new Set(all.map(x => x.y)).size > 1;
+  openEd(`<h4>거래 검색</h4><div class="sfield">${SICO}<input id="sq" type="search" enterkeyhint="search" placeholder="메모, 항목, 세부분류" autocomplete="off" autofocus><button id="sx" aria-label="지우기" hidden>✕</button></div><div id="sres" class="sres"></div>`);
+  const draw = () => {
+    const q = st.q.trim().toLowerCase(), el = $('#sres'); $('#sx').hidden = !q;
+    if (!q){   // 검색어 전: 자주 쓴 기록
+      const cnt = {}; all.forEach(({t}) => { const k = label(t); if (k) cnt[k] = (cnt[k] || 0) + 1; });
+      const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 12).map(x => x[0]);
+      el.innerHTML = top.length ? `<div class="shd2">자주 쓴 기록</div><div class="srec">${top.map(x => `<button data-q="${esc(x)}">${esc(x)}</button>`).join('')}</div>` : '';
+      el.querySelectorAll('[data-q]').forEach(b => b.onclick = () => { st.q = b.dataset.q; $('#sq').value = st.q; draw(); });
+      return;
+    }
+    const num = /^\d[\d,]*$/.test(q) ? q.replace(/,/g, '') : null;
+    const hit = all.filter(({t}) => isKind(t, st.kind) && ([t.memo, t.name, t.sub, t.pay].some(v => String(v || '').toLowerCase().includes(q)) || (num && String(t.amt).includes(num))))
+      .sort((a, b) => b.y - a.y || b.m - a.m || b.t.d - a.t.d);
+    const sum = hit.reduce((a, x) => a + sign(x.t), 0), groups = [];
+    for (const x of hit.slice(0, 300)){ const g = groups.at(-1); if (g && g.y === x.y && g.m === x.m) g.L.push(x); else groups.push({y: x.y, m: x.m, L: [x]}); }
+    el.innerHTML = `<div class="sfil">${['', '지출', '수입', '저축'].map(k => `<button data-k="${k}"${st.kind === k ? ' class="on"' : ''}>${k || '전체'}</button>`).join('')}</div>
+      <div class="ssum"><span>${hit.length ? `${hit.length}건` : '찾은 거래가 없어요'}</span>${hit.length ? `<b class="num">${sum > 0 ? '+' : ''}${fmtWon(sum)}원</b>` : ''}</div>
+      ${groups.map(g => `<section class="card"><div class="dayhead"><b>${multiYear ? g.y + '년 ' : ''}${g.m}월</b><span class="num">${fmtWon(g.L.reduce((a, x) => a + sign(x.t), 0))}원</span></div>
+        ${g.L.map(x => `<div data-sy="${x.y}" data-sm="${x.m}" data-sid="${esc(x.t.id)}" data-sd="${x.t.d}">${txRowHtml(x.t, false).replace('<small>', `<small><span class="dd">${x.m}.${x.t.d}</span> · `)}</div>`).join('')}</section>`).join('')}`;
+    el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { st.kind = b.dataset.k; draw(); });
+    el.querySelectorAll('[data-sid]').forEach(r => r.onclick = () => {   // 그 날짜의 달력으로 가서, 고칠 수 있으면 거래 수정 화면
+      const y = +r.dataset.sy, m = +r.dataset.sm, d = +r.dataset.sd;
+      setYear(y); S.month.budget = m; S.sel = {y, m, d}; S.bview = 'cal'; LS.set('bview', 'cal'); render();
+      if (canEdit(y)) editTx(r.dataset.sid); else closeEd();   // 검색 화면에서 바로 수정 화면으로 (뒤로 가기 기록이 꼬이지 않게 닫지 않고 바꿔요)
+    });
+  };
+  let t0; $('#sq').oninput = e => { clearTimeout(t0); t0 = setTimeout(() => { st.q = e.target.value; draw(); }, 120); };
+  $('#sx').onclick = () => { st.q = ''; $('#sq').value = ''; $('#sq').focus(); draw(); };
+  draw();
+}
+$('#searchBtn').onclick = () => openSearch();

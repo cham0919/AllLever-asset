@@ -27,6 +27,7 @@ function renderHead(){
     if (S.month[key]==null) S.month[key] = S.year === now.getFullYear() && canEdit() && (key === 'asset' || S.model.txMode) ? now.getMonth() + 1 : lastWith(fn);   // 올해는 이번 달부터
     const trend = isYearView();
     $('#prevM').disabled = !canShift(-1); $('#nextM').disabled = !canShift(1);
+    $('#searchBtn').hidden = !(S.tab === 'budget' && Object.values(S.years || {}).some(Y => Y.txMode));   // 거래 검색: 가계부 탭에서만
     $('#ymLabel').textContent = trend ? `${S.year}년` : `${S.year}년 ${S.month[key]}월`;
     $('#prevM').setAttribute('aria-label', trend ? '이전 연도' : '이전 달'); $('#nextM').setAttribute('aria-label', trend ? '다음 연도' : '다음 달');
   }

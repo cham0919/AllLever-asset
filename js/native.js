@@ -119,17 +119,8 @@ const notiCfg = () => Object.assign({daily: false, time: '21:00'}, LS.get('noti'
 const NOTI_SKIP_TODAY = true;   // 그날 앱에서 입력했으면 그날 알림은 건너뛰어요
 const NOTI_IDS = n => n >= 1000 && n < 4000;
 let notiT = null;
-function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(e => { notiState = {err: e?.message || String(e)}; notiShow(); }), 1200); }
-// 설정 › 알림에 실제로 예약된 다음 알림을 보여줘요 (예약이 안 됐으면 이유를)
-let notiState = null, notiAsked = false;
-const fmtNoti = d => { const t = new Date(), k = (d - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5;
-  const day = k < 1 ? '오늘' : k < 2 ? '내일' : `${d.getMonth() + 1}월 ${d.getDate()}일`, h = d.getHours();
-  return `${day} ${h < 12 ? '오전' : '오후'} ${(h % 12) || 12}:${String(d.getMinutes()).padStart(2, '0')}`; };
-function notiShow(){
-  const el = $('#ntNext'); if (!el) return; const st = notiState;
-  el.textContent = !st || !notiCfg().daily ? '' : st.err ? `예약하지 못했어요 (${st.err})` : st.perm ? '휴대폰 설정에서 머니머슬 알림이 꺼져 있어요'
-    : st.pending ? `다음 알림 ${fmtNoti(st.next)}${st.skip ? ' · 오늘은 이미 입력해서 건너뛰어요' : ''}` : '예약된 알림이 없어요';
-}
+function notiSoon(){ if (!NATIVE) return; clearTimeout(notiT); notiT = setTimeout(() => notiSchedule().catch(() => {}), 1200); }
+let notiAsked = false;   // 알림 화면에 들어올 때마다 한 번만 '설정으로 이동' 창
 const ymdKey = d => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
 async function notiSchedule(){
   const LN = nativePlugin('LocalNotifications'); if (!LN) return;
@@ -138,7 +129,6 @@ async function notiSchedule(){
   const mine = (pend.notifications || []).filter(n => NOTI_IDS(n.id)).map(n => ({id: n.id}));
   if (mine.length) await LN.cancel({notifications: mine}).catch(() => {});
   if (perm.display !== 'granted' || !c.daily){
-    notiState = c.daily ? {perm: true} : null; notiShow();
     if (c.daily && S.tab === 'settings' && S.spage === 'noti' && !notiAsked){ notiAsked = true; notiAskSettings(); }
     return; }
   const now = new Date(), list = [], at = (d, h, mi) => { const x = new Date(d); x.setHours(h, mi, 0, 0); return x; };
@@ -149,9 +139,6 @@ async function notiSchedule(){
       list.push({id: 1000 + i, title: '머니머슬', body: '오늘 쓴 돈을 기록해 볼까요?', schedule: {at: t, allowWhileIdle: true}, extra: {tab: 'budget'}}); }
   }
   if (list.length) await LN.schedule({notifications: list});
-  const after = await LN.getPending().catch(() => ({notifications: []}));
-  notiState = {pending: (after.notifications || []).filter(n => NOTI_IDS(+n.id)).length, next: list[0]?.schedule.at, skip: NOTI_SKIP_TODAY && LS.get('lastInput', '') === ymdKey(now)};
-  notiShow();
 }
 // 알림이 꺼져 있으면: 휴대폰 설정 › 머니머슬 › 알림으로 바로 가는 창
 async function notiAskSettings(){
@@ -200,7 +187,7 @@ function syncNativeSheet(){
   $('#lkOn').setAttribute('aria-checked', L.on); $('#lkDelay').hidden = !L.on;
   $('#lkDelay').querySelectorAll('[data-d]').forEach(b => b.classList.toggle('on', +b.dataset.d === L.delay));
   for (const k of ['daily']) $('#nt-' + k).setAttribute('aria-checked', N[k]);
-  $('#ntTime').hidden = !N.daily; notiShow();
+  $('#ntTime').hidden = !N.daily;
   $('#ntDailyH').hidden = $('#nt-daily').parentElement.hidden = !U.ledger;   // 끈 기능의 알림은 숨기고 예약도 안 해요
   $('#ntTimeV').textContent = N.time.replace(/^(\d+):(\d+)$/, (_, h, m) => `${+h < 12 ? '오전' : '오후'} ${(+h % 12) || 12}:${m}`);
 }

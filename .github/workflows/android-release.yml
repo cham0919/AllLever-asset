@@ -1,0 +1,60 @@
+# 안드로이드 출시용 설치 파일(AAB)을 서명해서 만들어요. Actions 탭에서 "Run workflow"로 직접 실행해요.
+# 필요한 저장소 Secrets (값은 채팅이나 코드에 넣지 말고 GitHub 저장소 설정에만 넣어요):
+#   ANDROID_KEYSTORE_BASE64    업로드 열쇠 파일(.jks)을 base64로 바꾼 문자열
+#   ANDROID_KEYSTORE_PASSWORD  열쇠 파일 비밀번호
+#   ANDROID_KEY_ALIAS          열쇠 별칭(alias)
+#   ANDROID_KEY_PASSWORD       열쇠 비밀번호
+# 결과: 실행 결과 화면 아래 Artifacts의 moneymuscle-android-release (AAB). 이 파일을 Play Console에 올려요.
+# 버전 이름은 package.json의 version, 버전 코드는 실행할 때마다 자동으로 올라가요.
+name: Android release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: android-release
+
+jobs:
+  aab:
+    runs-on: ubuntu-latest
+    env:
+      KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check secrets
+        run: |
+          missing=""
+          for k in KS_B64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do [ -n "${!k}" ] || missing="$missing $k"; done
+          if [ -n "$missing" ]; then echo "::error::저장소 Secrets가 없어요:$missing"; exit 1; fi
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v5
+        with: { distribution: temurin, java-version: 21 }
+      - run: npm ci
+      - run: npm run sync
+      - name: Keystore file
+        run: |
+          echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+      - name: Build signed AAB
+        working-directory: android
+        run: |
+          VN=$(node -p "require('../package.json').version")
+          VC=$(( ${{ github.run_number }} + 100 ))
+          echo "versionName=$VN versionCode=$VC"
+          ./gradlew bundleRelease --no-daemon -PversionName="$VN" -PversionCode="$VC"
+      - name: Check signature
+        run: |
+          AAB=android/app/build/outputs/bundle/release/app-release.aab
+          ls -la "$AAB"
+          keytool -printcert -jarfile "$AAB" | grep -E "Owner|SHA256|Valid" | head -5
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moneymuscle-android-release
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30

@@ -52,7 +52,8 @@ jobs:
         run: |
           AAB=android/app/build/outputs/bundle/release/app-release.aab
           ls -la "$AAB"
-          keytool -printcert -jarfile "$AAB" | grep -E "Owner|SHA256|Valid" | head -5
+          # 서명 인증서에 적은 이름·지역이 공개 로그에 남지 않도록 지문(SHA256)만 확인해요
+          keytool -printcert -jarfile "$AAB" | grep -E "SHA256" | head -1
       - uses: actions/upload-artifact@v4
         with:
           name: moneymuscle-android-release

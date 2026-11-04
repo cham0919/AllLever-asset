@@ -1,0 +1,9 @@
+2026-11-04 01:27:54.408 Df App[9154:81f0] [com.apple.BoardServices:XPCErrors] [C:1] Alloc com.apple.frontboard.systemappservices
+2026-11-04 01:27:54.486 Df App[9154:81dc] [com.apple.BoardServices:XPCErrors] [C:2] Alloc com.apple.backboard.hid-services.xpc
+2026-11-04 01:27:54.787 Df App[9154:81dc] (App.debug.dylib) KeyboardPlugin: resize mode - native
+2026-11-04 01:27:55.184 Df App[9154:81dc] [com.apple.BoardServices:XPCErrors] [C:3] Alloc com.apple.inputservice.input-ui-host
+2026-11-04 01:27:55.516 Df App[9154:81f5] [com.apple.xpc:connection] [0x102e34540] Re-initialization successful; calling out to event handler with XPC_ERROR_CONNECTION_INTERRUPTED
+2026-11-04 01:27:57.840 Df App[9154:8203] [com.apple.AppSSO:SOClient] configurationWithCompletion: success = YES, error = (null)
+2026-11-04 01:27:57.879 E  App[9154:81f5] [com.apple.TextInputUI:CandidateGeneration] Attempted to update accumulator from source type: 0, after completion has already been called for token:[16E1BC62]. This is an error and will be ignored.
+2026-11-04 01:27:58.072 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request known fingerprinting scripts from WebPrivacy: Error Domain=WebPrivacyErrorDomain Code=1001 "List data not found" UserInfo={NSLocalizedDescription=List data not found}
+2026-11-04 01:28:04.991 Df App[9154:8212] [com.apple.LocalAuthentication:Client,Biometry] canEvaluatePolicy:1 on LAContext[1:1:0] cid:2 returned Error Domain=com.apple.LocalAuthentication Code=-7 "No identities are enrolled." UserInfo={NSDebugDescription=No identities are enrolled., NSLocalizedDescription=생체 인식이 등록되어 있지 않습니다.}

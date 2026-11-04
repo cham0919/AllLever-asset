@@ -1,0 +1,26 @@
+2026-11-04 01:27:54.592 App[9154:33244] DiskCookieStorage changing policy from 2 to 0, cookie file: file:///Users/runner/Library/Developer/CoreSimulator/Devices/F5C4661C-7B05-4238-BF71-BF2845D2630A/data/Containers/Data/Application/DE25BA69-A18A-4C80-8AC1-213476688FD4/Library/Cookies/com.alllever.asset.binarycookies
+2026-11-04 01:27:54.787 App[9154:33244] KeyboardPlugin: resize mode - native
+⚡️  Loading app at capacitor://localhost...
+⚡️  To Native ->  Filesystem readFile 66175872
+⚡️  WebView loaded
+ERROR MESSAGE:  {"code":"OS-PLUG-FILE-0008","message":"'readFile' failed because file at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F5C4661C-7B05-4238-BF71-BF2845D2630A\/data\/Containers\/Data\/Application\/DE25BA69-A18A-4C80-8AC1-213476688FD4\/Library\/moneymuscle-data.json'  does not exist.","errorMessage":"'readFile' failed because file at 'file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F5C4661C-7B05-4238-BF71-BF2845D2630A\/data\/Containers\/Data\/Application\/DE25BA69-
+⚡️  [error] - {"code":"OS-PLUG-FILE-0008","message":"'readFile' failed because file at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F5C4661C-7B05-4238-BF71-BF2845D2630A/data/Containers/Data/Application/DE25BA69-A18A-4C80-8AC1-213476688FD4/Library/moneymuscle-data.json'  does not exist.","errorMessage":"'readFile' failed because file at 'file:///Users/runner/Library/Developer/CoreSimulator/Devices/F5C4661C-7B05-4238-BF71-BF2845D2630A/data/Containers/Data/Application/DE25BA69-A18A-4C80-8AC1-213476688FD4/Library/moneymuscle-data.json'  does not exist."}
+⚡️  To Native ->  SystemBars setStyle 66175873
+⚡️  [log] - [alv] native plugins: CapacitorHttp,Console,WebView,CapacitorCookies,SystemBars,Haptics,App,Filesystem,LocalNotifications,Browser,Keyboard,Share,WebAuth,Biometric,SecureStore,AppSettings
+⚡️  To Native ->  Biometric check 66175874
+⚡️  To Native ->  Biometric setPrivacy 66175875
+⚡️  To Native ->  App addListener 66175876
+⚡️  TO JS undefined
+⚡️  To Native ->  App addListener 66175877
+⚡️  To Native ->  LocalNotifications addListener 66175878
+⚡️  To Native ->  Filesystem writeFile 66175879
+⚡️  TO JS {"type":"faceID","available":true,"biometrics":false}
+⚡️  TO JS undefined
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/F5C4661C-7B05-4238-BF71-BF2845D2630A\/data\/Containers\/Data\/Application\/DE25BA69-A18A-4C80-8AC1-213476688FD4\/Library\/moneymuscle-data.json"}
+⚡️  To Native ->  LocalNotifications checkPermissions 66175880
+⚡️  TO JS {"display":"prompt"}
+⚡️  To Native ->  LocalNotifications getPending 66175881
+num of pending notifications 0
+[]
+⚡️  TO JS {"notifications":[]}
+com.alllever.asset: 9154

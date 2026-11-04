@@ -1,0 +1,19 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-04 01:27:54.635 E  App[9154:81f0] [com.apple.extensionkit:default] Failed to resolve host network app id to config: bundleID: com.apple.WebKit.Networking instance ID: Optional([_EXExtensionInstanceIdentifier: B7031FF5-BDEE-4F12-8B4E-163654AB7C51])
+2026-11-04 01:27:55.081 E  App[9154:8203] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 0 event_name: com.apple.app_launch_measurement.FirstFramePresentationMetric
+2026-11-04 01:27:55.235 E  App[9154:81dc] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:performInputOperation:]  Can only perform input operation for an active session. sessionID = B1CAF54E-A242-43D6-A4F0-8C4FD14666E9
+2026-11-04 01:27:55.268 E  App[9154:81dc] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:textSuggestionsChanged:]  Can only set suggestions for an active session. sessionID = B1CAF54E-A242-43D6-A4F0-8C4FD14666E9
+2026-11-04 01:27:55.366 E  App[9154:81f5] [com.apple.app_launch_measurement:General] Failed to send CA Event for app launch measurements for ca_event_type: 1 event_name: com.apple.app_launch_measurement.ExtendedLaunchMetrics
+2026-11-04 01:27:56.098 F  App[9154:81dc] [com.apple.WebKit:Process] GPU process (0x1111281e0) took 1.356517 seconds to launch
+2026-11-04 01:27:56.578 E  App[9154:81f5] [com.apple.TextInputUI:CandidateGeneration] Result accumulator timeout: 0.250000, exceeded.
+2026-11-04 01:27:56.668 E  App[9154:81f3] [com.apple.TextInputUI:CandidateGeneration] Result accumulator timeout: 0.250000, exceeded.
+2026-11-04 01:27:57.879 E  App[9154:81f5] [com.apple.TextInputUI:CandidateGeneration] Attempted to update accumulator from source type: 0, after completion has already been called for token:[16E1BC62]. This is an error and will be ignored.
+2026-11-04 01:27:58.071 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request storage access quirks from WebPrivacy.
+2026-11-04 01:27:58.071 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request storage access user agent string quirks from WebPrivacy.
+2026-11-04 01:27:58.072 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request known fingerprinting scripts from WebPrivacy: Error Domain=WebPrivacyErrorDomain Code=1001 "List data not found" UserInfo={NSLocalizedDescription=List data not found}
+2026-11-04 01:27:58.072 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request query parameters from WebPrivacy.
+2026-11-04 01:27:58.079 E  App[9154:8222] [com.apple.WebKit:ResourceLoadStatistics] WebContent[9163] Unable to filter tracking query parameters (missing data)
+2026-11-04 01:28:03.313 E  App[9154:8222] [com.apple.WebKit:ResourceLoadStatistics] WebContent[9163] Unable to hide query parameters from script (missing data)
+2026-11-04 01:28:03.405 E  App[9154:81dc] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:textSuggestionsChanged:]  Can only set suggestions for an active session. sessionID = B1CAF54E-A242-43D6-A4F0-8C4FD14666E9
+2026-11-04 01:28:03.432 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request allowed query parameters from WebPrivacy.
+2026-11-04 01:28:03.818 E  App[9154:81dc] [com.apple.WebKit:ResourceLoadStatistics] Failed to request restricted opener domains from WebPrivacy

@@ -9,7 +9,7 @@
 @media (prefers-color-scheme: dark){:root{--bg:#0f1115;--ink:#f3f4f6;--sub:#9ca3af;--line:#262a33;--accent:#5b9cf0}}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif}
 main{max-width:720px;margin:0 auto;padding:32px 16px 64px}
-h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 8px;padding-top:16px;border-top:1px solid var(--line)}
+h1{font-size:24px;margin:0 0 4px}h2{font-size:18px;margin:32px 0 8px;padding-top:16px;border-top:1px solid var(--line)}h3{font-size:16px;margin:20px 0 6px}
 p,li{color:var(--sub)}b{color:var(--ink)}a{color:var(--accent)}
 table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid var(--line);padding:8px;text-align:left;vertical-align:top}
 </style>
@@ -17,7 +17,7 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
 <body>
 <main>
 <h1>개인정보처리방침</h1>
-<p>머니머슬 - 가계부, 자산관리(이하 "앱") · 시행일 2026-10-30</p>
+<p>머니머슬 - 가계부, 자산관리(이하 "앱") · 시행일 2026-11-05</p>
 
 <h2>1. 한눈에 보기</h2>
 <ul>
@@ -52,12 +52,20 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
   <li><b>GitHub Pages</b>: 앱 화면 파일 제공</li>
 </ul>
 
-<h2>5. 삭제와 권한 취소</h2>
+<h2 id="delete">5. 계정 삭제와 권한 취소</h2>
 <ul>
   <li>앱 <b>설정 → 구글 계정 연결 해제</b>를 누르면 서버의 이메일·토큰이 바로 지워지고 구글 권한도 취소돼요. 기기에 저장된 데이터도 지워져요.</li>
   <li><a href="https://myaccount.google.com/permissions" rel="noopener">구글 계정 → 서드 파티 연결</a>에서도 언제든 권한을 취소할 수 있어요. 이 경우 서버의 토큰은 다음 요청 때 자동으로 지워져요.</li>
   <li>구글 시트 파일 자체는 사용자의 드라이브에 그대로 남아요.</li>
 </ul>
+<h3>앱 없이 계정 삭제 요청하기</h3>
+<p>앱을 이미 지웠거나 앱을 열 수 없다면 이메일로 삭제를 요청할 수 있어요.</p>
+<ol>
+  <li><a href="mailto:ckadl0118@gmail.com?subject=%EB%A8%B8%EB%8B%88%EB%A8%B8%EC%8A%AC%20%EA%B3%84%EC%A0%95%20%EC%82%AD%EC%A0%9C%20%EC%9A%94%EC%B2%AD">ckadl0118@gmail.com</a>으로 제목을 "머니머슬 계정 삭제 요청"으로 해서 메일을 보내주세요.</li>
+  <li>본문에 앱에서 연결했던 구글 계정 이메일을 적어주세요. 그 구글 계정으로 보내면 본인 확인이 쉬워요.</li>
+  <li>요청을 받은 날부터 7일 안에 로그인 서버의 이메일·갱신 토큰·세션 정보를 모두 지우고, 지운 뒤 답장으로 알려드려요.</li>
+</ol>
+<p>지워지는 정보: 로그인 서버에 있는 구글 계정 이메일, 암호화된 구글 갱신 토큰, 세션 값. 따로 보관하는 정보는 없어요. 가계부·자산 데이터는 서버에 없으니 지울 것이 없고, 사용자의 구글 시트 파일은 드라이브에 그대로 남아요. 시트도 지우려면 구글 드라이브에서 직접 삭제해주세요.</p>
 
 <h2>6. 문의</h2>
 <p>개인정보 관련 문의: <a href="mailto:ckadl0118@gmail.com">ckadl0118@gmail.com</a></p>

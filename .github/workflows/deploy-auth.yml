@@ -1,5 +1,7 @@
 # 로그인 유지 서버(server/)를 Cloudflare Workers에 배포해요.
-# 필요한 저장소 Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, GOOGLE_CLIENT_SECRET
+# 승인 단계 — 이 잡이 쓰는 GitHub 환경: server. 환경에 필수 검토자를 걸어 두면 실행 직전에 멈추고, 저장소 주인이 승인해야 비밀값을 받아 진행해요.
+#   비밀값은 저장소 Secrets가 아니라 Settings → Environments → server → Environment secrets에 둬요.
+# 필요한 Secrets: CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID, GOOGLE_CLIENT_SECRET
 # ENC_KEY(갱신 토큰 암호화 키)는 처음 배포할 때 자동으로 만들어 Cloudflare에만 저장해요. 어디에도 출력하지 않아요.
 name: Deploy auth server
 
@@ -14,6 +16,7 @@ concurrency: deploy-auth
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: server   # 승인 후에만 클라우드플레어 토큰과 구글 비밀값을 받아요
     defaults:
       run:
         working-directory: server

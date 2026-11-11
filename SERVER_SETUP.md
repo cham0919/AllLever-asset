@@ -22,11 +22,22 @@
 
 ## 2. Cloudflare API 토큰
 
+필요한 권한만 가진 토큰을 만들어요. Global API Key는 계정 전체 권한이라 쓰지 않아요.
+
 1. 오른쪽 위 프로필 → **My Profile → API Tokens → Create Token**을 누르세요.
-2. **Edit Cloudflare Workers** 템플릿을 고르세요(Use template).
-3. 권한에 **Account → D1 → Edit**를 하나 추가하세요.
-4. Account Resources는 본인 계정, Zone Resources는 All zones(기본값)로 두세요.
-5. Continue → Create Token을 누르고, 나온 토큰을 복사하세요. 다시 볼 수 없어요.
+2. **Edit Cloudflare Workers** 템플릿을 고르세요(Use template). 토큰 이름은 `GitHub 배포 (alllever)`처럼 알아보기 쉽게 정하세요.
+3. **Policies**를 아래처럼 맞추세요.
+   - **Account 정책**: Include → 본인 계정(`…'s Account`, All accounts 아님)
+     - 남길 권한: Workers Scripts **Edit**, Account Settings **Read**
+     - 추가할 권한: **D1 Edit**
+     - 해제할 권한: Workers KV Storage, Workers R2 Storage, Workers Tail, Workers Observability, Workers Builds Configuration, Workers Agents Configuration, Containers, Cloudflare Pages
+   - **Zone 정책**: Include → Specific zone → **`alllever.app`** (All zones 아님). 권한은 Workers Routes **Edit**
+   - **User 정책**: 그대로 (User Details Read, Memberships Read). 대상은 토큰 주인으로 정해져 있어 고르는 칸이 없어요.
+4. **Token expiration**: 1년 뒤로 정하고 캘린더에 갱신일을 적어 두세요. 만료되면 배포만 실패하고, 돌아가는 서버는 그대로예요.
+5. **Client IP Address Filtering**은 비워 두세요. GitHub 빌드 서버 IP가 매번 바뀌어요.
+6. Continue to summary → 요약 확인 → Create Token을 누르고, 나온 토큰을 복사하세요. 다시 볼 수 없어요.
+
+토큰을 바꿀 때는 GitHub Secrets의 `CLOUDFLARE_API_TOKEN`을 새 값으로 고친 뒤 **Actions → Deploy auth server → Run workflow**로 배포가 되는지 확인하고, 그다음에 옛 토큰을 지워요. (2026-11-11 이 방식으로 교체함)
 
 ## 3. 구글 클라이언트 보안 비밀
 

@@ -382,8 +382,8 @@ async function gRemove(i){
   syncSheet();
 }
 async function gSignOut(){
-  if (!(await ask('· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 파일은 그대로예요.', {title: '구글 계정 연결을 해제할까요?', ok: '해제하고 삭제', danger: true}))) return;
-  busy('연결을 해제하는 중이에요');
+  if (!(await ask('· 이 앱에 준 구글 권한을 취소해요\n· 로그인 서버에 저장된 로그인 정보를 모든 기기에서 삭제해요\n· 이 기기의 시트 목록을 지워요\n\n구글 드라이브의 시트 파일은 내 파일이라 그대로 남아요.', {title: '계정을 삭제할까요?', ok: '계정 삭제', danger: true}))) return;
+  busy('계정을 삭제하는 중이에요');
   try {
     const sid = await sidGet();
     if (sid) await fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}, signal: AbortSignal.timeout?.(8000)}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
@@ -391,7 +391,7 @@ async function gSignOut(){
     gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gfolder');
     if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
   } finally { busy(); }
-  syncSheet(); toast('구글 계정 연결을 해제했어요');
+  syncSheet(); toast('계정을 삭제했어요');
 }
 function renderG(){
   const ok = gReady();

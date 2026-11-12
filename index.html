@@ -166,6 +166,30 @@ body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.
 .echips button.on{background:var(--accent-soft);color:var(--accent)}
 .ememo{width:100%;border:0;background:var(--card);border-radius:14px;padding:13px 14px;font-size:16px;box-shadow:var(--shadow);margin-bottom:12px;outline:none}
 .echeck{display:flex;align-items:center;gap:8px;font-size:14px;margin:0 2px 14px}
+/* 거래 입력: 이름표 줄 (1.0.50) */
+.tamt{display:flex;align-items:baseline;gap:4px;padding:6px 6px 0}
+.tamt>span{font-size:13px;font-weight:600;color:var(--sub);margin-right:auto}
+.tamt input{width:0;flex:1;min-width:0;border:0;background:none;text-align:right;font-size:32px;font-weight:800;letter-spacing:-.02em;padding:4px 0;outline:none;color:var(--ink);font-family:inherit;font-variant-numeric:tabular-nums}
+.tamt input::placeholder{color:var(--faint)}
+.tamt b{font-size:21px;font-weight:700}
+.tamt+.ehint{text-align:right;margin:2px 8px 10px}
+.tform{background:var(--card);border-radius:18px;box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.trow{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;padding:12px 12px 12px 14px}
+.trow.mid{align-items:center;padding-top:4px;padding-bottom:4px}
+.tlbl{font-size:15px;font-weight:800;color:var(--ink);padding-top:7px}
+.trow.mid .tlbl{padding-top:0}
+.trow.tsub{padding-top:0}
+.trow.tsub .tlbl{font-size:13px;font-weight:700;color:var(--sub);padding-top:17px}
+.trow.tsub .tchips{border-top:1px dashed var(--faint);padding-top:10px}
+.tline{height:1px;background:var(--line)}
+.tchips{display:flex;flex-wrap:wrap;gap:6px}
+.tchips button{height:34px;padding:0 13px;border-radius:17px;background:var(--chip);border:2px solid var(--chip);font-size:14px;font-weight:500;color:var(--ink)}
+.tchips button.on{background:var(--card);border-color:var(--ink);font-weight:800}
+.tchips button.add{background:none;border:1px dashed var(--faint);color:var(--sub);padding:0 12px}
+.tin{width:100%;min-width:0;height:42px;border:0;background:none;font-size:16px;color:var(--ink);outline:none;font-family:inherit;padding:0}
+input[type=date].tin{font-weight:500}
+.tday{display:flex;align-items:center;gap:4px;font-size:16px}
+.tday .tin{width:3.2em;height:36px;text-align:center;background:var(--chip);border-radius:10px}
 .echeck input{width:18px;height:18px;accent-color:var(--accent)}
 .ecard{background:var(--card);border-radius:18px;box-shadow:var(--shadow);padding:12px 14px;margin-bottom:12px}
 .ecard .kv{display:flex;justify-content:space-between;font-size:14px;padding:4px 0}.ecard .kv span{color:var(--sub)}
@@ -679,7 +703,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <div id="gChooser" class="chooser" hidden></div>
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
     <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
-    <button class="btn ghost" id="gOut" hidden>구글 계정 연결 해제 (로그인 정보 삭제)</button>
+    <button class="btn ghost" id="gOut" hidden>계정 삭제 (구글 연결 해제)</button>
     <ul class="slines"><li>앱은 고르거나 앱에서 만든 시트만 볼 수 있어요.</li></ul>
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
   

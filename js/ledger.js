@@ -67,7 +67,7 @@ const shortAmt = n => { const a = Math.abs(n); return a >= 1e5 ? Math.round(a / 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const PAY_OPTS = ['신용카드', '체크카드', '현금'];
 S.payOff = []; LS.del('payOff');   // 결제수단 끄기 설정은 없앴어요 (예전에 끈 값도 정리)
-const payChips = (id, cur) => `<div class="elbl">결제수단</div><div class="echips" id="${id}">${[...PAY_OPTS.filter(p => !S.payOff.includes(p) || p === cur), ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div>`;
+const payChips = (id, cur) => `<div class="tline"></div><div class="trow mid"><div class="tlbl">결제수단</div><div class="tchips" id="${id}">${[...PAY_OPTS.filter(p => !S.payOff.includes(p) || p === cur), ...(cur && !PAY_OPTS.includes(cur) ? [cur] : [])].map(p => `<button data-p="${esc(p)}"${p === cur ? ' class="on"' : ''}>${esc(p)}</button>`).join('')}</div></div>`;
 const bindPay = (id, st) => document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { st.pay = st.pay === b.dataset.p ? '' : b.dataset.p;
   document.querySelectorAll(`#${id} button`).forEach(x => x.classList.toggle('on', x.dataset.p === st.pay)); });
 const groupKey = t => t.sub || t.name;
@@ -406,16 +406,20 @@ function editTx(id, presetDay){
     const amtV = st.amtTxt ?? (st.amt ? fmtWon(st.amt) : '');
     openEd(`<h4>${old ? '거래 고치기' : '거래 추가'} <button class="ex" id="edX">취소</button></h4><div style="height:10px"></div>
       ${modeSeg('txKind', st.mode)}
-      <div class="ewon"><input id="txAmt" inputmode="numeric" autocomplete="off" placeholder="금액 (예: 12000 또는 1.2만)" value="${esc(amtV)}"${old ? '' : ' autofocus'}><span>원</span></div>
+      <label class="tamt"><span>금액</span><input id="txAmt" inputmode="numeric" autocomplete="off" placeholder="0" value="${esc(amtV)}"${old ? '' : ' autofocus'}><b>원</b></label>
       <div class="ehint" id="txHint"></div>
-      <div class="elbl">항목</div><div class="echips" id="txItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('') || '<span class="note">항목이 없어요</span>'}</div>
-      ${it && it.kind !== '수입' || subs.length ? `<div class="elbl">세부분류${it ? ' · ' + esc(it.name) : ''}</div><div class="echips" id="txSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}<button data-s="+" class="add">+ 추가</button></div>` : ''}
-      ${st.mode ? '' : payChips('txPayC', st.pay)}
-      <div class="erow2"><label>날짜<input type="date" id="txDate" min="${y}-01-01" max="${y}-12-31" value="${y}-${pad(st.m)}-${pad(st.d)}"></label></div>
-      <input id="txMemo" class="ememo" maxlength="60" placeholder="메모 (예: 회사 근처 국밥)" value="${esc(st.memo)}">
+      <div class="tform">
+        <div class="trow"><div class="tlbl">항목</div><div class="tchips" id="txItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('') || '<span class="note">항목이 없어요</span>'}</div></div>
+        ${it && it.kind !== '수입' || subs.length ? `<div class="trow tsub"><div class="tlbl">세부분류</div><div class="tchips" id="txSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}<button data-s="+" class="add">+ 추가</button></div></div>` : ''}
+        ${st.mode ? '' : payChips('txPayC', st.pay)}
+        <div class="tline"></div>
+        <label class="trow mid"><span class="tlbl">날짜</span><input type="date" id="txDate" class="tin" min="${y}-01-01" max="${y}-12-31" value="${y}-${pad(st.m)}-${pad(st.d)}"></label>
+        <div class="tline"></div>
+        <label class="trow mid"><span class="tlbl">메모</span><input id="txMemo" class="tin" maxlength="60" placeholder="예: 회사 근처 국밥" value="${esc(st.memo)}"></label>
+      </div>
       ${old ? '' : `<label class="echeck"><input type="checkbox" id="txRep"${st.rep ? ' checked' : ''}> 매달 반복 <span class="muted" id="txRepNote">(매달 ${st.d}일, ${st.m < 12 ? `${st.m}~12월` : '12월'})</span></label>`}
       <button class="btn" id="edSave">저장</button>${old ? '<button class="btn ghost danger" id="txDel">삭제</button>' : ''}`);
-    const inp = $('#txAmt'), hint = v => $('#txHint').textContent = v == null ? '' : isNaN(v) ? '숫자만 넣어 주세요 (예: 1.2만)' : '= ' + fmtWon(v) + '원';
+    const inp = $('#txAmt'), hint = v => $('#txHint').textContent = v == null ? '예: 12000 또는 1.2만' : isNaN(v) ? '숫자만 넣어 주세요 (예: 1.2만)' : fmtWon(v) === inp.value.replace(/\s/g, '') ? '' : '= ' + fmtWon(v) + '원';
     bindWon(inp, hint); hint(parseWon(inp.value));
     const keep = () => { st.amtTxt = inp.value; st.amt = parseWon(inp.value); st.memo = $('#txMemo').value.trim(); if ($('#txRep')) st.rep = $('#txRep').checked;
       const dv = $('#txDate').value.split('-'); if (dv.length === 3 && +dv[0] === y){ st.m = +dv[1]; st.d = +dv[2]; } };
@@ -472,12 +476,16 @@ function editRep(ri, direct){
     openEd(`<h4>${old ? '반복 거래 고치기' : '반복 거래 추가'} <button class="ex" id="edX">취소</button></h4>
       ${!old && nRep ? `<button class="elink" id="rpList">등록된 반복 거래 ${nRep}개 보기 ›</button>` : '<div style="height:10px"></div>'}
       ${modeSeg('rpKind', st.mode)}
-      <div class="ewon"><input id="rpAmt" inputmode="numeric" autocomplete="off" placeholder="금액" value="${esc(amtV)}"><span>원</span></div><div class="ehint"></div>
-      <div class="elbl">항목</div><div class="echips" id="rpItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div>
-      ${subs.length ? `<div class="elbl">세부분류</div><div class="echips" id="rpSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}</div>` : ''}
-      ${st.mode ? '' : payChips('rpPayC', st.pay || '')}
-      <div class="erow2"><label>매달 (일)<input id="rpDay" type="number" inputmode="numeric" min="1" max="31" value="${st.day}"></label></div>
-      <input id="rpMemo" class="ememo" maxlength="60" placeholder="이름 (예: 넷플릭스, 적금)" value="${esc(st.memo || '')}">
+      <label class="tamt"><span>금액</span><input id="rpAmt" inputmode="numeric" autocomplete="off" placeholder="0" value="${esc(amtV)}"><b>원</b></label><div class="ehint"></div>
+      <div class="tform">
+        <div class="trow"><div class="tlbl">항목</div><div class="tchips" id="rpItem">${its.map(i => `<button data-k="${esc(i.kind + '|' + i.name)}"${i === it ? ' class="on"' : ''}>${esc(i.name)}</button>`).join('')}</div></div>
+        ${subs.length ? `<div class="trow tsub"><div class="tlbl">세부분류</div><div class="tchips" id="rpSub">${subs.map(s => `<button data-s="${esc(s)}"${s === st.sub ? ' class="on"' : ''}>${esc(s)}</button>`).join('')}</div></div>` : ''}
+        ${st.mode ? '' : payChips('rpPayC', st.pay || '')}
+        <div class="tline"></div>
+        <label class="trow mid"><span class="tlbl">매달</span><span class="tday"><input id="rpDay" class="tin" type="number" inputmode="numeric" min="1" max="31" value="${st.day}">일</span></label>
+        <div class="tline"></div>
+        <label class="trow mid"><span class="tlbl">이름</span><input id="rpMemo" class="tin" maxlength="60" placeholder="예: 넷플릭스, 적금" value="${esc(st.memo || '')}"></label>
+      </div>
       <button class="btn" id="edSave">저장</button>${old ? '<button class="btn ghost danger" id="rpDel">반복 그만하기</button>' : ''}`);
     bindWon($('#rpAmt'));
     const keep = () => { st.amtTxt = $('#rpAmt').value; st.amt = parseWon($('#rpAmt').value); st.day = Math.min(Math.max(+$('#rpDay').value || 1, 1), 31); st.memo = $('#rpMemo').value.trim(); };

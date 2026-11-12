@@ -181,11 +181,20 @@ async function token(req, env){
 async function logout(req, env){
   const sid = bearer(req); if (!sid) return json({ok: true});
   const h = await sha256(sid);
-  const row = await env.DB.prepare('SELECT sid_hash, refresh_enc FROM sessions WHERE sid_hash = ?1 OR prev_hash = ?1').bind(h).first();
+  const row = await env.DB.prepare('SELECT sid_hash, email FROM sessions WHERE sid_hash = ?1 OR prev_hash = ?1').bind(h).first();
   if (row){
-    try { await fetch(urls(env).revoke, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({token: await open(env, row.refresh_enc)})}); } catch {}
-    await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
+    // 계정 삭제: 같은 이메일로 로그인한 모든 기기의 로그인 정보를 지우고, 각 갱신 토큰의 구글 권한도 취소해요
+    const all = row.email
+      ? (await env.DB.prepare('SELECT sid_hash, refresh_enc FROM sessions WHERE email = ?1').bind(row.email).all()).results || []
+      : [await env.DB.prepare('SELECT sid_hash, refresh_enc FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).first()].filter(Boolean);
+    for (const s of all){
+      try { await fetch(urls(env).revoke, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({token: await open(env, s.refresh_enc)})}); } catch {}
+    }
+    if (row.email){
+      await env.DB.prepare('DELETE FROM sessions WHERE email = ?1').bind(row.email).run();
+      await env.DB.prepare('DELETE FROM app_codes WHERE email = ?1').bind(row.email).run();
+    } else await env.DB.prepare('DELETE FROM sessions WHERE sid_hash = ?1').bind(row.sid_hash).run();
   }
   return json({ok: true});
 }

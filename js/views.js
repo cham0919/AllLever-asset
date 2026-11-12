@@ -195,7 +195,8 @@ function viewAnalysis(){
     <div class="label">${useNet ? '순자산' : '금융자산'} ${money(principal)} 기준 매달</div>
     <div class="big2 num" style="color:var(--saving);margin-top:4px">${money(divMonth)}</div>
     ${cover != null ? `<div class="heq num" style="border:0;padding:0;margin-top:4px">한 달 지출의 <b>${pctPlain(cover, 0)}</b> · ${T / 1e8}억 달성 시 매달 <b>${money(goalMonth)}</b></div>` : ''}
-  </section>`;
+  </section>
+  <p class="note" style="margin:2px 6px 0">목표 달성 예상과 배당 계산은 입력한 기록으로 한 단순 계산이에요. 실제 결과를 보장하지 않고, 투자 권유가 아니에요.</p>`;
   seg('#segFire', S.fireBase, v => { S.fireBase = v; LS.set('fireBase', v); const y = window.scrollY; render(); window.scrollTo(0, y); });
 
   // ── 그래프

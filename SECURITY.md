@@ -7,7 +7,7 @@ If you find a security issue in MoneyMuscle, please report it privately as descr
 ## 신고 방법 (How to report)
 
 1. **GitHub 비공개 신고 (권장)**: 이 저장소의 **Security** 탭 → **Report a vulnerability**
-2. **이메일**: ckadl0118@gmail.com (제목에 `[머니머슬 보안]`을 붙여 주세요)
+2. **이메일**: alllever95@gmail.com (제목에 `[머니머슬 보안]`을 붙여 주세요)
 
 신고에 담아 주시면 좋은 것
 - 문제가 있는 곳 (앱 화면, 로그인 서버 `auth.alllever.app`, 홈페이지 `alllever.app` 등)

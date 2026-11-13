@@ -188,6 +188,9 @@ body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.
 .tchips button.add{background:none;border:1px dashed var(--faint);color:var(--sub);padding:0 12px}
 .tin{width:100%;min-width:0;height:42px;border:0;background:none;font-size:16px;color:var(--ink);outline:none;font-family:inherit;padding:0}
 input[type=date].tin{font-weight:500}
+.tarea{width:100%;min-width:0;box-sizing:border-box;border:0;background:none;resize:none;font:inherit;font-size:16px;line-height:1.55;color:var(--ink);outline:none;padding:5px 0}
+.ctinfo{font-size:14px;color:var(--sub);line-height:1.4}
+.ctdone{text-align:center;padding:96px 16px 40px}.ctdone b{font-size:22px;font-weight:800}.ctdone p{margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--sub)}
 .tday{display:flex;align-items:center;gap:4px;font-size:16px}
 .tday .tin{width:3.2em;height:36px;text-align:center;background:var(--chip);border-radius:10px}
 .echeck input{width:18px;height:18px;accent-color:var(--accent)}
@@ -667,6 +670,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
   <input type="file" id="fileInput" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
   <h5 class="shd">정보</h5>
   <div class="slist">
+    <button class="srow" data-go="contact"><span>문의하기</span><i>›</i></button>
     <button class="srow" id="btnDemo"><span>예시 데이터로 보기</span><i>›</i></button>
     <a class="srow" href="privacy.html" target="_blank" rel="noopener"><span>개인정보 처리방침</span><i>›</i></a>
     <div class="srow srow-info" id="sVerRow"><span>버전</span><em id="sVer"></em></div>
@@ -757,7 +761,26 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="srow" id="use-asset" role="switch" aria-checked="true"><span>자산<small>자산 · 목표 탭 · 홈 순자산 카드</small></span><b class="tg"></b></button>
   </div>
   <p class="note">꺼도 기록은 지워지지 않아요.</p>
-</div><div class="spage" data-page="view">
+</div><div class="spage" data-page="contact">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>문의하기</b><span></span></div>
+  <div id="ctForm">
+    <div class="tform">
+      <div class="trow mid"><div class="tlbl">종류</div><div class="tchips" id="ctKind"><button data-v="오류">오류</button><button data-v="제안">제안</button><button data-v="기타">기타</button></div></div>
+      <div class="tline"></div>
+      <label class="trow"><span class="tlbl">내용</span><textarea class="tarea" id="ctText" rows="9" maxlength="2000"></textarea></label>
+      <div class="tline"></div>
+      <label class="trow mid"><span class="tlbl">답장 메일</span><input class="tin" id="ctReply" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" maxlength="254"></label>
+      <div class="tline"></div>
+      <div class="trow mid"><div class="tlbl">함께 보냄</div><div class="ctinfo" id="ctInfo"></div></div>
+    </div>
+    <button class="btn" id="ctSend">보내기</button>
+  </div>
+  <div id="ctDone" hidden>
+    <div class="ctdone"><b>문의를 보냈어요</b><p id="ctDoneMsg"></p></div>
+    <button class="btn ghost" data-go="main">설정으로</button>
+  </div>
+</div>
+<div class="spage" data-page="view">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>화면</b><span></span></div>
   <div class="card" style="padding:14px">
 <div class="field"><span>테마</span>

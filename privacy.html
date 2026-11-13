@@ -17,7 +17,7 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
 <body>
 <main>
 <h1>개인정보처리방침</h1>
-<p>머니머슬 - 가계부, 자산관리(이하 "앱") · 시행일 2026-11-05</p>
+<p>머니머슬 - 가계부, 자산관리(이하 "앱") · 시행일 2026-11-13</p>
 
 <h2>1. 한눈에 보기</h2>
 <ul>
@@ -26,6 +26,7 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
   <li>로그인 유지를 위해 서버에는 <b>구글 계정 이메일</b>과 <b>암호화된 구글 갱신 토큰</b>만 보관해요.</li>
   <li>아이폰·안드로이드 앱의 <b>앱 잠금</b>은 기기의 Face ID·지문·암호 확인 결과(성공/실패)만 받아요. 얼굴·지문 정보는 받거나 저장하지 않아요.</li>
   <li>앱의 <b>알림</b>은 휴대폰 안에서 예약돼요. 알림을 위해 서버로 보내는 정보는 없어요.</li>
+  <li><b>설정 → 문의하기</b>로 보낸 내용은 로그인 서버를 거쳐 <b>앱 운영자의 메일로만</b> 전달되고, 서버에는 저장하지 않아요.</li>
   <li>앱은 사용자가 <b>직접 고르거나 앱에서 만든 시트만</b> 볼 수 있어요(구글 <code>drive.file</code> 권한). 드라이브의 다른 파일에는 접근하지 않아요.</li>
 </ul>
 
@@ -39,7 +40,10 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
   <tr><td>구글 갱신 토큰</td><td>로그인 서버 (AES-GCM 암호화)</td><td>다시 로그인하지 않고 시트를 불러오기</td><td>연결 해제 시 즉시 삭제 및 구글 권한 취소, 60일 미사용 또는 로그인 후 180일이 지나면 자동 삭제</td></tr>
   <tr><td>세션 값</td><td>사용자 기기 (앱은 아이폰 키체인·안드로이드 키스토어, 서버에는 해시값만). 하루에 한 번 새 값으로 바뀌어요</td><td>사용자 기기를 로그인 서버가 알아보기</td><td>위와 같음</td></tr>
   <tr><td>앱 로그인 일회용 코드 (아이폰·안드로이드 앱)</td><td>로그인 서버 (세션 값은 암호화)</td><td>로그인 창에서 앱으로 돌아온 뒤 세션으로 바꾸기</td><td>사용 즉시 또는 60초 뒤 삭제</td></tr>
+  <tr><td>문의 내용, 문의 종류, 답장받을 이메일(적은 경우), 앱 버전, 기기 종류, OS 버전</td><td>로그인 서버를 거쳐 앱 운영자의 메일함(Gmail)으로 전달. 서버에는 저장하지 않아요</td><td>문의 확인과 답변, 오류 원인 확인</td><td>답변을 마치고 1년이 지나면 메일함에서 삭제. 삭제를 요청하면 바로 삭제</td></tr>
+  <tr><td>날짜별 전체 문의 건수 (누가 보냈는지는 없음)</td><td>로그인 서버</td><td>짧은 시간에 많은 문의를 보내는 장난 막기</td><td>7일 뒤 삭제</td></tr>
 </table>
+<p>문의를 보낼 때 시트 내용, 가계부·자산 금액, 로그인 정보는 함께 보내지 않아요.</p>
 <p>앱은 광고, 분석 도구, 제3자 추적 도구를 쓰지 않아요.</p>
 
 <h2>3. 구글 사용자 데이터 이용</h2>
@@ -47,8 +51,8 @@ table{border-collapse:collapse;width:100%;font-size:14px}td,th{border:1px solid 
 
 <h2>4. 처리를 맡기는 곳</h2>
 <ul>
-  <li><b>Google</b>: 로그인, 구글 드라이브·시트 이용</li>
-  <li><b>Cloudflare</b>: 로그인 서버 운영(Workers, D1). 저장 위치는 Cloudflare 데이터센터예요.</li>
+  <li><b>Google</b>: 로그인, 구글 드라이브·시트 이용, 문의 메일 받기(Gmail)</li>
+  <li><b>Cloudflare</b>: 로그인 서버 운영(Workers, D1), 문의 메일 전달(Email Routing). 저장 위치는 Cloudflare 데이터센터예요.</li>
   <li><b>GitHub Pages</b>: 앱 화면 파일 제공</li>
 </ul>
 

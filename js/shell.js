@@ -210,7 +210,7 @@ function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
 }
 function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g){ if (g.classList.contains('sback')) return goBack(); syncSheet(); sPage(g.dataset.go); return; }
+  const g = e.target.closest('[data-go]'); if (g){ if (g.classList.contains('sback')) return goBack(); syncSheet(); sPage(g.dataset.go); if (g.dataset.go === 'contact') ctOpen(); return; }
 });
 for (const k of ['ledger', 'asset']) $('#use-' + k).onclick = () => {
   const other = k === 'ledger' ? 'asset' : 'ledger';
@@ -218,6 +218,48 @@ for (const k of ['ledger', 'asset']) $('#use-' + k).onclick = () => {
   S.use[k] = !S.use[k]; LS.set('use', S.use); haptic('light');
   syncSheet(); renderHead(); notiSoon();
 };
+/* ───────── 설정 › 문의하기 ─────────
+   내용은 로그인 서버(/contact)를 거쳐 개발자 메일로만 가요. 서버에 저장하지 않아요. 시트 내용·금액은 보내지 않아요. */
+const ct = {kind: '오류', info: null, busy: false};
+async function ctDeviceInfo(){
+  const ua = navigator.userAgent, plat = NATIVE ? window.Capacitor.getPlatform() : 'web';
+  let app = '';
+  try { const i = await nativePlugin('App')?.getInfo(); if (i?.version) app = i.version; } catch(e){}
+  if (!app){ const v = await appVersion(); app = v && v !== '-' ? v : '웹'; }
+  const ios = ua.match(/(?:iPhone|CPU) OS (\d+(?:_\d+)*)/), and = ua.match(/Android (\d+(?:\.\d+)*)(?:;\s*([^;)]+))?/);
+  const device = /iPad/.test(ua) ? 'iPad' : /iPhone/.test(ua) ? 'iPhone' : and ? (and[2] && !/^wv$|Build/.test(and[2]) ? and[2].trim() : 'Android') : plat === 'web' ? '브라우저' : plat;
+  const os = ios ? 'iOS ' + ios[1].replace(/_/g, '.') : and ? 'Android ' + and[1] : '';
+  return {app, device, os};
+}
+function ctKindPaint(){ $('#ctKind').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === ct.kind)); }
+async function ctOpen(){
+  $('#ctForm').hidden = false; $('#ctDone').hidden = true;
+  if (!$('#ctReply').value && S.guser) $('#ctReply').value = S.guser;
+  ctKindPaint();
+  ct.info = ct.info || await ctDeviceInfo();
+  $('#ctInfo').textContent = [ct.info.app && (ct.info.app === '웹' ? '웹' : '앱 ' + ct.info.app), ct.info.device, ct.info.os].filter(Boolean).join(' · ');
+}
+$('#ctKind').onclick = e => { const b = e.target.closest('button'); if (!b) return; ct.kind = b.dataset.v; haptic('light'); ctKindPaint(); };
+$('#ctSend').onclick = async () => {
+  if (ct.busy) return;
+  const text = $('#ctText').value.trim(), reply = $('#ctReply').value.trim();
+  if (!text) { $('#ctText').focus(); return toast('내용을 적어 주세요'); }
+  if (reply && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reply)) { $('#ctReply').focus(); return toast('답장 메일 주소를 확인해 주세요'); }
+  if (!navigator.onLine) return toast('인터넷에 연결된 뒤 다시 보내 주세요');
+  ct.busy = true; const btn = $('#ctSend'); btn.disabled = true; btn.textContent = '보내는 중…';
+  try {
+    const r = await fetch(GOOGLE.authServer + '/contact', {method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({kind: ct.kind, text, reply, info: ct.info || await ctDeviceInfo()})});
+    if (!r.ok){ const j = await r.json().catch(() => ({}));
+      throw new Error(j.error === 'rate_limited' ? '잠시 후 다시 보내 주세요' : j.error === 'too_long' ? '내용이 너무 길어요 (2,000자까지)' : j.error === 'bad_email' ? '답장 메일 주소를 확인해 주세요' : '보내지 못했어요. 잠시 후 다시 시도해 주세요'); }
+    haptic('success');
+    $('#ctText').value = '';
+    $('#ctDoneMsg').textContent = reply ? `답장은 ${reply}으로 드려요.` : '';
+    $('#ctForm').hidden = true; $('#ctDone').hidden = false; window.scrollTo(0, 0);
+  } catch(err){ toast(err.message === 'Failed to fetch' || err.name === 'TypeError' ? '보내지 못했어요. 인터넷 연결을 확인해 주세요' : err.message); }
+  finally { ct.busy = false; btn.disabled = false; btn.textContent = '보내기'; }
+};
+
 function closeSheet(){ if (S.tab === 'settings') go('home'); }
 $('#setBtn').onclick = () => openSheet();
 $('#btnSync').onclick = () => syncNow(true);

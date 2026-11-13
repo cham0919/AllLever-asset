@@ -20,6 +20,8 @@ ALLOWED_RETURN = "https://cham0919.github.io/AllLever-asset/"
 # 아이폰·안드로이드 앱으로 돌아오는 주소 (정확히 일치)와 앱 화면의 출처 (아이폰 capacitor://localhost, 안드로이드 https://localhost)
 APP_RETURN = "com.alllever.asset://auth"
 APP_ORIGINS = "capacitor://localhost,https://localhost"
+# 문의하기 받는 주소 (send_email 바인딩의 destination_address와 같아야 해요)
+CONTACT_TO = "alllever95@gmail.com"
 
 [[d1_databases]]
 binding = "DB"
@@ -37,6 +39,17 @@ simple = { limit = 20, period = 60 }
 name = "TOKEN_LIMIT"
 namespace_id = "1002"
 simple = { limit = 60, period = 60 }
+
+# 문의하기: IP당 분당 3회
+[[ratelimits]]
+name = "CONTACT_LIMIT"
+namespace_id = "1003"
+simple = { limit = 3, period = 60 }
+
+# 문의하기 메일: 받는 주소를 개발자 메일 하나로 고정 (클라우드플레어 이메일 라우팅에서 인증한 주소)
+[[send_email]]
+name = "CONTACT_MAIL"
+destination_address = "alllever95@gmail.com"
 
 [triggers]
 crons = ["17 18 * * *"]   # 매일 03:17 (한국 시간) 오래된 세션 정리

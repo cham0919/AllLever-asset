@@ -13,10 +13,13 @@
 //   POST /token     (Authorization: Bearer <세션>)  새 접근 토큰
 //        X-Alv-Rotate: 1 을 보내는 앱에는 하루에 한 번 새 세션 값(sid)도 함께 줘요. 옛 값은 교체 후 10분까지만 받아요.
 //   POST /logout    (Authorization: Bearer <세션>)  구글 권한 취소 + 세션 삭제
+//   POST /contact   {kind, text, reply, info}  앱의 설정 › 문의하기. 받는 주소는 wrangler.toml에 고정(개발자 메일)이라 다른 곳으로는 못 보내요.
+//        문의 내용은 메일로만 보내고 서버에 저장하지 않아요. 하루 전체 건수만 세요(장난 방지).
 //   GET  /health
 //
 // 환경 값 (wrangler.toml vars): GOOGLE_CLIENT_ID, ALLOWED_RETURN (쉼표로 구분한 허용 앱 주소 접두어),
 //                              APP_RETURN (앱으로 돌아오는 주소, 정확히 일치), APP_ORIGINS (앱 화면의 출처, 쉼표로 구분)
+// 메일 (wrangler.toml send_email): CONTACT_MAIL — 클라우드플레어 이메일 라우팅에서 인증한 개발자 메일로만 보냄
 // 비밀 값 (wrangler secret):    GOOGLE_CLIENT_SECRET, ENC_KEY (base64 32바이트)
 // 테스트용 덮어쓰기 (선택):      GOOGLE_AUTH_URL, GOOGLE_TOKEN_URL, GOOGLE_REVOKE_URL
 
@@ -28,6 +31,11 @@ const SESSION_MAX = 180 * DAY;               // 로그인하고 180일이 지나
 const ROTATE_EVERY = DAY;                    // 세션 값은 하루에 한 번 새 값으로 바꿔요
 const ROTATE_LEEWAY = 10 * 60 * 1000;        // 바꾼 뒤 10분 동안은 옛 값도 받아요 (응답을 못 받은 경우)
 const CODE_TTL = 60 * 1000;                  // 앱용 일회용 코드는 60초 안에 바꿔야 함
+
+const CONTACT_MAX = 2000;                    // 문의 글자 수
+const CONTACT_DAY_CAP = 200;                 // 하루 전체 문의 건수 (넘으면 다음 날까지 받지 않음)
+const CONTACT_FROM = 'app@alllever.app';     // 보내는 주소 (이메일 라우팅을 켠 alllever.app 도메인)
+const CONTACT_KINDS = ['오류', '제안', '기타'];
 
 const enc = new TextEncoder(), dec = new TextDecoder();
 const b64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -201,7 +209,7 @@ async function logout(req, env){
 
 // IP당 요청 수 제한 (Cloudflare Rate Limiting 바인딩). 바인딩이 없으면(로컬 등) 건너뜀
 async function limited(env, req, kind){
-  const lim = kind === 'auth' ? env.AUTH_LIMIT : env.TOKEN_LIMIT;
+  const lim = kind === 'auth' ? env.AUTH_LIMIT : kind === 'contact' ? env.CONTACT_LIMIT : env.TOKEN_LIMIT;
   if (!lim) return false;
   const ip = req.headers.get('CF-Connecting-IP') || 'local';
   const {success} = await lim.limit({key: kind + ':' + ip});
@@ -226,11 +234,13 @@ async function route(req, env){
     try {
       if (url.pathname.startsWith('/auth/') && url.pathname !== '/auth/exchange' && await limited(env, req, 'auth')) return page('요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', 429);
       if (['/token', '/logout', '/auth/exchange'].includes(url.pathname) && await limited(env, req, 'token')) return cors(env, req, json({error: 'rate_limited'}, 429));
+      if (url.pathname === '/contact' && await limited(env, req, 'contact')) return cors(env, req, json({error: 'rate_limited'}, 429));
       if (req.method === 'GET' && url.pathname === '/auth/start') return await authStart(req, env, url);
       if (req.method === 'GET' && url.pathname === '/auth/callback') return await authCallback(req, env, url);
       if (req.method === 'POST' && url.pathname === '/auth/exchange') return cors(env, req, await exchange(req, env));
       if (req.method === 'POST' && url.pathname === '/token') return cors(env, req, await token(req, env));
       if (req.method === 'POST' && url.pathname === '/logout') return cors(env, req, await logout(req, env));
+      if (req.method === 'POST' && url.pathname === '/contact') return cors(env, req, await contact(req, env));
       if (url.pathname === '/health') return json({ok: true});
       if (req.method === 'GET' && url.pathname === '/' && env.ASSETS) return env.ASSETS.fetch(new URL('/index.html', url));   // alllever.app 홈페이지
       return json({error: 'not_found'}, 404);
@@ -240,9 +250,68 @@ async function route(req, env){
     }
 }
 
+/* ───────── 문의하기 ───────── */
+const oneLine = (s, n) => String(s ?? '').replace(/[\r\n\t\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);
+const emailOk = s => s.length <= 254 && /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]+$/.test(s);
+async function contact(req, env){
+  if (!originOk(env, req.headers.get('Origin'))) return json({error: 'origin'}, 403);   // 앱 화면에서 온 요청만
+  if (!env.CONTACT_MAIL) return json({error: 'unavailable'}, 503);
+  let b; try { b = JSON.parse((await req.text()).slice(0, 12000)); } catch { return json({error: 'bad_request'}, 400); }
+  const text = String(b?.text ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, '').trim();
+  if (!text) return json({error: 'empty'}, 400);
+  if (text.length > CONTACT_MAX) return json({error: 'too_long'}, 400);
+  const kind = CONTACT_KINDS.includes(b?.kind) ? b.kind : '기타';
+  const reply = oneLine(b?.reply, 254);
+  if (reply && !emailOk(reply)) return json({error: 'bad_email'}, 400);
+  const info = b?.info || {};
+  const app = oneLine(info.app, 20), device = oneLine(info.device, 40), os = oneLine(info.os, 40);
+
+  // 하루 전체 건수 (IP나 내용은 저장하지 않아요)
+  const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);   // 한국 날짜
+  const row = await env.DB.prepare('INSERT INTO contact_daily (day, n) VALUES (?1, 1) ON CONFLICT(day) DO UPDATE SET n = n + 1 RETURNING n').bind(day).first();
+  if ((row?.n || 0) > CONTACT_DAY_CAP) return json({error: 'rate_limited'}, 429);
+
+  const subject = `[머니머슬 문의] ${kind}${app ? ' · ' + app : ''}`;
+  const body = [text, '', '──────────', `종류: ${kind}`, `답장 메일: ${reply || '(없음)'}`, `앱: ${app || '-'}`, `기기: ${device || '-'}`, `OS: ${os || '-'}`].join('\n');
+  try {
+    await sendMail(env, {subject, text: body, replyTo: reply || undefined});
+  } catch (e){
+    console.error('contact send failed', e?.code || '', e?.message || e);
+    return json({error: 'send_failed'}, 502);
+  }
+  return json({ok: true});
+}
+// 받는 주소는 바인딩(destination_address)에 고정돼 있어서 to를 비워 둬도 그 주소로만 가요
+async function sendMail(env, {subject, text, replyTo}){
+  const to = env.CONTACT_TO || undefined;
+  try {
+    return await env.CONTACT_MAIL.send({from: {email: CONTACT_FROM, name: '머니머슬 앱'}, to, subject, text, ...(replyTo ? {replyTo} : {})});
+  } catch (e){
+    if (e?.code) throw e;   // 메일 서비스가 거절한 경우 (E_…): 그대로 실패
+    // 예전 방식 바인딩: 원본 메일(MIME)로 보내기
+    const {EmailMessage} = await import('cloudflare:email');
+    const b64 = s => btoa(String.fromCharCode(...enc.encode(s)));
+    const mime = [
+      `From: =?UTF-8?B?${b64('머니머슬 앱')}?= <${CONTACT_FROM}>`,
+      `To: <${to}>`,
+      ...(replyTo ? [`Reply-To: <${replyTo}>`] : []),
+      `Subject: =?UTF-8?B?${b64(subject)}?=`,
+      `Message-ID: <${rand(12)}@alllever.app>`,
+      `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      b64(text).replace(/.{76}/g, '$&\r\n'),
+    ].join('\r\n');
+    return env.CONTACT_MAIL.send(new EmailMessage(CONTACT_FROM, to, mime));
+  }
+}
+
 async function cleanup(env){   // 매일: 오래 안 쓴 세션과 남은 로그인 요청 정리
   const now = Date.now();
   await env.DB.prepare('DELETE FROM sessions WHERE last_used < ?1 OR created < ?2').bind(now - SESSION_IDLE, now - SESSION_MAX).run();
   await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
   await env.DB.prepare('DELETE FROM app_codes WHERE created < ?1').bind(now - CODE_TTL).run();
+  await env.DB.prepare('DELETE FROM contact_daily WHERE day < ?1').bind(new Date(now - 7 * DAY).toISOString().slice(0, 10)).run();
 }

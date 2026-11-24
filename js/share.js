@@ -52,7 +52,7 @@ async function shareLoadNames(tok){
 }
 
 /* ───── 설정 › 공유 ───── */
-const sh = {step: 'list', email: '', name: '', pick: {}, mates: [], busy: false};
+const sh = {step: 'list', email: '', pick: {}, mates: [], busy: false};
 async function shareOpen(){
   sh.step = 'list'; shPaint();
   if (!S.guser || !shareSheets().length) return;
@@ -98,17 +98,17 @@ $('#shMeRow').onclick = async () => {
 };
 $('#shInvite').onclick = () => {
   if (!S.guser || !shareSheets().length) return toast('먼저 구글 시트를 연결해 주세요');
-  sh.step = 'form'; sh.pick = {}; $('#shEmail').value = sh.email; $('#shName').value = sh.name; shPaint();
+  sh.step = 'form'; sh.pick = {}; $('#shEmail').value = sh.email; shPaint();
 };
 $('#shPick').onclick = e => { const b = e.target.closest('button'); if (!b) return;
   if (shareSheets().filter(f => sh.pick[f.id] !== false).length <= 1) return toast('시트를 하나 이상 남겨 주세요');
   sh.pick[b.dataset.id] = false; haptic('light'); shPaint(); };
 $('#shNext').onclick = () => {
-  const email = $('#shEmail').value.trim().toLowerCase(), name = cleanName($('#shName').value);
+  const email = $('#shEmail').value.trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('#shEmail').focus(); return toast('구글 계정 메일 주소를 확인해 주세요'); }
   if (email === String(S.guser).toLowerCase()) return toast('내 계정은 초대할 수 없어요');
   if (!shareSheets().some(f => sh.pick[f.id] !== false)) return toast('공유할 시트를 골라 주세요');
-  sh.email = email; sh.name = name; sh.step = 'confirm'; shPaint();
+  sh.email = email; sh.step = 'confirm'; shPaint();
 };
 $('#shBack').onclick = () => { sh.step = 'form'; shPaint(); };
 function inviteLink(files){
@@ -134,12 +134,11 @@ $('#shGo').onclick = async () => {
       catch(e){ failed.push(f.name); console.warn('share', f.id, e?.message); }
     }
     if (failed.length === files.length) throw new Error('공유하지 못했어요. 시트 주인 계정인지 확인해 주세요');
-    const tag = await tagOf(sh.email), props = {['n.' + tag]: sh.name || sh.email.split('@')[0]};
-    if (!shareNames()[MY_TAG]) props['n.' + MY_TAG] = S.guser.split('@')[0];
-    await setProps(files, props, tok); LS.set('snames', {...shareNames(), ...Object.fromEntries(Object.entries(props).map(([k, v]) => [k.slice(2), v]))});
+    if (!shareNames()[MY_TAG]){ const props = {['n.' + MY_TAG]: S.guser.split('@')[0]};   // 내 이름표 (초대 링크의 '보낸 사람')
+      await setProps(files, props, tok); LS.set('snames', {...shareNames(), [MY_TAG]: props['n.' + MY_TAG]}); }
     busy(); haptic('success');
     if (failed.length) toast(`공유하지 못한 시트: ${failed.join(', ')}`);
-    sh.email = sh.name = ''; await shareOpen();
+    sh.email = ''; await shareOpen();
     await sendInvite(link);
   } catch(e){ toast(e.message || '공유하지 못했어요'); }
   finally { busy(); sh.busy = false; }

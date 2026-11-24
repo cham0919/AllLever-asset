@@ -192,7 +192,6 @@ input[type=date].tin{font-weight:500}
 .shv{font-size:15px;line-height:1.45;min-width:0;overflow-wrap:anywhere}.shv small{color:var(--sub);font-size:13px;margin-left:4px}.shv>small:first-child{margin-left:0}.shv small.st{display:block;margin:2px 0 0}
 .shform .trow.mid{min-height:52px}
 .shlist{display:flex;flex-direction:column;min-width:0}.shlist .shs{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:40px;font-size:15px}.shlist .shs+.shs{border-top:1px dashed var(--line)}.shlist .shs button{width:36px;height:36px;border:0;background:none;color:var(--sub);font-size:18px;line-height:1;cursor:pointer;flex:none}
-.shbig{padding:18px 6px 18px}.shbig b{font-size:22px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.shbig p{margin:8px 0 0;font-size:15px;line-height:1.55}
 .tarea{width:100%;min-width:0;box-sizing:border-box;border:0;background:none;resize:none;font:inherit;font-size:16px;line-height:1.55;color:var(--ink);outline:none;padding:5px 0}
 .ctinfo{font-size:14px;color:var(--sub);line-height:1.4}
 .ctdone{text-align:center;padding:96px 16px 40px}.ctdone b{font-size:22px;font-weight:800}.ctdone p{margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--sub)}
@@ -785,8 +784,6 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <div class="tform shform">
       <label class="trow mid"><span class="tlbl">구글 계정</span><input class="tin" id="shEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="254"></label>
       <div class="tline"></div>
-      <label class="trow mid"><span class="tlbl">이름</span><input class="tin" id="shName" maxlength="20" autocomplete="off"></label>
-      <div class="tline"></div>
       <div class="trow mid"><div class="tlbl">시트</div><div class="shlist" id="shPick"></div></div>
     </div>
     <button class="btn" id="shNext">다음</button>
@@ -805,7 +802,6 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
 </div>
 <div class="spage" data-page="join">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>공유받기</b><span></span></div>
-  <div class="shbig"><b>가계부를<br>공유받았어요</b></div>
   <div class="tform shform">
     <div class="trow mid"><div class="tlbl">보낸 사람</div><div class="shv" id="jFrom"></div></div>
     <div class="tline"></div>

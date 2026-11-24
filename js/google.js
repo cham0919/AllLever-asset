@@ -421,11 +421,18 @@ async function syncGoogle(interactive, show = false){   // show: 시트를 새�
     // 같은 연도 시트는 하나만: 먼저 연결한 시트를 남기고, 나중에 연결한 시트는 연결을 풀어요 (드라이브 파일은 그대로)
     const owner = {};
     for (const r of res) if (r.m && r.f.year === r.m.year && !(r.m.year in owner)) owner[r.m.year] = r.f;   // 이미 그 연도로 쓰던 시트 우선
+    const swapped = [];
     for (const r of res){
       r.f.gone = !r.m && !!r.e?.gone;
       if (!r.m){ fail.push(r); continue; }
       const y = r.m.year;
-      if (owner[y] && owner[y] !== r.f || next[y]){ dup.push(r.f); continue; }
+      if (owner[y] && owner[y] !== r.f || next[y]){
+        // 같은 연도 시트가 이미 있으면 바꿀지 물어봐요 (새로 연결한 시트만, 저장 못 한 기록이 있는 시트는 바꾸지 않아요)
+        const old = owner[y], isNew = !r.f.year;
+        if (isNew && old && !S.queue.some(o => o.fileId === old.id) && await ask(`${y}년에 이미 연결된 시트가 있어요. 변경할까요?\n지금: ${old.name}\n새 시트: ${r.f.name}`, {title: '시트 변경', ok: '변경', cancel: '취소'})){
+          dup.push(old); swapped.push(y); next[y] = r.m; r.f.year = y; owner[y] = r.f; continue; }
+        dup.push(r.f); continue;
+      }
       next[y] = r.m; r.f.year = y; owner[y] = r.f;
     }
     if (dup.length) S.gfiles = S.gfiles.filter(f => !dup.includes(f));
@@ -437,7 +444,9 @@ async function syncGoogle(interactive, show = false){   // show: 시트를 새�
     for (const r of res) if (r.m) delete r.m.__cached;
     if (same){ S.meta.syncedAt = Date.now(); LS.set('meta', S.meta); applyReps(); if (interactive) toast('최신 데이터예요'); return; }   // 바뀐 게 없으면 화면을 다시 그리지 않아요
     finishOb(); setYears(next, {source: 'google'}, S.meta.source === 'google'); applyReps();
-    if (dup.length){ const d = dup[0], y = res.find(r => r.f === d).m.year;
+    const kept = dup.filter(d => !swapped.includes(res.find(r => r.f === d)?.m?.year ?? d.year));
+    if (swapped.length) toast(`${swapped.join(', ')}년 시트를 변경했어요`);
+    else if (kept.length){ const d = kept[0], y = res.find(r => r.f === d).m.year;
       toast(`${y}년 시트는 이미 연결돼 있어서 '${d.name}'${dup.length > 1 ? ` 외 ${dup.length - 1}개` : ''}는 연결하지 않았어요`); }
     else if (fail.length) toast(`${fail.length}개 시트를 불러오지 못했어요: ${fail[0].e.message}`);
     else if (interactive) toast('최신 데이터로 업데이트했어요');

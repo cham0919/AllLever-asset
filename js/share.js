@@ -185,7 +185,7 @@ function shareGone(res){
   const gone = res.filter(r => !r.m && r.e && (r.e.gone || r.e.status === 403) && isJoinedFile(r.f.id)).map(r => r.f);
   if (!gone.length) return [];
   shareDrop(gone);
-  ask(`상대방에 의해 공유가 끊겼어요.\n${gone.map(f => f.name).join(', ')} 시트를 앱에서 뺐어요.`, {title: '공유가 끊겼어요', ok: '확인', cancel: ''});
+  ask('상대방에 의해 시트 공유가 끊겼어요.', {ok: '확인', cancel: ''});
   return gone;
 }
 // 공유한 쪽: 상대가 나갔으면(내 시트 권한 목록에서 사라짐) 알리고 정리해요
@@ -206,7 +206,7 @@ async function shareWatch(tok){
     await setProps(shareSheets().filter(g => !isJoinedFile(g.id)), props, tok);   // 상대 이름표·연결 표시 지우기
     const names = shareNames(); for (const k of Object.keys(props)) delete names[k.slice(2)]; LS.set('snames', names);
     sh.mates = sh.mates.filter(m => !left.includes(m.email.toLowerCase())); if (S.spage === 'share') shPaint();
-    await ask(`상대방에 의해 공유가 끊겼어요.\n${left.join(', ')} 계정은 이제 시트를 볼 수 없어요.`, {title: '공유가 끊겼어요', ok: '확인', cancel: ''});
+    await ask('상대방에 의해 시트 공유가 끊겼어요.', {ok: '확인', cancel: ''});
   } catch(e){ console.warn('share watch', e?.message); }
   finally { watching = false; }
 }

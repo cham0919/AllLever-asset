@@ -73,6 +73,9 @@ jobs:
             -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" > rel/upload.log 2>&1 \
             || { grep -E "error:|Error|failed|ERROR" rel/upload.log | head -40 >> rel/result.txt; exit 1; }
           echo "uploaded OK" >> rel/result.txt
+          # 유니버설 링크 권한(applinks)이 보관본에 들어갔는지 기록 (업로드 서명이 이 값을 따라가요)
+          (grep -rl "applinks:alllever.app" build/App.xcarchive/Products/Applications/App.app/*.xcent build/App.xcarchive/Products/Applications/App.app 2>/dev/null | head -1 | grep -q . \
+            && echo "entitlements: applinks in archive" || echo "entitlements: applinks NOT in archive") >> rel/result.txt
           echo "### TestFlight 업로드 완료" >> "$GITHUB_STEP_SUMMARY"
           echo "App Store Connect에서 처리(10~30분)가 끝나면 TestFlight 탭에 빌드가 보여요." >> "$GITHUB_STEP_SUMMARY"
       - name: Clean up key

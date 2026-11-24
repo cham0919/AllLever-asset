@@ -25,6 +25,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="com.alllever.asset" android:host="auth" />
                 <data android:scheme="com.alllever.asset" android:host="picked" />
+                <data android:scheme="com.alllever.asset" android:host="join" />
+            </intent-filter>
+            <!-- 공유 초대 링크 https://alllever.app/join 을 누르면 앱이 바로 열려요 (앱 링크, assetlinks.json으로 확인) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="alllever.app" android:path="/join" />
             </intent-filter>
         </activity>
 

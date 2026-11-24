@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="referrer" content="no-referrer">
+<title>머니머슬 공유받기</title>
+<link rel="icon" href="/img/icon-180.png">
+<style>
+@font-face{font-family:Pretendard;src:url(/fonts/PretendardVariable.subset.woff2) format("woff2-variations");font-weight:45 920;font-display:swap}
+:root{--bg:#F1F1EE;--card:#F9F9F6;--ink:#1E2027;--sub:#6E7178;--line:#E2E2DD;--accent:#4A5FC1;--chip:#DFDFD9}
+@media (prefers-color-scheme:dark){:root{--bg:#0E1013;--card:#171A1F;--ink:#ECEEF1;--sub:#9AA2AD;--line:#262A31;--accent:#7D8EE8;--chip:#262A31}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 Pretendard,-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;word-break:keep-all}
+main{max-width:440px;margin:0 auto;padding:56px 16px 40px}
+h1{font-size:26px;line-height:1.35;margin:0 0 24px;font-weight:800;padding:0 8px}
+.card{background:var(--card);border-radius:18px;overflow:hidden;margin-bottom:16px}
+.row{display:grid;grid-template-columns:84px minmax(0,1fr);gap:8px;padding:14px;align-items:center}
+.row+.row{border-top:1px solid var(--line)}
+.row b{font-weight:800;font-size:15px}.row span{font-size:15px;overflow-wrap:anywhere}
+.btn{display:flex;align-items:center;justify-content:center;height:52px;border-radius:14px;font-weight:700;font-size:16px;text-decoration:none;margin-top:8px}
+.go{background:var(--accent);color:#fff}
+.store{background:var(--chip);color:var(--ink)}
+</style>
+</head>
+<body>
+<main>
+  <h1>가계부를<br>공유받았어요</h1>
+  <div class="card">
+    <div class="row"><b>보낸 사람</b><span id="from">-</span></div>
+    <div class="row"><b>시트</b><span id="count">-</span></div>
+  </div>
+  <a class="btn go" id="open" href="#">머니머슬 앱에서 열기</a>
+  <a class="btn store" href="https://apps.apple.com/app/id6829369619">App Store에서 받기</a>
+  <a class="btn store" href="https://play.google.com/store/apps/details?id=com.alllever.asset">Google Play에서 받기</a>
+</main>
+<script>
+// 링크의 # 뒤(시트 id·보낸 사람 이름)는 서버로 가지 않아요. 앱이 있으면 앱 주소로 그대로 넘겨요.
+(function(){
+  var h = new URLSearchParams(location.hash.slice(1));
+  var ids = (h.get('f') || '').split(',').filter(function(x){ return /^[\w-]{10,200}$/.test(x); }).slice(0, 10);
+  var from = (h.get('n') || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 20);
+  document.getElementById('from').textContent = from || '-';
+  document.getElementById('count').textContent = ids.length ? ids.length + '개' : '-';
+  var q = 'f=' + ids.join(',') + '&n=' + encodeURIComponent(from);
+  var a = document.getElementById('open');
+  if (!ids.length){ a.style.display = 'none'; return; }
+  a.href = /Android/i.test(navigator.userAgent)
+    ? 'intent://join?' + q + '#Intent;scheme=com.alllever.asset;package=com.alllever.asset;S.browser_fallback_url=' + encodeURIComponent('https://play.google.com/store/apps/details?id=com.alllever.asset') + ';end'
+    : 'com.alllever.asset://join?' + q;
+})();
+</script>
+</body>
+</html>

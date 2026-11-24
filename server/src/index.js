@@ -290,12 +290,23 @@ async function route(req, env){
       if (req.method === 'POST' && url.pathname === '/contact') return cors(env, req, await contact(req, env));
       if (url.pathname === '/health') return json({ok: true});
       if (req.method === 'GET' && url.pathname === '/' && env.ASSETS) return env.ASSETS.fetch(new URL('/index.html', url));   // alllever.app 홈페이지
+      if (req.method === 'GET' && url.pathname === '/join' && env.ASSETS) return env.ASSETS.fetch(new URL('/join.html', url));   // 공유 초대 링크 (앱이 없을 때 보이는 페이지)
+      if (req.method === 'GET' && url.pathname === '/.well-known/apple-app-site-association') return wellKnown(APPLE_APP_LINKS);
+      if (req.method === 'GET' && url.pathname === '/.well-known/assetlinks.json') return wellKnown(ANDROID_APP_LINKS);
       return json({error: 'not_found'}, 404);
     } catch (e){
       console.error(e);
       return cors(env, req, json({error: 'server'}, 500));
     }
 }
+
+/* ───────── 앱 링크: https://alllever.app/join 을 앱이 열도록 확인해 주는 파일 (공개 정보) ───────── */
+const APPLE_APP_LINKS = {applinks: {details: [{appIDs: ['R5L2HKCBQ3.com.alllever.asset'], components: [{'/': '/join'}]}]}};
+const ANDROID_APP_LINKS = [{relation: ['delegate_permission/common.handle_all_urls'], target: {namespace: 'android_app', package_name: 'com.alllever.asset',
+  sha256_cert_fingerprints: [   // 플레이 콘솔 › 앱 무결성 › 앱 서명 키 인증서 (기존 키, 양자 내성 키)
+    '01:C7:44:A1:93:60:1C:4F:2D:F2:78:94:67:D2:DF:81:F8:1D:A0:1A:5C:DB:A6:E5:E4:A1:AA:3D:29:06:37:28',
+    '9A:7E:97:1A:7E:35:17:35:E2:25:85:AD:6D:0A:9C:BC:6D:3A:4E:E8:C3:CB:14:36:2C:5B:FC:49:55:E6:C3:92']}}];
+const wellKnown = obj => new Response(JSON.stringify(obj), {headers: {'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=3600'}});
 
 /* ───────── 문의하기 ───────── */
 const oneLine = (s, n) => String(s ?? '').replace(/[\r\n\t\u0000-\u001f\u007f]+/g, ' ').trim().slice(0, n);

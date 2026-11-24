@@ -15,6 +15,7 @@ function boot(){
   const gPending = gReturn();
   if (gPending === 'pick') gPick();
   else if (gPending && gPending.startsWith('joined:')) shareFinish(shareIds(gPending.slice(7)));
+  else if (gPending === 'join'){ const p = LS.get('pjoin', null); LS.del('pjoin'); if (p?.ids?.length){ Object.assign(jn, p); openSheet('join'); jPaint(); sharePick(p.ids); } }
   else if (gPending && gPending.startsWith('create:')) gCreate(+gPending.slice(7));
   const stale = () => S.gfiles.length && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;
   if (S.queue.length) flushQueue(false);   // 지난번에 못 쓴 입력부터 저장

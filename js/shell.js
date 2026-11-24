@@ -210,7 +210,7 @@ function sPage(key, back){   // 설정 두 단계: main(목록) ↔ 상세
 }
 function openSheet(page = 'main'){ S.spage = page; go('settings'); }
 $('#sheet').addEventListener('click', e => {
-  const g = e.target.closest('[data-go]'); if (g){ if (g.classList.contains('sback')) return goBack(); syncSheet(); sPage(g.dataset.go); if (g.dataset.go === 'contact') ctOpen(); return; }
+  const g = e.target.closest('[data-go]'); if (g){ if (g.classList.contains('sback')) return goBack(); syncSheet(); sPage(g.dataset.go); if (g.dataset.go === 'contact') ctOpen(); if (g.dataset.go === 'share') shareOpen(); return; }
 });
 for (const k of ['ledger', 'asset']) $('#use-' + k).onclick = () => {
   const other = k === 'ledger' ? 'asset' : 'ledger';

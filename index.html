@@ -188,6 +188,10 @@ body.onboarding nav.tabs,body.onboarding #stepper,body.onboarding #syncBtn,body.
 .tchips button.add{background:none;border:1px dashed var(--faint);color:var(--sub);padding:0 12px}
 .tin{width:100%;min-width:0;height:42px;border:0;background:none;font-size:16px;color:var(--ink);outline:none;font-family:inherit;padding:0}
 input[type=date].tin{font-weight:500}
+.shrow{width:100%;border:0;background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+.shv{font-size:15px;line-height:1.45;min-width:0;overflow-wrap:anywhere}.shv small{color:var(--sub);font-size:13px;margin-left:4px}.shv>small:first-child{margin-left:0}.shv small.st{display:block;margin:2px 0 0}
+.shbig{padding:18px 6px 18px}.shbig b{font-size:22px;font-weight:800;line-height:1.35;overflow-wrap:anywhere}.shbig p{margin:8px 0 0;font-size:15px;line-height:1.55}
+.row .n small b.who{color:var(--ink);font-weight:700}
 .tarea{width:100%;min-width:0;box-sizing:border-box;border:0;background:none;resize:none;font:inherit;font-size:16px;line-height:1.55;color:var(--ink);outline:none;padding:5px 0}
 .ctinfo{font-size:14px;color:var(--sub);line-height:1.4}
 .ctdone{text-align:center;padding:96px 16px 40px}.ctdone b{font-size:22px;font-weight:800}.ctdone p{margin:10px 0 0;font-size:15px;line-height:1.6;color:var(--sub)}
@@ -642,6 +646,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
   <h5 class="shd">계정</h5>
   <div class="slist">
     <button class="srow" data-go="google"><span>구글 계정 · 시트</span><em id="svGoogle"></em><i>›</i></button>
+    <button class="srow" data-go="share"><span>공유</span><em id="svShare"></em><i>›</i></button>
     <button class="srow" id="btnSync"><span>지금 불러오기</span><em id="svSync"></em><i>›</i></button>
     <div class="srow srow-info"><span>데이터</span><em id="svData"></em></div>
   </div>
@@ -707,8 +712,6 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <div id="gChooser" class="chooser" hidden></div>
     <button class="btn" id="gPick">내 구글 드라이브에서 시트 선택</button>
     <button class="btn ghost" id="gCreate">템플릿으로 새 시트 만들기</button>
-    <button class="btn ghost" id="gShare" hidden>함께 쓰기 초대 (시험)</button>
-    <button class="btn ghost" id="gJoin" hidden>초대받은 시트 연결 (시험)</button>
     <button class="btn ghost" id="gOut" hidden>계정 삭제 (구글 연결 해제)</button>
     <ul class="slines"><li>앱은 고르거나 앱에서 만든 시트만 볼 수 있어요.</li></ul>
     <p class="note" id="gCfg" hidden>개발자 설정(구글 클라이언트 ID)이 아직 없어 이 기능을 쓸 수 없어요.</p>
@@ -763,7 +766,54 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
     <button class="srow" id="use-asset" role="switch" aria-checked="true"><span>자산<small>자산 · 목표 탭 · 홈 순자산 카드</small></span><b class="tg"></b></button>
   </div>
   <p class="note">꺼도 기록은 지워지지 않아요.</p>
-</div><div class="spage" data-page="contact">
+</div><div class="spage" data-page="share">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>공유</b><span></span></div>
+  <div id="sh-list">
+    <div class="tform">
+      <button class="trow mid shrow" id="shMeRow"><span class="tlbl">나</span><span class="shv" id="shMe"></span></button>
+      <div class="tline"></div>
+      <div class="trow mid"><div class="tlbl">공유</div><div class="shv" id="shMates"></div></div>
+      <div class="tline"></div>
+      <div class="trow mid"><div class="tlbl">시트</div><div class="shv" id="shSheets"></div></div>
+    </div>
+    <button class="btn" id="shInvite">초대하기</button>
+    <button class="btn" id="shResend" hidden>초대 링크 다시 보내기</button>
+    <button class="btn ghost" id="shStop" hidden>공유 그만두기</button>
+  </div>
+  <div id="sh-form" hidden>
+    <div class="tform">
+      <label class="trow mid"><span class="tlbl">구글 계정</span><input class="tin" id="shEmail" type="email" inputmode="email" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="254"></label>
+      <div class="tline"></div>
+      <label class="trow mid"><span class="tlbl">부를 이름</span><input class="tin" id="shName" maxlength="20" autocomplete="off"></label>
+      <div class="tline"></div>
+      <div class="trow mid"><div class="tlbl">시트</div><div class="tchips" id="shPick"></div></div>
+    </div>
+    <button class="btn" id="shNext">다음</button>
+  </div>
+  <div id="sh-confirm" hidden>
+    <div class="shbig"><b id="shCEmail"></b><p>이 계정이 시트를 보고 고칠 수 있게 돼요.</p></div>
+    <div class="tform">
+      <div class="trow mid"><div class="tlbl">시트</div><div class="shv" id="shCSheets"></div></div>
+      <div class="tline"></div>
+      <div class="trow mid"><div class="tlbl">권한</div><div class="shv">보기 · 고치기</div></div>
+    </div>
+    <button class="btn" id="shGo">공유하고 초대 링크 보내기</button>
+    <button class="btn ghost" id="shBack">고치기</button>
+  </div>
+</div>
+<div class="spage" data-page="join">
+  <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>공유받기</b><span></span></div>
+  <div class="shbig"><b>가계부를<br>공유받았어요</b></div>
+  <div class="tform">
+    <div class="trow mid"><div class="tlbl">보낸 사람</div><div class="shv" id="jFrom"></div></div>
+    <div class="tline"></div>
+    <div class="trow mid"><div class="tlbl">시트</div><div class="shv" id="jCount"></div></div>
+    <div class="tline"></div>
+    <div class="trow mid"><div class="tlbl">내 계정</div><div class="shv" id="jMe"></div></div>
+  </div>
+  <button class="btn" id="jGo">연결하기</button>
+</div>
+<div class="spage" data-page="contact">
   <div class="shead"><button class="sback" data-go="main" aria-label="설정으로">‹ 설정</button><b>문의하기</b><span></span></div>
   <div id="ctForm">
     <div class="tform">
@@ -817,6 +867,7 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
 <script src="js/ledger.js"></script>
 <script src="js/onboard.js"></script>
 <script src="js/native.js"></script>
+<script src="js/share.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

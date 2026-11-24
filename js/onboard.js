@@ -59,6 +59,9 @@ function viewOnboard(){
 function finishOb(){ S.ob = {step: 'done', path: S.ob.path}; saveOb(); document.body.classList.remove('onboarding'); }
 async function restartOb(){
   if (S.meta.source === 'local' && yearsList().length && !(await ask('이 기기에만 저장된 가계부·자산 데이터가 지워져요.\n먼저 백업 파일 만들기를 권해요.', {title: '처음 화면으로 갈까요?', ok: '지우고 처음으로', danger: true}))) return;
+  if (S.queue?.length) return toast('아직 시트에 저장하지 못한 기록이 있어요. 저장된 뒤 다시 시도해 주세요');
+  // 구글 시트 연결도 앱에서만 풀어요 (드라이브의 시트와 공유는 그대로). 연결이 남아 있으면 처음 화면 대신 '불러오지 못했어요'가 떠요.
+  S.gfiles = []; gSave(); for (const k of ['sjoinedf', 'snames', 'sjoined', 'smates', 'pjoin']) LS.del(k);
   S.years = {}; S.meta = {}; LS.set('years', {}); LS.set('meta', {}); setYear(null);
   S.ob = {step: 'intro', path: null}; saveOb(); closeSheet(); go('home');
 }

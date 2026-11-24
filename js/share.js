@@ -59,13 +59,18 @@ async function shareOpen(){
   try {
     const tok = await gToken(false); if (!tok) return;
     await shareInitTag();
-    const f = shareSheets()[0];
-    const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(id,type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
-    const me = S.guser.toLowerCase();
+    // 연결된 시트마다 권한 목록을 보고 상대를 모아요 (내 시트를 공유한 상대 + 나에게 공유해 준 사람)
+    const me = S.guser.toLowerCase(), byEmail = {};
+    await Promise.all(shareSheets().map(async f => {
+      try { const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(id,type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
+        for (const p of j.permissions || []) if (p.type === 'user' && p.emailAddress && p.emailAddress.toLowerCase() !== me && ['writer', 'owner'].includes(p.role)){
+          const e = p.emailAddress.toLowerCase(), m = byEmail[e] || (byEmail[e] = {email: p.emailAddress, own: [], joined: []});
+          (isJoinedFile(f.id) ? m.joined : m.own).push(f.id); } }
+      catch(e){ console.warn('share perms', f.id, e?.message); }
+    }));
     sh.mates = [];
-    for (const p of j.permissions || []) if (p.type === 'user' && p.emailAddress && p.emailAddress.toLowerCase() !== me && ['writer', 'owner'].includes(p.role)){
-      const tag = await tagOf(p.emailAddress); sh.mates.push({email: p.emailAddress, tag}); }
-    if (!isJoinedFile(f.id)) LS.set('smates', sh.mates.map(m => m.email.toLowerCase()));   // 내가 공유한 상대 (나갔는지 알아채려고)
+    for (const m of Object.values(byEmail)) sh.mates.push({...m, tag: await tagOf(m.email)});
+    LS.set('smates', sh.mates.filter(m => m.own.length).map(m => m.email.toLowerCase()));   // 내가 공유한 상대 (나갔는지 알아채려고)
     shPaint();
     await shareLoadNames(tok);   // 상대가 연결했는지(j.표시)·이름표를 새로 받아 다시 그려요
     shPaint();
@@ -77,7 +82,7 @@ function shPaint(){
   $('#svShare').textContent = sh.mates.length ? (names[sh.mates[0].tag] || sh.mates[0].email.split('@')[0]) : '';
   if (sh.step === 'list'){
     $('#shMe').innerHTML = S.guser ? `${esc(myName)} <small>${esc(S.guser)}</small>` : '<small>구글 계정 연결 안 됨</small>';
-    $('#shMates').innerHTML = sh.mates.length ? sh.mates.map(m => `<div>${esc(names[m.tag] || m.email.split('@')[0])} <small>${esc(m.email)}</small><small class="st">${joined[m.tag] ? '연결됨' : '초대함'}</small></div>`).join('') : '<small>없음</small>';
+    $('#shMates').innerHTML = sh.mates.length ? sh.mates.map(m => `<div>${esc(names[m.tag] || m.email.split('@')[0])} <small>${esc(m.email)}</small><small class="st">${!m.own?.length || joined[m.tag] ? '연결됨' : '초대함'}</small></div>`).join('') : '<small>없음</small>';
     $('#shSheets').textContent = files.length ? files.map(f => f.name).join(' · ') : '없음';
     const joinedSide = files.some(f => isJoinedFile(f.id));
     $('#shInvite').hidden = !!sh.mates.length; $('#shStop').hidden = !sh.mates.length; $('#shResend').hidden = !sh.mates.length || joinedSide;
@@ -148,15 +153,14 @@ $('#shGo').onclick = async () => {
 $('#shResend').onclick = () => sendInvite(inviteLink(shareSheets()));
 $('#shStop').onclick = async () => {
   const m = sh.mates[0]; if (!m) return;
-  const mine = shareSheets().filter(f => isJoinedFile(f.id));
-  if (mine.length) return shareLeave(mine);   // 공유받은 쪽: 내 권한을 지우고 나가요
+  if (!m.own?.length){ const mine = shareSheets().filter(f => (m.joined || []).includes(f.id)); if (mine.length) return shareLeave(mine); }   // 공유받은 쪽: 내 권한을 지우고 나가요
   const ok = await ask(`${m.email} 계정과 시트 공유를 그만둘까요?`, {ok: '그만두기', danger: true});
   if (!ok) return;
   LS.set('smates', (LS.get('smates', []) || []).filter(e => e !== m.email.toLowerCase()));   // 내가 끊은 건 알림 안 띄우게
   busy('공유를 그만두는 중이에요');
   try {
     const tok = await gToken(true);
-    for (const f of shareSheets()){
+    for (const f of shareSheets().filter(g => !isJoinedFile(g.id))){   // 내 시트에서만 상대 권한을 지워요
       try { const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(id,emailAddress)`, {cache: 'no-store'}, tok)).json();
         for (const p of j.permissions || []) if ((p.emailAddress || '').toLowerCase() === m.email.toLowerCase())
           await drive(`${encodeURIComponent(f.id)}/permissions/${encodeURIComponent(p.id)}`, {method: 'DELETE'}, tok); }
@@ -192,12 +196,13 @@ function shareGone(res){
 let watching = false;
 async function shareWatch(tok){
   const before = LS.get('smates', []) || [];
-  const f = shareSheets().find(g => !isJoinedFile(g.id));
-  if (watching || !before.length || !f || !tok) return;
+  const own = shareSheets().filter(g => !isJoinedFile(g.id));
+  if (watching || !before.length || !own.length || !tok) return;
   watching = true;
   try {
-    const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
-    const now = (j.permissions || []).filter(p => p.type === 'user' && p.emailAddress).map(p => p.emailAddress.toLowerCase());
+    const now = [];
+    for (const f of own){ const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
+      for (const p of j.permissions || []) if (p.type === 'user' && p.emailAddress) now.push(p.emailAddress.toLowerCase()); }
     const left = before.filter(e => !now.includes(e));
     if (!left.length) return;
     LS.set('smates', before.filter(e => now.includes(e)));

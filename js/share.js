@@ -4,7 +4,7 @@
      링크가 새도 구글이 공유한 계정이 아니면 시트를 열 수 없어요.
    - 공유받기: 링크를 열면 구글 '앱용 선택 창'(trigger_onepick, file_ids)에서 그 시트만 보여 주고,
      한 번 고르면 이 앱(drive.file)이 그 시트를 볼 수 있어요. 아이폰도 PC 없이 돼요.
-   - 누가 넣었는지: 새 거래 ID 끝에 사람 표시(.xxxxxx, 메일의 해시)를 붙여요. 시트 모양(열·탭)은 바꾸지 않아요.
+   - 누가 넣었는지: 새 거래 ID 끝에 사람 표시(.xxxxxx, 메일의 해시)를 붙여요(화면 표시는 아직 끔). 시트 모양(열·탭)은 바꾸지 않아요.
      표시 ↔ 이름은 드라이브 파일의 앱 전용 속성(appProperties, 시트 화면에 안 보임)에 'n.<표시>'로 저장해요.
      상대가 연결하면 'j.<표시>'를 남겨 "연결됨"을 알 수 있어요. 메일 주소는 시트·ID에 남기지 않아요. */
 const JOIN_URL = 'https://alllever.app/join';
@@ -27,11 +27,7 @@ async function shareInitTag(){
 }
 const txTag = id => { const m = /\.([A-Za-z0-9]{6})$/.exec(String(id || '')); return m ? m[1] : ''; };
 const shareNames = () => LS.get('snames', {}) || {};
-// 거래 목록: 상대가 넣은 거래에만 이름 (W2)
-function txWho(t){
-  const tag = txTag(t.id); if (!tag || tag === MY_TAG) return '';
-  const n = shareNames()[tag]; return n ? ` · <b class="who">${esc(n)}</b>` : '';
-}
+// 거래 목록에 넣은 사람 이름은 아직 보여 주지 않아요 (결정 기록 11/24). 켤 때는 txTag(t.id)로 shareNames()에서 찾으면 돼요.
 
 const drive = (path, opt, tok) => gFetch('https://www.googleapis.com/drive/v3/files/' + path, opt, tok);
 async function setProps(files, props, tok){

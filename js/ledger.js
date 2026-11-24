@@ -62,6 +62,7 @@ function recalcMonth(Y, m){
 function hash36(s){ let h = 5381; for (const ch of s) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0; return h.toString(36); }
 const repId = r => 'R' + hash36([r.kind, r.name, r.sub || '', r.memo || ''].join('|'));
 // 구글 시트를 쓰면 ID 끝에 넣은 사람 표시(.xxxxxx)를 붙여요 (공유: share.js). 시트 모양은 그대로예요.
+// 화면에는 아직 보여 주지 않아요(11/24 결정): 시트에서 직접 넣은 거래는 표시가 없어 헷갈릴 수 있어서. 기록만 남겨 두고 나중에 켤 수 있게.
 const newTxId = () => 'T' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + (S.meta?.source === 'google' && typeof MY_TAG === 'string' && MY_TAG ? '.' + MY_TAG : '');
 const txOf = (m, y = S.year) => { [m, y] = wrapYM(m, y); return S.years?.[y]?.txMode ? (S.years[y].tx?.[m] || []).filter(t => !t.skip) : null; };
 const shortAmt = n => { const a = Math.abs(n); return a >= 1e5 ? Math.round(a / 1e4) + '만' : a >= 1e4 ? (+(a / 1e4).toFixed(1)) + '만' : a.toLocaleString('ko-KR'); };
@@ -109,7 +110,7 @@ function selDay(y, m){
 function txRowHtml(t, ed){
   const inc = t.kind === '수입', sav = t.kind === '저축';
   return `<div class="row${ed ? ' tap' : ''}" ${ed ? `data-tx="${esc(t.id)}" role="button" tabindex="0"` : ''}><div class="tico ${inc ? 'inc' : sav ? 'sav' : ''}">${esc((t.sub || t.name).slice(0, 1))}</div>
-    <div class="n">${esc(t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name))}${t.id.startsWith('R') ? '<span class="rep">반복</span>' : ''}<small>${esc(t.name)}${t.sub ? ' › ' + esc(t.sub) : ''}${t.pay ? ' · ' + esc(t.pay) : ''}${typeof txWho === 'function' ? txWho(t) : ''}</small></div>
+    <div class="n">${esc(t.memo && t.memo !== '반복' ? t.memo : (t.sub || t.name))}${t.id.startsWith('R') ? '<span class="rep">반복</span>' : ''}<small>${esc(t.name)}${t.sub ? ' › ' + esc(t.sub) : ''}${t.pay ? ' · ' + esc(t.pay) : ''}</small></div>
     <div class="a num ${inc ? 'inc' : sav ? 'sav' : 'exp'}">${inc ? '+' : sav ? '' : '-'}${fmtWon(t.amt)}</div></div>`;
 }
 function viewCal(){

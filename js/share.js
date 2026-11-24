@@ -81,7 +81,7 @@ function shPaint(){
     $('#shInvite').hidden = !!sh.mates.length; $('#shResend').hidden = $('#shStop').hidden = !sh.mates.length;
   }
   if (sh.step === 'form'){
-    $('#shPick').innerHTML = files.map(f => `<button data-id="${esc(f.id)}" class="${sh.pick[f.id] !== false ? 'on' : ''}">${esc(f.name)}</button>`).join('');
+    $('#shPick').innerHTML = files.filter(f => sh.pick[f.id] !== false).map(f => `<div class="shs"><span>${esc(f.name)}</span><button data-id="${esc(f.id)}" aria-label="${esc(f.name)} 빼기">×</button></div>`).join('');
   }
   if (sh.step === 'confirm'){
     $('#shCEmail').textContent = sh.email;
@@ -100,13 +100,15 @@ $('#shInvite').onclick = () => {
   if (!S.guser || !shareSheets().length) return toast('먼저 구글 시트를 연결해 주세요');
   sh.step = 'form'; sh.pick = {}; $('#shEmail').value = sh.email; $('#shName').value = sh.name; shPaint();
 };
-$('#shPick').onclick = e => { const b = e.target.closest('button'); if (!b) return; sh.pick[b.dataset.id] = sh.pick[b.dataset.id] === false; haptic('light'); shPaint(); };
+$('#shPick').onclick = e => { const b = e.target.closest('button'); if (!b) return;
+  if (shareSheets().filter(f => sh.pick[f.id] !== false).length <= 1) return toast('시트를 하나 이상 남겨 주세요');
+  sh.pick[b.dataset.id] = false; haptic('light'); shPaint(); };
 $('#shNext').onclick = () => {
   const email = $('#shEmail').value.trim().toLowerCase(), name = cleanName($('#shName').value);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { $('#shEmail').focus(); return toast('구글 계정 메일 주소를 확인해 주세요'); }
   if (email === String(S.guser).toLowerCase()) return toast('내 계정은 초대할 수 없어요');
   if (!shareSheets().some(f => sh.pick[f.id] !== false)) return toast('공유할 시트를 골라 주세요');
-  sh.email = email; sh.name = name; sh.step = 'confirm'; shPaint(); window.scrollTo(0, 0);
+  sh.email = email; sh.name = name; sh.step = 'confirm'; shPaint();
 };
 $('#shBack').onclick = () => { sh.step = 'form'; shPaint(); };
 function inviteLink(files){

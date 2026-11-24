@@ -155,6 +155,7 @@ async function nativeLogin(){
 // 구글 로그인에서 돌아왔을 때: 주소의 #alv_sid=… 를 저장하고 주소창에서 지운 뒤, 하려던 동작을 이어서 해요.
 function gReturn(){
   const h = new URLSearchParams(location.hash.slice(1));
+  if (LS.get('pnonce', null) && (h.has('alv_picked') || h.has('alv_err'))) return shareReturn(h);
   if (!h.has('alv_sid') && !h.has('alv_err')) return null;
   history.replaceState(null, '', location.pathname + location.search);
   let pending = null, nonce = null;
@@ -443,6 +444,7 @@ async function syncGoogle(interactive, show = false){   // show: 시트를 새�
   } finally { gSyncing = false; $('#syncBtn').classList.remove('spin'); if (show) busy(); }
 }
 function syncNow(interactive){ if (S.gfiles.length) return syncGoogle(interactive); if (interactive){ toast('설정에서 구글 시트를 연결하세요'); openSheet('google'); } }
+$('#gShare').onclick = shareInvite; $('#gJoin').onclick = () => shareJoin();
 $('#gPick').onclick = gPick; $('#gCreate').onclick = () => gCreate(); $('#gOut').onclick = gSignOut;
 
 // 화면 안 버튼 동작 (CSP 때문에 onclick 속성 대신 위임)
@@ -462,3 +464,96 @@ document.addEventListener('click', e => { const b = e.target.closest('[data-act]
   else if (a === 'homeAsset'){ const c = assetPoints().at(-1); if (c){ setYear(c.y); S.month.asset = c.m; } go('asset'); } else if (a === 'budAdd') openBudAdd(); else if (a === 'goBud'){ S.bview = 'bud'; LS.set('bview', 'bud'); render(); }
   else if (a === 'addB') addBudgetItem(S.month.budget, b.dataset.kind);
   else if (a === 'zeroItems'){ S.showZero = !S.showZero; render(); } });
+
+/* ───────── 함께 쓰기 (시험판) ─────────
+   1) 초대: 연결된 시트를 상대 구글 계정에 편집자로 공유해요 (drive.file 권한으로 앱이 만든·고른 시트만 가능).
+      구글이 상대에게 알림 메일을 보내고, 앱은 초대 링크를 만들어요. 링크에는 시트 id만 있어요.
+      링크가 새도 구글이 공유한 계정이 아니면 시트를 열 수 없어요.
+   2) 연결: 상대가 초대 링크를 넣으면 구글 '앱용 선택 창'(trigger_onepick)에서 그 시트만 보여 주고,
+      한 번 고르면 이 앱(drive.file)이 그 시트를 볼 수 있게 돼요. */
+const JOIN_BASE = 'https://alllever.app/join#f=';
+// 시험 중에는 버튼을 숨겨 둬요: 설정 › 버전을 7번 누르면 보이고, 다시 7번 누르면 숨겨요.
+const shareTestPaint = () => { const on = !!LS.get('sharetest', false); $('#gShare').hidden = $('#gJoin').hidden = !on; };
+let verTaps = 0, verTimer = 0;
+$('#sVerRow').addEventListener('click', () => {
+  clearTimeout(verTimer); verTimer = setTimeout(() => verTaps = 0, 1500);
+  if (++verTaps < 7) return; verTaps = 0;
+  const on = !LS.get('sharetest', false); on ? LS.set('sharetest', true) : LS.del('sharetest'); shareTestPaint();
+  toast(on ? '함께 쓰기 시험 버튼을 켰어요' : '함께 쓰기 시험 버튼을 껐어요');
+});
+shareTestPaint();
+const shareIds = s => { const m = /[#?&]f=([\w,-]+)/.exec(String(s || '')) || /^([\w-]{10,200}(?:,[\w-]{10,200})*)$/.exec(String(s || '').trim());
+  return m ? m[1].split(',').filter(x => /^[\w-]{10,200}$/.test(x)).slice(0, 10) : []; };
+async function shareInvite(){
+  if (!S.guser || !S.gfiles.length) return toast('먼저 구글 시트를 연결해 주세요');
+  const email = ((await askText('함께 쓸 사람의 구글 계정', {placeholder: 'name@gmail.com', ok: '초대', max: 254})) || '').trim().toLowerCase();
+  if (!email) return;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('구글 계정 메일 주소를 확인해 주세요');
+  if (email === String(S.guser).toLowerCase()) return toast('내 계정은 초대할 수 없어요');
+  const files = S.gfiles.filter(f => f.mime === MIME_SHEET);
+  if (!files.length) return toast('구글 시트 형식의 시트만 함께 쓸 수 있어요');
+  const link = JOIN_BASE + files.map(f => f.id).join(',');
+  busy('초대하는 중이에요');
+  const failed = [];
+  try {
+    const tok = await gToken(true, 'share');
+    for (const f of files){
+      const q = new URLSearchParams({sendNotificationEmail: 'true', fields: 'id',
+        emailMessage: `머니머슬 가계부를 함께 써요. 머니머슬 앱 › 설정 › 구글 계정 · 시트 › 초대받은 시트 연결에 이 링크를 넣어 주세요: ${link}`});
+      try { await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(f.id)}/permissions?` + q, {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: 'user', role: 'writer', emailAddress: email})}, tok); }
+      catch(e){ failed.push(f.name || f.id); console.warn('share failed', f.id, e?.message); }
+    }
+  } catch(e){ busy(); return toast(e.message || '초대하지 못했어요'); }
+  busy();
+  if (failed.length === files.length) return toast('초대하지 못했어요. 시트 주인 계정인지 확인해 주세요');
+  try { await navigator.clipboard.writeText(link); } catch(e){}
+  await ask(`${email} 계정에 시트 ${files.length - failed.length}개를 공유했어요.${failed.length ? `\n공유하지 못한 시트: ${failed.join(', ')}` : ''}\n\n초대 링크를 복사했어요. 상대방에게 보내 주세요.\n${link}`, {title: '초대했어요', ok: '확인', cancel: ''});
+}
+async function shareJoin(text){
+  if (!S.guser) return toast('먼저 구글로 로그인해 주세요');
+  if (text == null) text = await askText('초대받은 시트 연결', {placeholder: '초대 링크를 붙여 넣어 주세요', ok: '연결', max: 2400});
+  if (text == null) return;
+  const ids = shareIds(text);
+  if (!ids.length) return toast('초대 링크를 확인해 주세요');
+  const nonce = b64url(crypto.getRandomValues(new Uint8Array(24)));
+  const q = new URLSearchParams({file: ids.join(','), nonce, hint: S.guser});
+  if (!NATIVE){   // 웹: 이 페이지로 돌아와요 (shareReturn)
+    LS.set('pnonce', nonce);
+    q.set('return', location.origin + location.pathname);
+    location.href = gServer() + '/auth/pick-start?' + q;
+    return;
+  }
+  q.set('return', `${APP_SCHEME}://picked`);
+  try {
+    const back = await nativeAuthSession(gServer() + '/auth/pick-start?' + q, 'picked');
+    const h = new URLSearchParams(String(back).split('#')[1] || '');
+    if (h.get('alv_nonce') !== nonce) throw new Error('이 기기에서 시작한 요청이 아니에요. 다시 시도해 주세요');
+    if (h.has('alv_err')) throw new Error(h.get('alv_err') === 'access_denied' || h.get('alv_err') === 'denied' ? '시트를 고르지 않았어요' : '시트를 연결하지 못했어요 (' + h.get('alv_err') + ')');
+    await shareFinish(shareIds(h.get('alv_picked')));
+  } catch(e){ if (!e.canceled) toast(e.message); }
+}
+function shareReturn(h){
+  history.replaceState(null, '', location.pathname + location.search);
+  const nonce = LS.get('pnonce', null); LS.del('pnonce');
+  if (h.get('alv_nonce') !== nonce){ toast('이 기기에서 시작한 요청이 아니라서 무시했어요'); return null; }
+  if (h.has('alv_err')){ toast('시트를 연결하지 못했어요 (' + h.get('alv_err') + ')'); return null; }
+  return 'joined:' + shareIds(h.get('alv_picked')).join(',');
+}
+async function shareFinish(ids){
+  if (!ids.length) return toast('고른 시트가 없어요');
+  busy('시트를 연결하는 중이에요');
+  try {
+    const tok = await gToken(true, 'sync'), docs = [];
+    for (const id of ids){
+      try { const j = await (await gFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?fields=id,name,mimeType,trashed`, {cache: 'no-store'}, tok)).json();
+        if (j.id && !j.trashed && j.mimeType === MIME_SHEET) docs.push({id: j.id, name: String(j.name || '').slice(0, 200), mime: j.mimeType}); }
+      catch(e){ console.warn('join read failed', id, e?.message); }
+    }
+    busy();
+    if (!docs.length) return toast('시트를 열 수 없어요. 초대받은 계정으로 로그인했는지 확인해 주세요');
+    const n = gAdd(docs);
+    if (n) syncGoogle(true, true); else toast('이미 연결된 시트예요');
+  } catch(e){ busy(); toast(e.message || '시트를 연결하지 못했어요'); }
+}
+

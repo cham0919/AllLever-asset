@@ -13,6 +13,9 @@
 //   POST /token     (Authorization: Bearer <세션>)  새 접근 토큰
 //        X-Alv-Rotate: 1 을 보내는 앱에는 하루에 한 번 새 세션 값(sid)도 함께 줘요. 옛 값은 교체 후 10분까지만 받아요.
 //   POST /logout    (Authorization: Bearer <세션>)  구글 권한 취소 + 세션 삭제
+//   GET  /auth/pick-start?file=…&return=…&nonce=…   함께 쓰기: 공유받은 시트를 구글 '앱용 선택 창'(trigger_onepick)으로 한 번 골라
+//                     이 앱이 그 시트를 볼 수 있게 해요 (drive.file 권한만, 로그인·세션과 별개)
+//   GET  /auth/pick-callback                        구글에서 돌아오면 고른 시트 id만 앱으로 돌려줘요. 구글 토큰은 저장하지 않아요
 //   POST /contact   {kind, text, reply, info}  앱의 설정 › 문의하기. 받는 주소는 wrangler.toml에 고정(개발자 메일)이라 다른 곳으로는 못 보내요.
 //        문의 내용은 메일로만 보내고 서버에 저장하지 않아요. 하루 전체 건수만 세요(장난 방지).
 //   GET  /health
@@ -107,9 +110,9 @@ async function authStart(req, env, url){
 
 async function authCallback(req, env, url){
   const state = url.searchParams.get('state') || '', code = url.searchParams.get('code');
-  const row = await env.DB.prepare('SELECT return_url, created, nonce, cc FROM auth_state WHERE state = ?1').bind(state).first();
+  const row = await env.DB.prepare('SELECT return_url, created, nonce, cc, kind FROM auth_state WHERE state = ?1').bind(state).first();
   if (row) await env.DB.prepare('DELETE FROM auth_state WHERE state = ?1').bind(state).run();
-  if (!row || Date.now() - row.created > STATE_TTL) return page('로그인 요청이 만료됐어요.');
+  if (!row || row.kind === 'pick' || Date.now() - row.created > STATE_TTL) return page('로그인 요청이 만료됐어요.');
   const back = (frag) => new Response(null, {status: 302, headers: {Location: row.return_url.split('#')[0] + '#' + new URLSearchParams({...frag, alv_nonce: row.nonce || ''}), 'Cache-Control': 'no-store'}});
   if (!code) return back({alv_err: url.searchParams.get('error') || 'denied'});
   const r = await fetch(urls(env).token, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
@@ -129,6 +132,48 @@ async function authCallback(req, env, url){
     return back({alv_code: code});
   }
   return back({alv_sid: sid, alv_email: email || ''});
+}
+
+/* ───────── 함께 쓰기: 공유받은 시트 고르기 ─────────
+   drive.file 권한은 "앱이 만들었거나 사용자가 고른 파일"만 열 수 있어서, 공유받은 시트는 한 번 골라 줘야 해요.
+   구글 '앱용 선택 창'(trigger_onepick)은 구글 화면 안에서 파일을 고르고, 고른 파일 id를 돌려줘요.
+   file_ids로 초대받은 시트만 보이게 해요. 돌려받은 토큰은 쓰지 않고 버려요 (권한 부여는 구글 쪽에 남아요). */
+const PICK_RETURN = 'com.alllever.asset://picked';
+const FILE_ID_RE = /^[\w-]{10,200}$/;
+const pickReturnOk = (env, u) => u === PICK_RETURN || (!isApp(env, u) && returnOk(env, u));
+async function pickStart(req, env, url){
+  const ret = url.searchParams.get('return') || '', nonce = url.searchParams.get('nonce') || '';
+  const files = String(url.searchParams.get('file') || '').split(',').filter(Boolean);
+  if (!pickReturnOk(env, ret)) return page('허용되지 않은 앱 주소예요.');
+  if (!/^[\w-]{16,64}$/.test(nonce)) return page('앱을 최신 버전으로 업데이트한 뒤 다시 시도해 주세요.');
+  if (!files.length || files.length > 10 || !files.every(f => FILE_ID_RE.test(f))) return page('초대 링크가 올바르지 않아요.');
+  const state = rand(24), now = Date.now();
+  await env.DB.prepare("INSERT INTO auth_state (state, return_url, created, nonce, cc, kind) VALUES (?1, ?2, ?3, ?4, NULL, 'pick')").bind(state, ret, now, nonce).run();
+  await env.DB.prepare('DELETE FROM auth_state WHERE created < ?1').bind(now - STATE_TTL).run();
+  const q = new URLSearchParams({
+    client_id: env.GOOGLE_CLIENT_ID, redirect_uri: url.origin + '/auth/pick-callback', response_type: 'code',
+    scope: 'https://www.googleapis.com/auth/drive.file', prompt: 'consent', trigger_onepick: 'true',
+    file_ids: files.join(','), allow_multiple: files.length > 1 ? 'true' : 'false',
+    mimetypes: 'application/vnd.google-apps.spreadsheet', state,
+  });
+  const hint = url.searchParams.get('hint'); if (hint && hint.length <= 254) q.set('login_hint', hint);
+  return Response.redirect(urls(env).auth + '?' + q, 302);
+}
+async function pickCallback(req, env, url){
+  const state = url.searchParams.get('state') || '', code = url.searchParams.get('code');
+  const row = await env.DB.prepare('SELECT return_url, created, nonce, kind FROM auth_state WHERE state = ?1').bind(state).first();
+  if (row) await env.DB.prepare('DELETE FROM auth_state WHERE state = ?1').bind(state).run();
+  if (!row || row.kind !== 'pick' || Date.now() - row.created > STATE_TTL) return page('요청이 만료됐어요.');
+  const back = (frag) => new Response(null, {status: 302, headers: {Location: row.return_url.split('#')[0] + '#' + new URLSearchParams({...frag, alv_nonce: row.nonce || ''}), 'Cache-Control': 'no-store'}});
+  if (!code) return back({alv_err: url.searchParams.get('error') || 'denied'});
+  // 코드를 토큰으로 바꿔 권한 부여를 마무리해요. 받은 토큰은 저장하거나 돌려주지 않아요.
+  const r = await fetch(urls(env).token, {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({code, client_id: env.GOOGLE_CLIENT_ID, client_secret: env.GOOGLE_CLIENT_SECRET,
+      redirect_uri: url.origin + '/auth/pick-callback', grant_type: 'authorization_code'})});
+  if (!r.ok) return back({alv_err: 'token'});
+  const picked = String(url.searchParams.get('picked_file_ids') || '').split(',').filter(f => FILE_ID_RE.test(f)).slice(0, 10);
+  if (!picked.length) return back({alv_err: 'none'});
+  return back({alv_picked: picked.join(',')});
 }
 
 async function exchange(req, env){   // 앱: 일회용 코드 + verifier → 세션
@@ -237,6 +282,8 @@ async function route(req, env){
       if (url.pathname === '/contact' && await limited(env, req, 'contact')) return cors(env, req, json({error: 'rate_limited'}, 429));
       if (req.method === 'GET' && url.pathname === '/auth/start') return await authStart(req, env, url);
       if (req.method === 'GET' && url.pathname === '/auth/callback') return await authCallback(req, env, url);
+      if (req.method === 'GET' && url.pathname === '/auth/pick-start') return await pickStart(req, env, url);
+      if (req.method === 'GET' && url.pathname === '/auth/pick-callback') return await pickCallback(req, env, url);
       if (req.method === 'POST' && url.pathname === '/auth/exchange') return cors(env, req, await exchange(req, env));
       if (req.method === 'POST' && url.pathname === '/token') return cors(env, req, await token(req, env));
       if (req.method === 'POST' && url.pathname === '/logout') return cors(env, req, await logout(req, env));

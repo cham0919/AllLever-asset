@@ -41,9 +41,10 @@ h1{font-size:26px;line-height:1.35;margin:0 0 24px;font-weight:800;padding:0 8px
   var h = new URLSearchParams(location.hash.slice(1));
   var ids = (h.get('f') || '').split(',').filter(function(x){ return /^[\w-]{10,200}$/.test(x); }).slice(0, 10);
   var from = (h.get('n') || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 20);
+  var code = /^[A-Za-z0-9_-]{16,64}$/.test(h.get('c') || '') ? h.get('c') : '';
   document.getElementById('from').textContent = from || '-';
   document.getElementById('count').textContent = ids.length ? ids.length + '개' : '-';
-  var q = 'f=' + ids.join(',') + '&n=' + encodeURIComponent(from);
+  var q = 'f=' + ids.join(',') + '&c=' + code + '&n=' + encodeURIComponent(from);
   var a = document.getElementById('open');
   if (!ids.length){ a.style.display = 'none'; return; }
   a.href = /Android/i.test(navigator.userAgent)

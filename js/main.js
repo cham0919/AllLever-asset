@@ -14,7 +14,7 @@ function boot(){
   if (S.meta.source === 'local') applyReps();
   const gPending = gReturn();
   if (gPending === 'pick') gPick();
-  else if (gPending && gPending.startsWith('joined:')) shareFinish(shareIds(gPending.slice(7)));
+  else if (gPending && gPending.startsWith('joined:')){ const c = LS.get('pcode', ''); LS.del('pcode'); shareFinish(shareIds(gPending.slice(7)), c); }
   else if (gPending === 'join'){ const p = LS.get('pjoin', null); LS.del('pjoin'); if (p?.ids?.length){ Object.assign(jn, p); openSheet('join'); jPaint(); sharePick(p.ids); } }
   else if (gPending && gPending.startsWith('create:')) gCreate(+gPending.slice(7));
   const stale = () => S.gfiles.length && Date.now() - (S.meta.syncedAt || 0) > 60 * 1000;

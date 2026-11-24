@@ -43,7 +43,7 @@ async function user(b, email) {
   await p.evaluate(em => {
     window.__toasts = []; const t0 = toast; toast = m => { window.__toasts.push(m); t0(m); };
     gToken = async () => 'tok-' + em; gWhoAmI = async () => {}; S.guser = em; LS.set('guser', em);
-    sharePick = async ids => { await window.__pick(ids); await shareFinish(ids); };   // 구글 앱용 선택 창 대신
+    sharePick = async ids => { await window.__pick(ids); await shareFinish(ids, jn.code); };   // 구글 앱용 선택 창 대신
   }, email);
   await p.exposeFunction('__pick', ids => { (picked[email] = picked[email] || new Set()); ids.forEach(i => picked[email].add(i)); });
   p.email = email; return p;
@@ -91,13 +91,13 @@ const results = []; const check = (name, ok, info = '') => { results.push({ name
 
     // S2 A가 B 초대 (2025만)
     const link = await invite(A, 'b@x.com', ['A2026xxxxxxxx']);
-    check('S2a 초대 링크', /^https:\/\/alllever\.app\/join#f=A2025xxxxxxxx&n=a$/.test(link || ''), link);
+    check('S2a 초대 링크 (일회용 코드 포함)', /^https:\/\/alllever\.app\/join#f=A2025xxxxxxxx&c=[A-Za-z0-9_-]{24}&n=a$/.test(link || ''), link);
     check('S2b 2025만 공유됨', files['A2025xxxxxxxx'].perms.some(p => p.email === 'b@x.com') && !files['A2026xxxxxxxx'].perms.some(p => p.email === 'b@x.com'));
     let s = await openShare(A); check('S2c A 공유 칸 = B 초대함', s.mates.includes('b@x.com') && s.mates.includes('초대함'), s.mates);
 
     // S3 B가 링크로 연결 (B는 이미 자기 2026 시트 있음)
     await connectOwn(B, ['B2026xxxxxxxx']);
-    await ev(B, l => joinOpen(l), link); await B.waitForTimeout(200);
+    await ev(B, l => { joinOpen(l); }, link); await B.waitForTimeout(200);
     const jv = await ev(B, () => [$('#jFrom').textContent, $('#jCount').textContent, $('#jMe').textContent]);
     check('S3a 공유받기 화면', jv.join('|') === 'a|1개|b@x.com', jv.join('|'));
     await B.click('#jGo'); await B.waitForTimeout(1200);
@@ -106,9 +106,20 @@ const results = []; const check = (name, ok, info = '') => { results.push({ name
     s = await openShare(B); check('S3d B 공유 칸 = A 연결됨, 다시 보내기 숨김', s.mates.includes('a@x.com') && s.mates.includes('연결됨') && !s.resend, JSON.stringify(s));
     s = await openShare(A); check('S3e A 공유 칸 = B 연결됨', s.mates.includes('연결됨'), s.mates);
 
-    // S4 같은 링크로 다시 연결
-    await ev(B, l => joinOpen(l), link); await B.click('#jGo'); await B.waitForTimeout(800);
-    check('S4 이미 연결된 시트', (await toasts(B)).some(t => t.includes('이미 연결된')));
+
+    // S4b 일회용: 쓴 링크를 같은 기기에서 다시 열기 → 바로 만료
+    await ev(B, l => { joinOpen(l); }, link); const t4b = await dialog(B, 'ok');
+    check('S4b 같은 기기 재사용 → 만료', (t4b || '').startsWith('만료된 초대 링크예요.'), t4b);
+    check('S4c 연결 후 코드 지워짐', !Object.keys(files['A2025xxxxxxxx'].appProps).some(k => k.startsWith('i.')));
+    // S4d 다른 기기(같은 B 계정)에서 쓴 링크 → 구글 거친 뒤 만료
+    const B2 = await user(b, 'b@x.com');
+    await ev(B2, l => { joinOpen(l); }, link); await B2.click('#jGo'); const t4d = await dialog(B2, 'ok', 6000);
+    check('S4d 다른 기기 재사용 → 만료, 연결 안 함', (t4d || '').startsWith('만료된 초대 링크예요.') && (await ev(B2, () => S.gfiles.length)) === 0, t4d);
+    // S4e 제3자 C가 링크로 연결 시도 → 열 수 없음
+    const C = await user(b, 'c@x.com');
+    await ev(C, l => { joinOpen(l); }, link); await C.click('#jGo'); const t4e = await dialog(C, 'ok', 6000);
+    check('S4e 제3자 → 열 수 없음', (t4e || '').startsWith('이 계정으로는 열 수 없는 초대 링크예요.') && (await ev(C, () => S.gfiles.length)) === 0, t4e);
+    check('오류 없음 B2·C', !B2.errs.length && !C.errs.length, [...B2.errs, ...C.errs].join(' / '));
 
     // S5 A가 공유 그만두기 → B 알림
     await openShare(A); await A.click('#shStop'); const t5 = await dialog(A, 'ok'); await A.waitForTimeout(600);
@@ -122,7 +133,14 @@ const results = []; const check = (name, ok, info = '') => { results.push({ name
     // S6 다시 초대 → B가 나가기 → A 알림
     const link2 = await invite(A, 'b@x.com', ['A2026xxxxxxxx']);
     s = await openShare(A); check('S6-0 다시 초대 직후 A 공유 칸 = 초대함 (예전 연결 표시 안 남음)', s.mates.includes('초대함'), s.mates);
-    await ev(B, l => joinOpen(l), link2); await B.click('#jGo'); await B.waitForTimeout(1000);
+    // S6-1 다시 보내기 → 예전 링크(link2) 만료, 새 링크로 연결
+    await ev(A, () => { sendInvite = async l => { window.__link = l; }; }); await A.click('#shResend'); await A.waitForTimeout(600);
+    const link2b = await ev(A, () => window.__link);
+    check('S6-1a 다시 보내기 → 새 코드', link2b && link2b !== link2, link2b);
+    const B3 = await user(b, 'b@x.com'); await ev(B3, l => { joinOpen(l); }, link2); await B3.click('#jGo'); const t61 = await dialog(B3, 'ok', 6000);
+    check('S6-1b 예전 링크 만료', (t61 || '').startsWith('만료된 초대 링크예요.'), t61);
+    check('S6-1c 코드는 하나만 남음', Object.keys(files['A2025xxxxxxxx'].appProps).filter(k => k.startsWith('i.')).length === 1);
+    await ev(B, l => { joinOpen(l); }, link2b); await B.click('#jGo'); await B.waitForTimeout(1000);
     await openShare(A);   // 상대 목록 기억
     await openShare(B); await B.click('#shStop'); const t6 = await dialog(B, 'ok'); await B.waitForTimeout(800);
     check('S6a B 나가기 확인 창', t6 && t6.startsWith('공유받은 시트에서 나갈까요?'), t6);
@@ -135,12 +153,12 @@ const results = []; const check = (name, ok, info = '') => { results.push({ name
 
     // S7 반대 방향: B가 A 초대 (B 2026 ↔ A 2026: 같은 연도) → 변경/취소
     const link3 = await invite(B, 'a@x.com');
-    await ev(A, l => joinOpen(l), link3); await A.click('#jGo'); const t7 = await dialog(A, 'cancel', 6000); await A.waitForTimeout(800);
+    await ev(A, l => { joinOpen(l); }, link3); await A.click('#jGo'); const t7 = await dialog(A, 'cancel', 6000); await A.waitForTimeout(800);
     check('S7a 같은 연도 물어보기', (t7 || '').includes('2026년에 이미 연결된 시트가 있어요. 변경할까요?'), t7);
     check('S7b 취소 → A 2026 유지', (await ev(A, () => S.gfiles.map(f => f.id).sort().join())) === 'A2025xxxxxxxx,A2026xxxxxxxx');
     s = await openShare(A); check('S7c A 공유 칸 (취소 후)', true, s.mates);
     s = await openShare(B); check('S7c2 취소했으면 B 쪽에 A 연결됨 아님', s.mates.includes('초대함'), s.mates);
-    await ev(A, l => joinOpen(l), link3); await A.click('#jGo'); const t7d = await dialog(A, 'ok', 6000); await A.waitForTimeout(1000);
+    await ev(A, l => { joinOpen(l); }, link3); await A.click('#jGo'); const t7d = await dialog(A, 'ok', 6000); await A.waitForTimeout(1000);
     check('S7d 변경 → B 2026으로', (await ev(A, () => S.gfiles.map(f => f.id).sort().join())) === 'A2025xxxxxxxx,B2026xxxxxxxx', await ev(A, () => S.gfiles.map(f => f.id).join()));
     s = await openShare(A); check('S7e A(공유받은 쪽) 공유 칸 = B 연결됨', s.mates.includes('b@x.com') && s.mates.includes('연결됨'), s.mates);
     s = await openShare(B); check('S7f B(주인) 공유 칸 = A 연결됨', s.mates.includes('a@x.com') && s.mates.includes('연결됨'), s.mates);
@@ -152,9 +170,11 @@ const results = []; const check = (name, ok, info = '') => { results.push({ name
     await sync(B); check('S8c B에 알림 없음', !(await B.$('.dlg-bg')));
 
     // S9 링크 조작
-    await ev(B, () => joinOpen('https://alllever.app/join#f=<script>&n=x')); check('S9a 잘못된 링크', (await toasts(B)).some(t => t.includes('초대 링크')));
-    await ev(B, () => joinOpen('https://alllever.app/join#f=B2026xxxxxxxx&n=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E'));
+    await ev(B, () => { joinOpen('https://alllever.app/join#f=<script>&n=x'); }); check('S9a 잘못된 링크', (await toasts(B)).some(t => t.includes('초대 링크')));
+    await ev(B, () => { joinOpen('https://alllever.app/join#f=B2026xxxxxxxx&c=abcdefghijklmnopqrstuvwx&n=%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E'); });
     check('S9b 이름 태그 무해화', !(await ev(B, () => $('#jFrom').innerHTML)).includes('<img'), await ev(B, () => $('#jFrom').innerHTML));
+    await ev(B, () => { joinOpen('https://alllever.app/join#f=B2026xxxxxxxx&n=x'); }); const t9c = await dialog(B, 'ok');
+    check('S9c 코드 없는 링크 → 만료', (t9c || '').startsWith('만료된 초대 링크예요.'), t9c);
 
     // S10 저장 못 한 기록이 있으면 처음 화면으로 막기
     await ev(B, () => { S.queue.push({t: 'tx', fileId: 'B2026xxxxxxxx'}); openSheet('main'); }); await B.dispatchEvent('#btnRestart', 'click'); await dialog(B, 'ok');

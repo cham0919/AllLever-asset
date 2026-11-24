@@ -6,11 +6,14 @@
      한 번 고르면 이 앱(drive.file)이 그 시트를 볼 수 있어요. 아이폰도 PC 없이 돼요.
    - 누가 넣었는지: 새 거래 ID 끝에 사람 표시(.xxxxxx, 메일의 해시)를 붙여요(화면 표시는 아직 끔). 시트 모양(열·탭)은 바꾸지 않아요.
      표시 ↔ 이름은 드라이브 파일의 앱 전용 속성(appProperties, 시트 화면에 안 보임)에 'n.<표시>'로 저장해요.
-     상대가 연결하면 'j.<표시>'를 남겨 "연결됨"을 알 수 있어요. 메일 주소는 시트·ID에 남기지 않아요. */
+     상대가 연결하면 'j.<표시>'를 남겨 "연결됨"을 알 수 있어요. 메일 주소는 시트·ID에 남기지 않아요.
+   - 일회용 초대 링크: 초대할 때마다 코드(c)를 만들어 'i.<코드>' = 초대받은 사람 표시로 시트에 적어 둬요.
+     연결할 때 코드가 있고 내 표시와 같아야 연결하고, 연결하면 지워요. 다시 보내기·그만두기 때 예전 코드도 지워요. */
 const JOIN_URL = 'https://alllever.app/join';
 const FILE_ID = /^[\w-]{10,200}$/;
 const shareIds = s => { const m = /[#?&]f=([\w,-]+)/.exec(String(s || '')) || /^([\w-]{10,200}(?:,[\w-]{10,200})*)$/.exec(String(s || '').trim());
   return m ? m[1].split(',').filter(x => FILE_ID.test(x)).slice(0, 10) : []; };
+const joinCode = s => { const m = /[#?&]c=([A-Za-z0-9_-]{16,64})/.exec(String(s || '')); return m ? m[1] : ''; };
 const joinFrom = s => { const m = /[#&]n=([^&]*)/.exec(String(s || '')); try { return m ? decodeURIComponent(m[1]).replace(/[\u0000-\u001f<>]/g, '').slice(0, 20) : ''; } catch(e){ return ''; } };
 const shareSheets = () => S.gfiles.filter(f => f.mime === MIME_SHEET && !f.gone);
 const NAME_MAX = 20;
@@ -118,9 +121,21 @@ $('#shNext').onclick = () => {
   sh.email = email; sh.step = 'confirm'; shPaint();
 };
 $('#shBack').onclick = () => { sh.step = 'form'; shPaint(); };
-function inviteLink(files){
+function inviteLink(files, code){
   const me = shareNames()[MY_TAG] || (S.guser || '').split('@')[0];
-  return JOIN_URL + '#f=' + files.map(f => f.id).join(',') + '&n=' + encodeURIComponent(me);
+  return JOIN_URL + '#f=' + files.map(f => f.id).join(',') + '&c=' + code + '&n=' + encodeURIComponent(me);
+}
+// 일회용 코드 만들기: 이 사람에게 예전에 만든 코드는 지우고 새 코드를 적어요
+async function newInviteCode(files, tag, tok){
+  const code = b64url(crypto.getRandomValues(new Uint8Array(18)));
+  const props = {['i.' + code]: tag};
+  for (const f of files){
+    try { const j = await (await drive(`${encodeURIComponent(f.id)}?fields=appProperties`, {cache: 'no-store'}, tok)).json();
+      for (const [k, v] of Object.entries(j.appProperties || {})) if (k.startsWith('i.') && v === tag) props[k] = null; } catch(e){}
+  }
+  props['i.' + code] = tag;
+  await setProps(files, props, tok);
+  return code;
 }
 async function sendInvite(link){
   const text = `머니머슬 가계부를 공유했어요. 이 링크를 눌러 연결해 주세요.\n${link}`;
@@ -134,7 +149,7 @@ $('#shGo').onclick = async () => {
   busy('공유하는 중이에요');
   try {
     const tok = await gToken(true); await shareInitTag();
-    const link = inviteLink(files);
+    const link = inviteLink(files, await newInviteCode(files, await tagOf(sh.email), tok));
     for (const f of files){
       const q = new URLSearchParams({sendNotificationEmail: 'true', fields: 'id', emailMessage: `머니머슬 가계부를 공유했어요. 이 링크를 눌러 연결해 주세요: ${link}`});
       try { await drive(`${encodeURIComponent(f.id)}/permissions?` + q, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({type: 'user', role: 'writer', emailAddress: sh.email})}, tok); }
@@ -150,7 +165,15 @@ $('#shGo').onclick = async () => {
   } catch(e){ toast(e.message || '공유하지 못했어요'); }
   finally { busy(); sh.busy = false; }
 };
-$('#shResend').onclick = () => sendInvite(inviteLink(shareSheets()));
+$('#shResend').onclick = async () => {   // 새 일회용 코드로 다시 보내기 (예전 링크는 만료)
+  const m = sh.mates.find(x => x.own?.length); if (!m) return;
+  const files = shareSheets().filter(f => m.own.includes(f.id));
+  busy('링크를 만드는 중이에요');
+  let link = '';
+  try { const tok = await gToken(true); await shareInitTag(); link = inviteLink(files, await newInviteCode(files, m.tag, tok)); }
+  catch(e){ toast(e.message); } finally { busy(); }
+  if (link) sendInvite(link);
+};
 $('#shStop').onclick = async () => {
   const m = sh.mates[0]; if (!m) return;
   if (!m.own?.length){ const mine = shareSheets().filter(f => (m.joined || []).includes(f.id)); if (mine.length) return shareLeave(mine); }   // 공유받은 쪽: 내 권한을 지우고 나가요
@@ -166,7 +189,10 @@ $('#shStop').onclick = async () => {
           await drive(`${encodeURIComponent(f.id)}/permissions/${encodeURIComponent(p.id)}`, {method: 'DELETE'}, tok); }
       catch(e){ console.warn('unshare', f.id, e?.message); }
     }
-    await setProps(shareSheets().filter(g => !isJoinedFile(g.id)), {['j.' + m.tag]: null, ['n.' + m.tag]: null}, tok);   // 상대 연결 표시·이름표 지우기 (다시 초대하면 '초대함'부터)
+    const own = shareSheets().filter(g => !isJoinedFile(g.id)), clear = {['j.' + m.tag]: null, ['n.' + m.tag]: null};
+    for (const f of own){ try { const j = await (await drive(`${encodeURIComponent(f.id)}?fields=appProperties`, {cache: 'no-store'}, tok)).json();
+      for (const [k, v] of Object.entries(j.appProperties || {})) if (k.startsWith('i.') && v === m.tag) clear[k] = null; } catch(e){} }
+    await setProps(own, clear, tok);   // 상대 연결 표시·이름표·남은 초대 코드 지우기 (다시 초대하면 '초대함'부터)   // 상대 연결 표시·이름표 지우기 (다시 초대하면 '초대함'부터)
     toast('공유를 그만뒀어요');
   } catch(e){ toast(e.message); }
   finally { busy(); shareOpen(); }
@@ -236,10 +262,12 @@ async function shareLeave(files){
 }
 
 /* ───── 공유받기 ───── */
-const jn = {ids: [], from: ''};
+const jn = {ids: [], from: '', code: ''};
+const EXPIRED = '만료된 초대 링크예요.';
 function joinOpen(url){
-  const ids = shareIds(url); if (!ids.length) return toast('초대 링크를 확인해 주세요');
-  jn.ids = ids; jn.from = joinFrom(url);
+  const ids = shareIds(url), code = joinCode(url); if (!ids.length) return toast('초대 링크를 확인해 주세요');
+  if (!code || (LS.get('usedcodes', []) || []).includes(code)) return ask(EXPIRED, {ok: '확인', cancel: ''});   // 이 기기에서 이미 쓴 링크
+  jn.ids = ids; jn.from = joinFrom(url); jn.code = code;
   openSheet('join'); jPaint();
 }
 function jPaint(){
@@ -261,14 +289,14 @@ $('#jGo').onclick = async () => {
 async function sharePick(ids){
   const nonce = b64url(crypto.getRandomValues(new Uint8Array(24)));
   const q = new URLSearchParams({file: ids.join(','), nonce, hint: S.guser});
-  if (!NATIVE){ LS.set('pnonce', nonce); q.set('return', location.origin + location.pathname); location.href = gServer() + '/auth/pick-start?' + q; return; }
+  if (!NATIVE){ LS.set('pnonce', nonce); LS.set('pcode', jn.code); q.set('return', location.origin + location.pathname); location.href = gServer() + '/auth/pick-start?' + q; return; }
   q.set('return', `${APP_SCHEME}://picked`);
   try {
     const back = await nativeAuthSession(gServer() + '/auth/pick-start?' + q, 'picked');
     const h = new URLSearchParams(String(back).split('#')[1] || '');
     if (h.get('alv_nonce') !== nonce) throw new Error('이 기기에서 시작한 요청이 아니에요. 다시 시도해 주세요');
     if (h.has('alv_err')) throw new Error(['access_denied', 'denied', 'none'].includes(h.get('alv_err')) ? '시트를 고르지 않았어요' : '시트를 연결하지 못했어요 (' + h.get('alv_err') + ')');
-    await shareFinish(shareIds(h.get('alv_picked')));
+    await shareFinish(shareIds(h.get('alv_picked')), jn.code);
   } catch(e){ if (!e.canceled) toast(e.message); }
 }
 function shareReturn(h){   // 웹: 구글에서 돌아왔을 때 (gReturn에서 불러요)
@@ -278,27 +306,31 @@ function shareReturn(h){   // 웹: 구글에서 돌아왔을 때 (gReturn에서 
   if (h.has('alv_err')){ toast('시트를 연결하지 못했어요 (' + h.get('alv_err') + ')'); return null; }
   return 'joined:' + shareIds(h.get('alv_picked')).join(',');
 }
-async function shareFinish(ids){
+async function shareFinish(ids, code){
   if (!ids.length) return toast('고른 시트가 없어요');
   busy('시트를 연결하는 중이에요');
   try {
-    const tok = await gToken(true), docs = [];
+    const tok = await gToken(true), found = [];
+    await shareInitTag();
     for (const id of ids){
-      try { const j = await (await drive(`${encodeURIComponent(id)}?fields=id,name,mimeType,trashed`, {cache: 'no-store'}, tok)).json();
-        if (j.id && !j.trashed && j.mimeType === MIME_SHEET) docs.push({id: j.id, name: String(j.name || '').slice(0, 200), mime: j.mimeType}); }
+      try { const j = await (await drive(`${encodeURIComponent(id)}?fields=id,name,mimeType,trashed,appProperties`, {cache: 'no-store'}, tok)).json();
+        if (j.id && !j.trashed && j.mimeType === MIME_SHEET) found.push({id: j.id, name: String(j.name || '').slice(0, 200), mime: j.mimeType, ok: !!code && (j.appProperties || {})['i.' + code] === MY_TAG}); }
       catch(e){ console.warn('join read', id, e?.message); }
     }
-    if (!docs.length){ busy(); return toast('시트를 열 수 없어요. 초대받은 구글 계정으로 로그인했는지 확인해 주세요'); }
-    await shareInitTag();
     busy();
+    const used = () => code && LS.set('usedcodes', [...(LS.get('usedcodes', []) || []), code].slice(-50));   // 이 기기에서 쓴 링크 (다시 열면 바로 만료 안내)
+    if (!found.length) return ask('이 계정으로는 열 수 없는 초대 링크예요.', {ok: '확인', cancel: ''});
+    const docs = found.filter(d => d.ok).map(({ok, ...d}) => d);
+    if (!docs.length){ used(); if (S.spage === 'join') sPage('main'); return ask(EXPIRED, {ok: '확인', cancel: ''}); }
     const n = gAdd(docs); jn.ids = [];
     if (S.spage === 'join') sPage('main');
     if (n) await syncGoogle(true, true); else toast('이미 연결된 시트예요');
     // 실제로 연결된 시트에만 '연결됨' 표시를 남겨요 (같은 연도 시트 변경을 취소했으면 남기지 않아요)
     const kept = docs.filter(d => S.gfiles.some(f => f.id === d.id));
-    if (!kept.length) return;
+    if (!kept.length) return;   // 같은 연도 시트 변경을 취소했으면 링크는 그대로 다시 쓸 수 있어요
+    used();
     LS.set('sjoinedf', [...new Set([...(LS.get('sjoinedf', []) || []), ...kept.map(d => d.id)])]);   // 내가 공유받은 시트
-    const props = {['j.' + MY_TAG]: '1'};
+    const props = {['j.' + MY_TAG]: '1', ['i.' + code]: null};   // 연결됨 표시 + 쓴 초대 코드 지우기 (일회용)
     if (!shareNames()[MY_TAG]) props['n.' + MY_TAG] = S.guser.split('@')[0];
     await setProps(kept, props, tok);
     shareLoadNames(tok);

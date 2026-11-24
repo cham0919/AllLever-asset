@@ -166,6 +166,7 @@ $('#shStop').onclick = async () => {
           await drive(`${encodeURIComponent(f.id)}/permissions/${encodeURIComponent(p.id)}`, {method: 'DELETE'}, tok); }
       catch(e){ console.warn('unshare', f.id, e?.message); }
     }
+    await setProps(shareSheets().filter(g => !isJoinedFile(g.id)), {['j.' + m.tag]: null, ['n.' + m.tag]: null}, tok);   // 상대 연결 표시·이름표 지우기 (다시 초대하면 '초대함'부터)
     toast('공유를 그만뒀어요');
   } catch(e){ toast(e.message); }
   finally { busy(); shareOpen(); }
@@ -289,14 +290,17 @@ async function shareFinish(ids){
     }
     if (!docs.length){ busy(); return toast('시트를 열 수 없어요. 초대받은 구글 계정으로 로그인했는지 확인해 주세요'); }
     await shareInitTag();
-    const props = {['j.' + MY_TAG]: '1'};   // 연결됨 표시 (이름은 초대한 사람이 정한 이름을 그대로 두고, 없을 때만 넣어요)
-    if (!shareNames()[MY_TAG]) props['n.' + MY_TAG] = S.guser.split('@')[0];
-    await setProps(docs, props, tok);
     busy();
-    LS.set('sjoinedf', [...new Set([...(LS.get('sjoinedf', []) || []), ...docs.map(d => d.id)])]);   // 내가 공유받은 시트
     const n = gAdd(docs); jn.ids = [];
     if (S.spage === 'join') sPage('main');
     if (n) await syncGoogle(true, true); else toast('이미 연결된 시트예요');
+    // 실제로 연결된 시트에만 '연결됨' 표시를 남겨요 (같은 연도 시트 변경을 취소했으면 남기지 않아요)
+    const kept = docs.filter(d => S.gfiles.some(f => f.id === d.id));
+    if (!kept.length) return;
+    LS.set('sjoinedf', [...new Set([...(LS.get('sjoinedf', []) || []), ...kept.map(d => d.id)])]);   // 내가 공유받은 시트
+    const props = {['j.' + MY_TAG]: '1'};
+    if (!shareNames()[MY_TAG]) props['n.' + MY_TAG] = S.guser.split('@')[0];
+    await setProps(kept, props, tok);
     shareLoadNames(tok);
   } catch(e){ busy(); toast(e.message || '시트를 연결하지 못했어요'); }
 }

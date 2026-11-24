@@ -429,7 +429,7 @@ async function syncGoogle(interactive, show = false){   // show: 시트를 새�
       if (owner[y] && owner[y] !== r.f || next[y]){
         // 같은 연도 시트가 이미 있으면 바꿀지 물어봐요 (새로 연결한 시트만, 저장 못 한 기록이 있는 시트는 바꾸지 않아요)
         const old = owner[y], isNew = !r.f.year;
-        if (isNew && old && !S.queue.some(o => o.fileId === old.id) && await ask(`${y}년에 이미 연결된 시트가 있어요. 변경할까요?\n지금: ${old.name}\n새 시트: ${r.f.name}`, {title: '시트 변경', ok: '변경', cancel: '취소'})){
+        if (isNew && old && !S.queue.some(o => o.fileId === old.id) && await ask(`${y}년에 이미 연결된 시트가 있어요. 변경할까요?`, {ok: '변경', cancel: '취소'})){
           dup.push(old); swapped.push(y); next[y] = r.m; r.f.year = y; owner[y] = r.f; continue; }
         dup.push(r.f); continue;
       }

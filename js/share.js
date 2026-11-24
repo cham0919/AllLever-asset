@@ -150,7 +150,7 @@ $('#shStop').onclick = async () => {
   const m = sh.mates[0]; if (!m) return;
   const mine = shareSheets().filter(f => isJoinedFile(f.id));
   if (mine.length) return shareLeave(mine);   // 공유받은 쪽: 내 권한을 지우고 나가요
-  const ok = await ask(`${m.email} 계정과 시트 공유를 그만둘까요?\n그 계정은 이 시트를 더 볼 수 없어요.`, {title: '공유 그만두기', ok: '그만두기', danger: true});
+  const ok = await ask(`${m.email} 계정과 시트 공유를 그만둘까요?`, {ok: '그만두기', danger: true});
   if (!ok) return;
   LS.set('smates', (LS.get('smates', []) || []).filter(e => e !== m.email.toLowerCase()));   // 내가 끊은 건 알림 안 띄우게
   busy('공유를 그만두는 중이에요');
@@ -212,7 +212,7 @@ async function shareWatch(tok){
 }
 // 공유받은 쪽이 나가기: 내 권한을 지우고(주인 쪽에 알림이 가요) 앱에서 시트를 빼요
 async function shareLeave(files){
-  const ok = await ask('공유받은 시트에서 나갈까요?\n이 시트를 더 볼 수 없고, 앱에서도 빠져요.', {title: '공유 그만두기', ok: '그만두기', danger: true});
+  const ok = await ask('공유받은 시트에서 나갈까요?', {ok: '그만두기', danger: true});
   if (!ok) return;
   busy('공유를 그만두는 중이에요');
   try {

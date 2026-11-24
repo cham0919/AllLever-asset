@@ -65,6 +65,7 @@ async function shareOpen(){
     sh.mates = [];
     for (const p of j.permissions || []) if (p.type === 'user' && p.emailAddress && p.emailAddress.toLowerCase() !== me && ['writer', 'owner'].includes(p.role)){
       const tag = await tagOf(p.emailAddress); sh.mates.push({email: p.emailAddress, tag}); }
+    if (!isJoinedFile(f.id)) LS.set('smates', sh.mates.map(m => m.email.toLowerCase()));   // 내가 공유한 상대 (나갔는지 알아채려고)
     shPaint();
     await shareLoadNames(tok);   // 상대가 연결했는지(j.표시)·이름표를 새로 받아 다시 그려요
     shPaint();
@@ -78,7 +79,8 @@ function shPaint(){
     $('#shMe').innerHTML = S.guser ? `${esc(myName)} <small>${esc(S.guser)}</small>` : '<small>구글 계정 연결 안 됨</small>';
     $('#shMates').innerHTML = sh.mates.length ? sh.mates.map(m => `<div>${esc(names[m.tag] || m.email.split('@')[0])} <small>${esc(m.email)}</small><small class="st">${joined[m.tag] ? '연결됨' : '초대함'}</small></div>`).join('') : '<small>없음</small>';
     $('#shSheets').textContent = files.length ? files.map(f => f.name).join(' · ') : '없음';
-    $('#shInvite').hidden = !!sh.mates.length; $('#shResend').hidden = $('#shStop').hidden = !sh.mates.length;
+    const joinedSide = files.some(f => isJoinedFile(f.id));
+    $('#shInvite').hidden = !!sh.mates.length; $('#shStop').hidden = !sh.mates.length; $('#shResend').hidden = !sh.mates.length || joinedSide;
   }
   if (sh.step === 'form'){
     $('#shPick').innerHTML = files.filter(f => sh.pick[f.id] !== false).map(f => `<div class="shs"><span>${esc(f.name)}</span><button data-id="${esc(f.id)}" aria-label="${esc(f.name)} 빼기">×</button></div>`).join('');
@@ -146,8 +148,11 @@ $('#shGo').onclick = async () => {
 $('#shResend').onclick = () => sendInvite(inviteLink(shareSheets()));
 $('#shStop').onclick = async () => {
   const m = sh.mates[0]; if (!m) return;
+  const mine = shareSheets().filter(f => isJoinedFile(f.id));
+  if (mine.length) return shareLeave(mine);   // 공유받은 쪽: 내 권한을 지우고 나가요
   const ok = await ask(`${m.email} 계정과 시트 공유를 그만둘까요?\n그 계정은 이 시트를 더 볼 수 없어요.`, {title: '공유 그만두기', ok: '그만두기', danger: true});
   if (!ok) return;
+  LS.set('smates', (LS.get('smates', []) || []).filter(e => e !== m.email.toLowerCase()));   // 내가 끊은 건 알림 안 띄우게
   busy('공유를 그만두는 중이에요');
   try {
     const tok = await gToken(true);
@@ -161,6 +166,68 @@ $('#shStop').onclick = async () => {
   } catch(e){ toast(e.message); }
   finally { busy(); shareOpen(); }
 };
+
+/* ───── 공유가 끊겼을 때 ───── */
+const isJoinedFile = id => (LS.get('sjoinedf', []) || []).includes(id);
+// 시트와 그 연도 데이터를 앱에서 빼요 (드라이브 파일은 그대로)
+function shareDrop(files){
+  const ids = files.map(f => f.id);
+  S.gfiles = S.gfiles.filter(f => !ids.includes(f.id)); gSave();
+  LS.set('sjoinedf', (LS.get('sjoinedf', []) || []).filter(id => !ids.includes(id)));
+  if (!(LS.get('sjoinedf', []) || []).length){ LS.del('snames'); LS.del('sjoined'); }
+  let changed = false;
+  for (const f of files) if (S.meta.source === 'google' && f.year && !S.gfiles.some(g => g.year === f.year)){ delete S.years[f.year]; changed = true; }
+  if (changed){ LS.set('years', S.years); setYear(S.year); render(); }
+  renderG(); syncSheet();
+}
+// 공유받은 쪽: 동기화 때 시트를 열 수 없게 됐으면(주인이 공유를 그만둠) 알리고 정리해요
+function shareGone(res){
+  const gone = res.filter(r => !r.m && r.e && (r.e.gone || r.e.status === 403) && isJoinedFile(r.f.id)).map(r => r.f);
+  if (!gone.length) return [];
+  shareDrop(gone);
+  ask(`상대방에 의해 공유가 끊겼어요.\n${gone.map(f => f.name).join(', ')} 시트를 앱에서 뺐어요.`, {title: '공유가 끊겼어요', ok: '확인', cancel: ''});
+  return gone;
+}
+// 공유한 쪽: 상대가 나갔으면(내 시트 권한 목록에서 사라짐) 알리고 정리해요
+let watching = false;
+async function shareWatch(tok){
+  const before = LS.get('smates', []) || [];
+  const f = shareSheets().find(g => !isJoinedFile(g.id));
+  if (watching || !before.length || !f || !tok) return;
+  watching = true;
+  try {
+    const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
+    const now = (j.permissions || []).filter(p => p.type === 'user' && p.emailAddress).map(p => p.emailAddress.toLowerCase());
+    const left = before.filter(e => !now.includes(e));
+    if (!left.length) return;
+    LS.set('smates', before.filter(e => now.includes(e)));
+    const props = {};
+    for (const e of left){ const tag = await tagOf(e); props['n.' + tag] = null; props['j.' + tag] = null; }
+    await setProps(shareSheets().filter(g => !isJoinedFile(g.id)), props, tok);   // 상대 이름표·연결 표시 지우기
+    const names = shareNames(); for (const k of Object.keys(props)) delete names[k.slice(2)]; LS.set('snames', names);
+    sh.mates = sh.mates.filter(m => !left.includes(m.email.toLowerCase())); if (S.spage === 'share') shPaint();
+    await ask(`상대방에 의해 공유가 끊겼어요.\n${left.join(', ')} 계정은 이제 시트를 볼 수 없어요.`, {title: '공유가 끊겼어요', ok: '확인', cancel: ''});
+  } catch(e){ console.warn('share watch', e?.message); }
+  finally { watching = false; }
+}
+// 공유받은 쪽이 나가기: 내 권한을 지우고(주인 쪽에 알림이 가요) 앱에서 시트를 빼요
+async function shareLeave(files){
+  const ok = await ask('공유받은 시트에서 나갈까요?\n이 시트를 더 볼 수 없고, 앱에서도 빠져요.', {title: '공유 그만두기', ok: '그만두기', danger: true});
+  if (!ok) return;
+  busy('공유를 그만두는 중이에요');
+  try {
+    const tok = await gToken(true); await shareInitTag();
+    await setProps(files, {['j.' + MY_TAG]: null}, tok);
+    for (const f of files){
+      try { const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(id,emailAddress)`, {cache: 'no-store'}, tok)).json();
+        const me = (j.permissions || []).find(p => (p.emailAddress || '').toLowerCase() === S.guser.toLowerCase());
+        if (me) await drive(`${encodeURIComponent(f.id)}/permissions/${encodeURIComponent(me.id)}`, {method: 'DELETE'}, tok); }
+      catch(e){ console.warn('leave', f.id, e?.message); }
+    }
+    shareDrop(files); sh.mates = []; sPage('main'); toast('공유를 그만뒀어요');
+  } catch(e){ toast(e.message); }
+  finally { busy(); }
+}
 
 /* ───── 공유받기 ───── */
 const jn = {ids: [], from: ''};
@@ -221,6 +288,7 @@ async function shareFinish(ids){
     if (!shareNames()[MY_TAG]) props['n.' + MY_TAG] = S.guser.split('@')[0];
     await setProps(docs, props, tok);
     busy();
+    LS.set('sjoinedf', [...new Set([...(LS.get('sjoinedf', []) || []), ...docs.map(d => d.id)])]);   // 내가 공유받은 시트
     const n = gAdd(docs); jn.ids = [];
     if (S.spage === 'join') sPage('main');
     if (n) await syncGoogle(true, true); else toast('이미 연결된 시트예요');

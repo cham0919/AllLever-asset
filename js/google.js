@@ -438,6 +438,10 @@ async function syncGoogle(interactive, show = false){   // show: 시트를 새�
     if (dup.length) S.gfiles = S.gfiles.filter(f => !dup.includes(f));
     for (const r of fail){ const y = r.f.year; if (y && old[y] && !next[y]) next[y] = old[y]; }   // 실패한 연도는 이전 데이터 유지
     gSave(); renderG();
+    const dropped = typeof shareGone === 'function' ? shareGone(res) : [];   // 공유받은 시트를 주인이 끊었으면 알리고 목록에서 빼요
+    for (const f of dropped) if (f.year && !S.gfiles.some(g => g.year === f.year)) delete next[f.year];
+    if (dropped.length){ if (!res.some(r => r.m)) return; }
+    else if (typeof shareWatch === 'function') shareWatch(tok);   // 내가 공유한 상대가 나갔는지 (뒤에서)
     if (!res.some(r => r.m)){   // 하나도 못 받았으면 기존 데이터·동기화 시각을 그대로 둬요
       toast(fail.some(r => r.e.auth) ? '구글 로그인이 만료됐어요. 새로고침 버튼을 눌러 다시 로그인해 주세요' : '불러오기 실패: ' + fail[0].e.message); return; }
     const same = res.every(r => r.m?.__cached) && !dup.length;

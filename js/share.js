@@ -61,21 +61,22 @@ async function shareOpen(){
     await shareInitTag();
     const f = shareSheets()[0];
     const j = await (await drive(`${encodeURIComponent(f.id)}/permissions?fields=permissions(id,type,role,emailAddress)`, {cache: 'no-store'}, tok)).json();
-    const me = S.guser.toLowerCase(), joined = LS.get('sjoined', {}) || {};
+    const me = S.guser.toLowerCase();
     sh.mates = [];
     for (const p of j.permissions || []) if (p.type === 'user' && p.emailAddress && p.emailAddress.toLowerCase() !== me && ['writer', 'owner'].includes(p.role)){
-      const tag = await tagOf(p.emailAddress); sh.mates.push({email: p.emailAddress, tag, joined: !!joined[tag]}); }
-    shareLoadNames(tok).then(shPaint);
+      const tag = await tagOf(p.emailAddress); sh.mates.push({email: p.emailAddress, tag}); }
+    shPaint();
+    await shareLoadNames(tok);   // 상대가 연결했는지(j.표시)·이름표를 새로 받아 다시 그려요
     shPaint();
   } catch(e){ console.warn('share open', e?.message); }
 }
 function shPaint(){
-  const files = shareSheets(), names = shareNames(), myName = names[MY_TAG] || (S.guser || '').split('@')[0];
+  const files = shareSheets(), names = shareNames(), joined = LS.get('sjoined', {}) || {}, myName = names[MY_TAG] || (S.guser || '').split('@')[0];
   for (const k of ['list', 'form', 'confirm']) $('#sh-' + k).hidden = sh.step !== k;
   $('#svShare').textContent = sh.mates.length ? (names[sh.mates[0].tag] || sh.mates[0].email.split('@')[0]) : '';
   if (sh.step === 'list'){
     $('#shMe').innerHTML = S.guser ? `${esc(myName)} <small>${esc(S.guser)}</small>` : '<small>구글 계정 연결 안 됨</small>';
-    $('#shMates').innerHTML = sh.mates.length ? sh.mates.map(m => `<div>${esc(names[m.tag] || m.email.split('@')[0])} <small>${esc(m.email)}</small><small class="st">${m.joined ? '연결됨' : '초대함 · 아직 연결 전'}</small></div>`).join('') : '<small>없음</small>';
+    $('#shMates').innerHTML = sh.mates.length ? sh.mates.map(m => `<div>${esc(names[m.tag] || m.email.split('@')[0])} <small>${esc(m.email)}</small><small class="st">${joined[m.tag] ? '연결됨' : '초대함'}</small></div>`).join('') : '<small>없음</small>';
     $('#shSheets').textContent = files.length ? files.map(f => f.name).join(' · ') : '없음';
     $('#shInvite').hidden = !!sh.mates.length; $('#shResend').hidden = $('#shStop').hidden = !sh.mates.length;
   }

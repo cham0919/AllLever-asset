@@ -699,6 +699,48 @@ html.locked body > :not(#lockScr):not(.dlg-bg){visibility:hidden}
 .rt-todo > b{width:72px;flex:none;font-size:17px;color:var(--accent)}.rt-todo span{display:block;font-size:17px;font-weight:700;line-height:1.45}.rt-todo small{display:block;font-size:15px;color:var(--sub);line-height:1.55;margin-top:4px}
 .rt-rnote{background:rgba(255,255,255,.14);border-radius:18px;padding:18px 20px;font-size:15px;line-height:1.7;margin:4px 0 18px}
 .rt-wbtn{background:#fff;color:var(--accent)}
+/* 은퇴 설계 2차: 자산 흐름, 매달 꺼내 쓰는 곳, 주식 꺼내기, 은퇴 계산 레포트 */
+.rt-top-rep{margin:0 0 12px}
+.rt-flowc{position:relative}.rt-bars button.pre i{background:#A9DCC6}.rt-bars button.pre.on i{background:var(--saving)}
+.rt-rmark{position:absolute;top:0;bottom:0;border-left:2px dashed var(--ink);opacity:.45;pointer-events:none}.rt-rmark em{position:absolute;top:-16px;left:-12px;font-style:normal;font-size:11px;font-weight:700;white-space:nowrap}
+.rt-lgd2{display:flex;gap:14px;font-size:12px;color:var(--sub);margin-top:10px}.rt-lgd2 i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px}
+.rt-say{font-size:13px;color:var(--sub);line-height:1.6}
+.rt-divlink{display:flex;justify-content:space-between;align-items:center;gap:8px;width:100%;min-height:44px;margin-top:10px;padding:8px 14px;border-radius:12px;background:var(--chip);font-size:14px;color:var(--ink);text-align:left}.rt-divlink b{color:var(--accent);white-space:nowrap}
+.rt-opt{display:block;width:100%;text-align:left;border-radius:12px;padding:11px 14px;margin-bottom:6px;background:var(--chip);color:var(--ink)}.rt-opt b{display:block;font-size:14px}.rt-opt small{display:block;font-size:12px;color:var(--sub);margin-top:2px}
+.rt-opt.on{background:var(--ink);color:var(--card)}.rt-opt.on small{color:var(--faint)}
+.rt-divsum{margin:12px 0 6px;background:var(--accent-soft);border-radius:14px;padding:14px;font-size:14px;line-height:1.6}.rt-divsum .sub{font-size:12px;color:var(--sub);margin-top:8px}.rt-divsum .warn{font-size:12px;font-weight:700;color:#B4561A;margin-top:8px}
+.rt-rep .acc{color:var(--accent)}.rt-pill.acc{background:var(--accent-soft)}.rt-pill.acc b{color:var(--accent)}.rt-pill.acc2{background:#E6F7EF}:root[data-theme="dark"] .rt-pill.acc2{background:#163A2C}
+.rt-rsec span{display:block;font-size:14px;opacity:.85;margin-top:6px;line-height:1.6}
+.rt-rchg{margin:6px 8px 12px;color:#fff;font-size:15px;font-weight:700;line-height:1.5}
+.rt-why{background:var(--accent-soft);border-radius:14px;padding:14px 16px;margin:4px 0 14px;font-size:15px;line-height:1.7}.rt-why b{color:var(--accent)}
+.rt-stack.big{height:14px;border-radius:7px;margin:14px 0 6px}
+.rt-li.rt-tx{color:var(--sub);font-size:15px;min-height:36px}.rt-li.sum small{font-weight:500;color:var(--sub);font-size:12px}
+.rt-netbox{display:flex;justify-content:space-between;align-items:center;min-height:52px;margin-top:8px;padding:0 14px;border-radius:12px;font-size:17px;background:var(--accent-soft)}.rt-netbox .num{font-size:20px;color:var(--accent)}
+.rt-netbox.short{background:#FFF1F2}.rt-netbox.short .num{color:var(--expense)}:root[data-theme="dark"] .rt-netbox.short{background:#3D1B1E}
+.rt-assets{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}.rt-assets .rt-sublab{font-size:15px;font-weight:700}
+.rt-amove{display:flex;align-items:baseline;gap:8px}.rt-amove span{font-size:16px;color:var(--sub)}.rt-amove i{font-style:normal;color:var(--faint)}.rt-amove b{font-size:18px;font-weight:800}
+.rt-assets p{font-size:15px;line-height:1.6;margin:4px 0 6px}
+.rt-gbars{display:flex;align-items:flex-end;gap:3px;height:146px;margin-top:16px}.rt-gbars > div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%}
+.rt-gbars i{display:block;width:100%}.rt-gbars .base{background:var(--saving)}.rt-gbars .top{background:#A9DCC6;border-radius:4px 4px 0 0}
+.rt-golink{display:flex;align-items:center;gap:10px;width:100%;text-align:left}.rt-golink span{flex:1}.rt-golink b{font-size:17px}.rt-golink small{display:block;font-size:14px;color:var(--saving);font-weight:700;margin-top:4px}.rt-golink i{font-style:normal;font-size:22px;color:var(--faint)}
+/* 스크롤로 움직이는 돈의 흐름 */
+.rt-flw{margin:6px 0 14px;padding:14px 0 6px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.rt-fcap{position:relative;height:50px;font-size:15px;line-height:1.5}.rt-fcap span{position:absolute;inset:0;opacity:0;transition:opacity .25s}.rt-fcap span.on{opacity:1}
+.rt-fcap .up{color:#137A52}.rt-fcap .cut{color:var(--fixed)}.rt-fcap .net{color:var(--accent)}:root[data-theme="dark"] .rt-fcap .up{color:#5FD6A4}
+.rt-fstage{position:relative;width:280px;height:360px;margin:8px auto 0}
+.rt-fcol{position:absolute;top:0;display:flex;flex-direction:column;justify-content:flex-end}
+.rt-fbar{position:relative;display:block;width:100%;border-radius:6px 6px 0 0;--gh:0px}
+.rt-fbar.c0{background:linear-gradient(to bottom,#57C59A var(--gh),var(--fixed) var(--gh))}.rt-fbar.c1{background:linear-gradient(to bottom,#57C59A var(--gh),var(--saving) var(--gh))}.rt-fbar.c2{background:linear-gradient(to bottom,#57C59A var(--gh),#8E9196 var(--gh))}
+.rt-fbar.none{background:var(--chip)}.rt-fbar em{position:absolute;left:0;right:0;bottom:22px;text-align:center;color:rgba(255,255,255,.9);font-style:normal;letter-spacing:2px}.rt-fbar.none em{display:none}
+.rt-fchunk,.rt-fnps,.rt-ftax{position:absolute;display:block;border-radius:6px;opacity:0;will-change:transform}
+.rt-fchunk{box-shadow:0 2px 6px rgba(0,0,0,.18)}.rt-fchunk.c0{background:var(--fixed)}.rt-fchunk.c1{background:var(--saving)}.rt-fchunk.c2{background:#8E9196}
+.rt-fnps{background:var(--accent)}.rt-ftax{background:var(--expense)}
+.rt-fliv{position:absolute;display:block;border:2px dashed var(--accent-soft);border-radius:8px;box-sizing:border-box}
+.rt-flw.done .rt-fliv{border-color:var(--accent)}
+.rt-flab{position:absolute;text-align:center;line-height:1.35}.rt-flab b{display:block;font-size:12px}.rt-flab span{display:block;font-size:11px;color:var(--sub)}.rt-flab em{display:block;font-style:normal;font-size:11px;font-weight:700;color:var(--faint)}.rt-flab em.up{color:#137A52}
+.rt-ftray{position:absolute;text-align:center;font-size:11px;color:var(--expense);line-height:1.4}
+.rt-farrow{position:absolute;top:120px;font-size:22px;color:var(--faint)}
+@media (prefers-reduced-motion: reduce){.rt-fcap span{transition:none}}
 </style>
 </head>
 <body>

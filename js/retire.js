@@ -309,6 +309,8 @@ const liquidOf = b => LIQ.reduce((s, k) => s + b[k].bal, 0);
 
 // ── 한 해 꺼내 쓰기 계획 ───────────────────────────────────
 // 기본 순서: 현금 → ISA → 해외주식 → 국내상장 해외ETF → 국내주식 → 연금저축·IRP(55세부터)
+// 기본 순서: 55세부터 연금저축·IRP를 한 해 1,500만원(한 사람) 안에서 먼저 함께 쓰고,
+// 모자라는 돈은 현금 → ISA → 해외주식 → 국내상장 해외ETF → 국내주식 → 연금계좌(1,500만 넘는 몫) 순서로 (11/25 사용자 결정)
 const ORDER_BASIC = ['cash', 'isa', 'foreign', 'kretf', 'domestic', 'pension'];
 
 function drawPlan(ppl, need, ages, order, opt) {
@@ -317,12 +319,19 @@ function drawPlan(ppl, need, ages, order, opt) {
   let left = need;
   const minAge = R('연금계좌.수령요건').최소나이;
   const limits = ppl.map((pp, i) => pensionAnnualLimit(pp.b.pension.bal, pp.b.pension.yearNo + 1));
-  // 개선 1: 연금계좌에서 해마다 한 사람 1,500만까지 꼭 꺼낸다(낮은 세율 구간을 해마다 채움). 쓰고 남으면 현금으로 모은다
+  const cap = R('연금계좌.분리과세기준').기준;
   if (opt.pensionEarly) {
-    const cap = R('연금계좌.분리과세기준').기준;
+    // 개선 방법: 쓸 돈이 적어도 해마다 한 사람 1,500만까지 꼭 꺼내 낮은 세율 구간을 채운다. 쓰고 남으면 다시 투자
     for (let i = 0; i < n; i++) {
       if (ages[i] < Math.max(minAge, opt.pensionEarlyAge || 0)) continue;
       const t = Math.min(cap, limits[i], ppl[i].b.pension.bal);
+      take[i].pensionIn += t; left -= t;
+    }
+  } else if (!opt.pensionLast) {
+    // 기본: 55세부터 필요한 만큼, 한 사람 한 해 1,500만 안에서 먼저 꺼낸다
+    for (let i = 0; i < n && left > 0; i++) {
+      if (ages[i] < minAge) continue;
+      const t = Math.min(left, cap, limits[i], ppl[i].b.pension.bal);
       take[i].pensionIn += t; left -= t;
     }
   }
@@ -380,7 +389,7 @@ function personTax({ age, publicPension, interest, domesticDiv, foreignDiv, take
 //   nps: {mode:'direct', monthly, startAge} | {mode:'auto', years, monthlyIncome, startAge},
 //   spouse?: {birthYear, nps}
 // }
-// opt(개선 방법): {pensionEarly, harvest, giftToSpouse, noDividend}
+// opt(개선 방법): {pensionEarly, harvest, giftToSpouse, noDividend, openIsa, fillPension}, pensionLast(옛 기본 순서: 연금계좌 맨 마지막, 비교·테스트용)
 function normalize(p) {
   const q = Object.assign({ planAge: 95, inflation: 0.02, returnRate: 0.06, cashRate: 0.02, annualSaving: 0, debt: 0, annualRepay: 0, holdYears: 0, region: '대도시', order: ORDER_BASIC, endAge: 100, baseYear: BASE_YEAR }, p);
   if (q.retireAge < q.baseYear - q.birthYear) q.retireAge = q.baseYear - q.birthYear;   // 이미 은퇴했으면 올해부터
@@ -661,7 +670,7 @@ function summary(p0, opt = {}) {
 
 // ── 세금 줄이기: 개선 방법별 비교 ──────────────────────────
 const IMPROVEMENTS = [
-  { id: 'pensionEarly', title: '연금저축·IRP는 은퇴하면 바로, 한 해 1,500만원 안에서' },
+  { id: 'pensionEarly', title: '연금저축·IRP를 쓸 돈이 적어도 해마다 1,500만원까지 꺼내 두기' },
   { id: 'harvest', title: '해외주식은 해마다 이익 250만원만큼 팔고 다시 사기' },
   { id: 'giftToSpouse', title: '해외주식 절반을 배우자 이름으로', couple: true },
   { id: 'noDividend', title: '배당 대신 팔아서 쓰기', needFinOver: true },

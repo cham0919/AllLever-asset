@@ -126,18 +126,20 @@ test('17. 계획 나이까지 쓸 수 있는 돈: 같은 조건, 61세까지', (
   assert.equal(E.sustainableMonthly(tiny), 1227000);
 });
 
-test('18. 기본 꺼내 쓰는 순서: 현금 → 해외주식, 연금은 마지막', () => {
-  const r = E.simulate({
+test('18. 기본 순서: 55세부터 연금계좌를 1,500만(한도) 안에서 먼저, 그다음 현금 → 해외주식', () => {
+  const p = {
     birthYear: 1966, retireAge: 60, planAge: 95, spendMonthly: 2000000, inflation: 0, cashRate: 0,
     accounts: [{ kind: '현금', balance: 10000000, rate: 0 }, { kind: '해외주식', balance: 100000000, principal: 50000000, rate: 0 },
       { kind: '연금저축', balance: 50000000, rate: 0 }]
-  });
-  const y = r.rows[0];
-  near(y.take.cash, 10000000);
-  assert.ok(y.take.foreign > 14000000);
-  assert.equal(y.take.pensionIn + y.take.pensionOut, 0);
-  // 판 돈의 절반이 이익 → (이익 − 250만) × 22%
-  near(y.tax.stock, (y.take.foreign / 2 - 2500000) * 0.22, 1);
+  };
+  // 연금 한도 = 5,000만 ÷ 10 × 1.2 = 600만 → 600만 먼저, 현금 1,000만, 나머지 해외주식
+  const y = E.simulate(p).rows[0];
+  near(y.take.pensionIn, 6000000); near(y.take.cash, 10000000);
+  assert.ok(y.take.foreign > 8000000);
+  near(y.tax.stock, Math.max(0, y.take.foreign / 2 - 2500000) * 0.22, 1);
+  // 옛 순서(연금계좌 맨 마지막)
+  const o = E.simulate(p, null, { pensionLast: true }).rows[0];
+  near(o.take.cash, 10000000); assert.equal(o.take.pensionIn + o.take.pensionOut, 0); assert.ok(o.take.foreign > 14000000);
 });
 
 // ── 2단계: 부부, 국내상장 해외ETF, 개선 방법 ──

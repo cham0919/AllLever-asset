@@ -1,0 +1,4 @@
+version 1.0.52 build 167 · Xcode 26.6
+entitlements: applinks added
+uploaded OK
+entitlements: applinks NOT in archive

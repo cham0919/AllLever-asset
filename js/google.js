@@ -390,7 +390,7 @@ async function gSignOut(){
     if (sid) await fetch(gServer() + '/logout', {method: 'POST', headers: {Authorization: 'Bearer ' + sid}, signal: AbortSignal.timeout?.(8000)}).catch(() => {});   // 서버 세션 삭제 + 구글 권한 취소
     await sidDel();
     gTok = null; S.gfiles = []; S.guser = null; gSave(); LS.del('guser'); LS.del('gfolder');
-    if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); render(); }
+    if (S.meta.source === 'google'){ S.years = {}; LS.set('years', {}); S.meta = {}; LS.set('meta', {}); setYear(null); RT = null; LS.del('retire'); render(); }
   } finally { busy(); }
   syncSheet(); toast('계정을 삭제했어요');
 }

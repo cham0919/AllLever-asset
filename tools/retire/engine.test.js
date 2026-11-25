@@ -214,3 +214,10 @@ test('26. 세금 줄이기 목록: 혼자면 배우자 방법이 없고, 효과�
   for (let i = 1; i < im.list.length; i++) assert.ok(im.list[i - 1].saving >= im.list[i].saving);
   assert.ok(im.list.every(x => x.saving > 10000));
 });
+
+test('27. 빚: 해마다 상환액만큼 줄고, 은퇴할 때 남은 빚은 현금으로 갚는다', () => {
+  // 지금 58세, 60세 은퇴. 빚 5,000만, 한 해 1,000만 상환 → 58·59세 두 해 → 3,000만 남음 → 현금 1억에서 갚아 7,000만
+  const r = E.simulate({ birthYear: 1968, retireAge: 60, planAge: 61, spendMonthly: 0, inflation: 0, cashRate: 0,
+    debt: 50000000, annualRepay: 10000000, accounts: [{ kind: '현금', balance: 100000000, rate: 0 }] });
+  near(r.atRetire.bal.cash, 70000000); near(r.atRetire.debtLeft, 0);
+});

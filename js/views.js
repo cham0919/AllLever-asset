@@ -125,12 +125,13 @@ function planCurve(base, g){
 }
 let anaChart = null;
 function viewAnalysis(){
+  if (S.gview === 'retire') return viewRetire();   // 목표 탭 위 전환: 은퇴 설계 (js/retireui.js)
   const pts = assetPoints();
   if (pts.length < 2){   // 기록이 한 달 이하: 진행률만 (예상 시점은 두 달부터)
     const T0 = S.goal.target, c0 = pts.at(-1), d0 = c0 ? Math.min(1, Math.max(0, c0.net / T0)) : 0;
-    $('#view').innerHTML = `<section class="card hero"><div class="label">목표 ${T0 / 1e8}억까지</div>
+    $('#view').innerHTML = goalSegHtml() + `<section class="card hero"><div class="label">목표 ${T0 / 1e8}억까지</div>
       ${c0 ? `<div class="gtop"><b class="num">${pctPlain(d0, 0)}</b><span class="num"><b>${money(c0.net)}</b> / ${T0 / 1e8}억</span></div>` : '<div class="big num" style="color:var(--faint)">—</div>'}<div class="prog"><i style="width:${d0 * 100}%"></i></div>
-      ${c0 ? '' : '<button class="btn" data-act="homeAsset">잔액 입력하기</button>'}</section>`; return; }
+      ${c0 ? '' : '<button class="btn" data-act="homeAsset">잔액 입력하기</button>'}</section>`; goalSegBind(); return; }
   const g = S.goal, cur = pts.at(-1), curI = ymIdx(cur.y, cur.m), T = g.target;
   const inp = analysisInputs(pts);
   const base = g.planBase ?? pts[0].net;
@@ -161,7 +162,7 @@ function viewAnalysis(){
   const divYear = principal * DR * DN, divMonth = divYear / 12, goalMonth = T * DR * DN / 12;
   const cover = inp.expense ? divMonth / inp.expense : null;
 
-  $('#view').innerHTML = `
+  $('#view').innerHTML = goalSegHtml() + `
   <section class="card hero"><div class="label">목표 ${T / 1e8}억까지</div>
     <div class="gtop"><b class="num">${pctPlain(pctDone, 0)}</b><span class="num"><b>${money(cur.net)}</b> / ${T / 1e8}억</span></div>
     <div class="prog"><i style="width:${pctDone * 100}%"></i></div>
@@ -197,6 +198,7 @@ function viewAnalysis(){
     ${cover != null ? `<div class="heq num" style="border:0;padding:0;margin-top:4px">한 달 지출의 <b>${pctPlain(cover, 0)}</b> · ${T / 1e8}억 달성 시 매달 <b>${money(goalMonth)}</b></div>` : ''}
   </section>
   <p class="note" style="margin:2px 6px 0">목표 달성 예상과 배당 계산은 입력한 기록으로 한 단순 계산이에요. 실제 결과를 보장하지 않고, 투자 권유가 아니에요.</p>`;
+  goalSegBind();
   seg('#segFire', S.fireBase, v => { S.fireBase = v; LS.set('fireBase', v); const y = window.scrollY; render(); window.scrollTo(0, y); });
 
   // ── 그래프

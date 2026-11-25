@@ -6,10 +6,11 @@
 // 추정 단순화는 ASSUMPTIONS 에 모아 두고 계산 내역 화면에 그대로 보여 준다.
 (function (root) {
 'use strict';
-const RULES = (typeof root.RULES !== 'undefined') ? root.RULES : require('./rules.js').RULES;
-const R = id => { const v = RULES[id]; if (v === undefined) throw new Error('세법 수치 없음: ' + id); return v; };
+// 브라우저: js/rules.js 가 만든 전역 RULES(const라 window에는 없음) / node: require
+const RULES_ = (typeof RULES !== 'undefined') ? RULES : require('./rules.js').RULES;
+const R = id => { const v = RULES_[id]; if (v === undefined) throw new Error('세법 수치 없음: ' + id); return v; };
 
-const BASE_YEAR = 2026;
+const BASE_YEAR = 2026;   // 세법 기준 연도. 시간 계산의 시작 연도는 p.baseYear(앱은 올해)로 따로 받는다
 const LOCAL = R('지방소득세.비율');            // 지방소득세 = 국세의 10%
 const MAN = 10000;
 
@@ -24,7 +25,8 @@ const ASSUMPTIONS = [
   '해마다 연초에 꺼내 쓰고, 남은 돈이 한 해 동안 불어난다고 봐요',
   '세금 합계에는 계획 나이에 남은 돈을 한꺼번에 찾을 때의 세금도 넣어요',
   '부부는 같은 해에 은퇴하고, 생활비는 함께 써요',
-  '쓰고 남는 돈은 해외주식에 다시 넣어요(해외주식이 없으면 현금)'
+  '쓰고 남는 돈은 해외주식에 다시 넣어요(해외주식이 없으면 현금)',
+  '빚은 가계부 상환액만큼 해마다 줄고, 은퇴할 때 남은 빚은 모아 둔 돈으로 갚아요'
 ];
 
 // ── 공통 도구 ──────────────────────────────────────────────
@@ -365,7 +367,8 @@ function personTax({ age, publicPension, interest, domesticDiv, foreignDiv, take
 // }
 // opt(개선 방법): {pensionEarly, harvest, giftToSpouse, noDividend}
 function normalize(p) {
-  const q = Object.assign({ planAge: 95, inflation: 0.02, returnRate: 0.06, cashRate: 0.02, annualSaving: 0, holdYears: 0, region: '대도시', order: ORDER_BASIC, endAge: 100 }, p);
+  const q = Object.assign({ planAge: 95, inflation: 0.02, returnRate: 0.06, cashRate: 0.02, annualSaving: 0, debt: 0, annualRepay: 0, holdYears: 0, region: '대도시', order: ORDER_BASIC, endAge: 100, baseYear: BASE_YEAR }, p);
+  if (q.retireAge < q.baseYear - q.birthYear) q.retireAge = q.baseYear - q.birthYear;   // 이미 은퇴했으면 올해부터
   if (q.savingGrowth == null) q.savingGrowth = q.inflation;
   if (q.houseGrowth == null) q.houseGrowth = q.inflation;
   const npsOf = (birthYear, nps, retireAge) => {
@@ -414,18 +417,19 @@ function simulate(p0, spendOverride, opt = {}) {
       g.rate = (g.rate * g.bal + f.rate * move) / (g.bal + move);
       g.div = (g.div * g.bal + f.div * move) / (g.bal + move);
       g.bal += move; g.basis += move;
-      if (p.retireAge - (BASE_YEAR - p.birthYear) < 1) notes.push('증여 후 1년 안에 팔면 효과가 없어요');
+      if (p.retireAge - (p.baseYear - p.birthYear) < 1) notes.push('증여 후 1년 안에 팔면 효과가 없어요');
     }
   }
   // 개선 4: 배당 대신 팔아서 쓰기 — 같은 총수익률의 배당 없는 상품으로 본다
   if (opt.noDividend) ppl.forEach(pp => { pp.b.foreign.div = 0; pp.b.kretf.div = 0; pp.b.domestic.div = 0; });
-  const nowAge = BASE_YEAR - p.birthYear;
+  const nowAge = p.baseYear - p.birthYear;
+  let debt = p.debt || 0;
   const rows = [];
   let depletedAge = null, atRetire = null;
   const wr = R('금융소득.원천징수') * (1 + LOCAL);
   for (let age = nowAge; age <= p.endAge; age++) {
     const t = age - nowAge;
-    const year = BASE_YEAR + t;
+    const year = p.baseYear + t;
     const ages = ppl.map(pp => year - pp.birthYear);
     const infl = Math.pow(1 + p.inflation, t);
     const housePrice = house.price * Math.pow(1 + p.houseGrowth, t);
@@ -442,10 +446,22 @@ function simulate(p0, spendOverride, opt = {}) {
         if (opt.harvest) b.foreign.basis += Math.min(harvestCap, clamp0(b.foreign.bal - b.foreign.basis));
       }
       addSaving(ppl, p.annualSaving * Math.pow(1 + p.savingGrowth, t));
+      debt = clamp0(debt - p.annualRepay);   // 빚은 가계부 상환액만큼 해마다 준다
       rows.push({ age, year, phase: 'work', infl, housePrice, bal: snapshot(ppl) });
       continue;
     }
-    if (!atRetire) atRetire = { age, infl, housePrice, bal: snapshot(ppl) };
+    if (!atRetire) {
+      // 은퇴할 때 남은 빚은 모아 둔 돈으로 갚는다(현금 → ISA → 해외주식 → 국내상장 해외ETF → 국내주식, 연금계좌 제외)
+      if (debt > 0) {
+        for (const k of ['cash', 'isa', 'foreign', 'kretf', 'domestic']) for (const pp of ppl) {
+          const x = pp.b[k], t = Math.min(debt, x.bal);
+          if (t <= 0) continue;
+          if ('basis' in x) x.basis *= 1 - t / x.bal;
+          x.bal -= t; debt -= t;
+        }
+      }
+      atRetire = { age, infl, housePrice, bal: snapshot(ppl), debtLeft: debt };
+    }
     const need = spend * 12 * infl;
     const inc = ppl.map((pp, i) => ({
       publicPension: ages[i] >= pp.npsStart ? pp.npsMonthly * 12 * infl : 0,
@@ -636,8 +652,8 @@ function improvements(p0) {
       lastAge: r.lastAge, notes: r.notes
     });
   }
-  // 효과가 있는 것만(1만원 넘게), 큰 순서
-  const useful = list.filter(x => x.saving > 10000).sort((a, b) => b.saving - a.saving);
+  // 효과가 있는 것만(1만원 넘게), 큰 순서. 매달 쓸 수 있는 돈이나 버티는 나이가 줄어드는 방법은 빼요
+  const useful = list.filter(x => x.saving > 10000 && x.monthlyGain >= 0 && x.lastAge >= base.lastAge).sort((a, b) => b.saving - a.saving);
   const allOpt = Object.fromEntries(useful.map(x => [x.id, true]));
   const all = simulate(p0, null, allOpt);
   return {

@@ -63,6 +63,7 @@ async function restartOb(){
   // 구글 시트 연결도 앱에서만 풀어요 (드라이브의 시트와 공유는 그대로). 연결이 남아 있으면 처음 화면 대신 '불러오지 못했어요'가 떠요.
   S.gfiles = []; gSave(); for (const k of ['sjoinedf', 'snames', 'sjoined', 'smates', 'pjoin']) LS.del(k);
   S.years = {}; S.meta = {}; LS.set('years', {}); LS.set('meta', {}); setYear(null);
+  RT = null; LS.del('retire');   // 은퇴 설계 입력값도 지워요
   S.ob = {step: 'intro', path: null}; saveOb(); closeSheet(); go('home');
 }
 

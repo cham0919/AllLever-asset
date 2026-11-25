@@ -26,7 +26,8 @@ const ASSUMPTIONS = [
   '세금 합계에는 계획 나이에 남은 돈을 한꺼번에 찾을 때의 세금도 넣어요',
   '부부는 같은 해에 은퇴하고, 생활비는 함께 써요',
   '쓰고 남는 돈은 해외주식에 다시 넣어요(해외주식이 없으면 현금)',
-  '빚은 가계부 상환액만큼 해마다 줄고, 은퇴할 때 남은 빚은 모아 둔 돈으로 갚아요',
+  '빚은 가계부 상환액만큼 해마다 줄고, 은퇴할 때 남은 빚은 모아 둔 돈으로 갚아요. 그래도 남으면 은퇴 후에도 해마다 갚아요',
+  '55세 전에는 다른 돈을 다 쓴 뒤에만 연금계좌를 해지해 꺼내고 16.5%를 내요',
   '연금저축·IRP에 넣은 돈은 일하는 동안 연봉에 따라 13.2% 또는 16.5%를 돌려받아 다시 넣어요(나만, 한 해 900만원까지)'
 ];
 
@@ -229,7 +230,11 @@ function basicPension({ npsMonthly, housePrice, financial, region = '대도시',
   if (recognized > R('기초연금.선정기준액').단독 * infl) return 0;
   const base = R('기초연금.기준연금액') * infl;
   const aBenefit = npsMonthly / 2;   // A급여액 ≈ 국민연금의 절반(추정)
-  return Math.min(base, clamp0(base - aBenefit * 2 / 3) + base / 2);
+  let amt = Math.min(base, clamp0(base - aBenefit * 2 / 3) + base / 2);
+  // 소득역전 방지: 소득인정액 + 기초연금이 선정기준액을 넘으면 넘는 만큼 깎는다(최소 기준연금액의 10%)
+  const sel = R('기초연금.선정기준액').단독 * infl, rv = R('기초연금.소득역전감액');
+  if (recognized + amt > sel) amt = Math.max(sel - recognized, base * rv.최소비율_단독);
+  return amt;
 }
 
 // 부부 기초연금(월, 한 사람당 금액 배열). 둘 다 받으면 각각 20% 감액
@@ -242,7 +247,15 @@ function basicPensionCouple({ npsMonthly, eligible, housePrice, financial, regio
   const each = npsMonthly.map((n, i) => eligible[i] ? Math.min(base, clamp0(base - n / 2 * 2 / 3) + base / 2) : 0);
   const both = eligible[0] && eligible[1];
   const cut = both ? 1 - R('기초연금.산정').부부_동시수급_감액 : 1;
-  return each.map(v => v * cut);
+  let amts = each.map(v => v * cut);
+  // 소득역전 방지 감액: 합이 선정기준액을 넘는 만큼 깎고, 두 사람 비율로 나눈다(부부 합계 최소 20%, 한 사람 최소 10%)
+  const sel = R('기초연금.선정기준액').부부 * infl, rv = R('기초연금.소득역전감액');
+  const tot = amts[0] + amts[1];
+  if (tot > 0 && recognized + tot > sel) {
+    const newTot = Math.max(sel - recognized, base * (both ? rv.최소비율_부부합계 : rv.최소비율_단독));
+    amts = amts.map(v => v > 0 ? Math.max(newTot * v / tot, base * rv.부부_1인_최소비율) : 0);
+  }
+  return amts;
 }
 
 // ── 계좌 정리 ─────────────────────────────────────────────
@@ -317,8 +330,9 @@ function drawPlan(ppl, need, ages, order, opt) {
     if (left <= 0) break;
     if (k === 'pension') {
       for (let i = 0; i < n && left > 0; i++) {
-        if (ages[i] < minAge) continue;
         const p = ppl[i].b.pension;
+        // 55세 전: 연금으로 받을 수 없어 해지·중도인출(연금외수령, 16.5%)로만 꺼낸다 — 다른 돈을 다 쓴 다음
+        if (ages[i] < minAge) { const outL = Math.min(left, p.bal); take[i].pensionOut += outL; left -= outL; continue; }
         const roomIn = clamp0(Math.min(limits[i], p.bal) - take[i].pensionIn);
         const inL = Math.min(left, roomIn); take[i].pensionIn += inL; left -= inL;
         const roomOut = clamp0(p.bal - take[i].pensionIn - take[i].pensionOut);
@@ -424,7 +438,7 @@ function simulate(p0, spendOverride, opt = {}) {
   // 개선 4: 배당 대신 팔아서 쓰기 — 같은 총수익률의 배당 없는 상품으로 본다
   if (opt.noDividend) ppl.forEach(pp => { pp.b.foreign.div = 0; pp.b.kretf.div = 0; pp.b.domestic.div = 0; });
   const nowAge = p.baseYear - p.birthYear;
-  let debt = p.debt || 0, isaYears = 0, refunds = 0;
+  let debt = p.debt || 0, isaYears = 0, refunds = 0, debtYearly = 0;
   const isaMoves = [];
   const rows = [];
   let depletedAge = null, atRetire = null;
@@ -437,8 +451,10 @@ function simulate(p0, spendOverride, opt = {}) {
     const housePrice = house.price * Math.pow(1 + p.houseGrowth, t);
     const publicPrice = house.publicPrice * Math.pow(1 + p.houseGrowth, t);
     if (age < p.retireAge) {
+      let workTax = 0;   // 일하는 동안 배당·이자에서 떼는 세금(장부 확인용)
       for (const pp of ppl) {
         const b = pp.b;
+        workTax += b.cash.bal * b.cash.rate * wr + b.foreign.bal * b.foreign.div * 0.15 + (b.domestic.bal * b.domestic.div + b.kretf.bal * b.kretf.div) * wr;
         b.cash.bal *= 1 + b.cash.rate * (1 - wr);
         b.isa.bal *= 1 + b.isa.rate;
         b.foreign.bal *= 1 + b.foreign.rate - b.foreign.div * 0.15;
@@ -472,7 +488,7 @@ function simulate(p0, spendOverride, opt = {}) {
       if (refund > 0) addSaving(ppl, refund, [...new Set([...skip, 'pension'])]);   // 돌려받은 세금은 다시 투자(연금계좌 말고)
       refunds += refund / infl;
       debt = clamp0(debt - p.annualRepay);   // 빚은 가계부 상환액만큼 해마다 준다
-      rows.push({ age, year, phase: 'work', infl, housePrice, bal: snapshot(ppl) });
+      rows.push({ age, year, phase: 'work', infl, housePrice, bal: snapshot(ppl), saved: p.annualSaving * Math.pow(1 + p.savingGrowth, t), refund, workTax, isaTax: isaMoves.length && isaMoves.at(-1).age === age ? isaMoves.at(-1).isaTax : 0 });
       continue;
     }
     if (!atRetire) {
@@ -486,21 +502,28 @@ function simulate(p0, spendOverride, opt = {}) {
         }
       }
       atRetire = { age, infl, housePrice, bal: snapshot(ppl), debtLeft: debt };
+      debtYearly = debt > 0 ? Math.max(p.annualRepay || 0, debt / 10) : 0;   // 다 못 갚은 빚은 은퇴 후에도 갚는다(상환액이 없으면 10년)
     }
-    const need = spend * 12 * infl;
-    const inc = ppl.map((pp, i) => ({
-      publicPension: ages[i] >= pp.npsStart ? pp.npsMonthly * 12 * infl : 0,
-      interest: pp.b.cash.bal * pp.b.cash.rate,
-      foreignDiv: pp.b.foreign.bal * pp.b.foreign.div,
-      domesticDiv: pp.b.domestic.bal * pp.b.domestic.div + pp.b.kretf.bal * pp.b.kretf.div
-    }));
+    const living = spend * 12 * infl;
+    const debtRepay = Math.min(debt, debtYearly);
+    const need = living + debtRepay;   // 생활비 + 남은 빚 갚기
+    // 배당·이자는 연초에 꺼내고 남은 잔액에서 나온다(꺼낸 몫에는 배당이 없음) → 꺼낼 돈과 함께 맞춘다
+    const pubs = ppl.map((pp, i) => ages[i] >= pp.npsStart ? pp.npsMonthly * 12 * infl : 0);
+    const incomeOf = takes => ppl.map((pp, i) => {
+      const b = pp.b, tk = takes ? takes[i] : {};
+      const left = k => clamp0(b[k].bal - (tk[k] || 0));
+      return { publicPension: pubs[i], interest: left('cash') * b.cash.rate, foreignDiv: left('foreign') * b.foreign.div,
+        domesticDiv: left('domestic') * b.domestic.div + left('kretf') * b.kretf.div };
+    });
     const financial = ppl.reduce((s, pp) => s + liquidOf(pp.b), 0);
     let basic;
-    if (couple) basic = basicPensionCouple({ npsMonthly: inc.map(x => x.publicPension / 12), eligible: ages.map(a => a >= 65), housePrice: publicPrice, financial, region: p.region, infl }).map(v => v * 12);
-    else basic = [ages[0] >= 65 ? basicPension({ npsMonthly: inc[0].publicPension / 12, housePrice: publicPrice, financial, region: p.region, infl }) * 12 : 0];
-    const income = inc.reduce((s, x) => s + x.publicPension + x.interest + x.foreignDiv + x.domesticDiv, 0) + basic[0] + (basic[1] || 0);
+    if (couple) basic = basicPensionCouple({ npsMonthly: pubs.map(x => x / 12), eligible: ages.map(a => a >= 65), housePrice: publicPrice, financial, region: p.region, infl }).map(v => v * 12);
+    else basic = [ages[0] >= 65 ? basicPension({ npsMonthly: pubs[0] / 12, housePrice: publicPrice, financial, region: p.region, infl }) * 12 : 0];
+    const basicSum = basic[0] + (basic[1] || 0);
     const evalYear = draw => {
       const plan = drawPlan(ppl, draw, ages, p.order, Object.assign({ pensionEarlyAge: p.retireAge }, opt));
+      const inc = incomeOf(plan.take);
+      const income = inc.reduce((s, x) => s + x.publicPension + x.interest + x.foreignDiv + x.domesticDiv, 0) + basicSum;
       const per = ppl.map((pp, i) => personTax(Object.assign({ age: ages[i], take: plan.take[i], gain: plan.gain[i], isaFreeLeft: pp.isaFreeLeft }, inc[i])));
       // 건보료는 한 세대로(금융소득 1,000만 기준은 사람별)
       const ev = R('건보.지역.소득평가');
@@ -511,17 +534,17 @@ function simulate(p0, spendOverride, opt = {}) {
       parts.health = hi.annual;
       parts.house = propertyTax(publicPrice) + jongbuTax(publicPrice, { age: ages[0], holdYears: p.holdYears + t });
       const total = Object.values(parts).reduce((s, v) => s + v, 0);
-      return { plan, parts, total, per, finOver: per.some(x => x.fin > ev.금융소득_미반영_이하) };
+      return { plan, parts, total, per, inc, income, finOver: per.some(x => x.fin > ev.금융소득_미반영_이하) };
     };
     let draw = 0, ev;
-    for (let i = 0; i < 40; i++) {
+    for (let i = 0; i < 60; i++) {
       ev = evalYear(draw);
-      const want = clamp0(need + ev.total - income);
+      const want = clamp0(need + ev.total - ev.income);
       if (Math.abs(want - draw) < 1) { draw = want; break; }
       draw = want;
     }
     ev = evalYear(draw);
-    const plan = ev.plan;
+    const plan = ev.plan, inc = ev.inc, income = ev.income;
     const surplus = income + plan.taken - need - ev.total;   // 쓰고 남는 돈(배당이 많거나 연금을 미리 꺼낸 경우)
     // 실제로 꺼낸다
     ppl.forEach((pp, i) => {
@@ -534,22 +557,19 @@ function simulate(p0, spendOverride, opt = {}) {
       // 개선 2: 그해 이익이 250만에 못 미치면 남는 만큼 팔고 다시 사서 원금을 올린다
       if (opt.harvest) b.foreign.basis += Math.min(clamp0(harvestCap - plan.gain[i].foreign), clamp0(b.foreign.bal - b.foreign.basis));
     });
-    // 남는 돈은 다시 투자한다: 해외주식이 있으면 해외주식에(원금도 늘어남), 없으면 현금으로
-    if (surplus > 0) {
-      const tgt = ppl.find(pp => pp.b.foreign.bal > 0);
-      if (tgt) { tgt.b.foreign.bal += surplus; tgt.b.foreign.basis += surplus; } else ppl[0].b.cash.bal += surplus;
-    }
     for (const pp of ppl) for (const k of LIQ) if (pp.b[k].bal < 1) { pp.b[k].bal = 0; if ('basis' in pp.b[k]) pp.b[k].basis = 0; }
     if (plan.short > 1 && depletedAge === null) depletedAge = age;
+    debt -= debtRepay;
     const row = {
-      age, year, phase: 'retire', infl, housePrice, need,
+      age, year, phase: 'retire', infl, housePrice, need, living, debtRepay,
       publicPension: inc.reduce((s, x) => s + x.publicPension, 0),
-      basicPension: basic[0] + (basic[1] || 0),
+      basicPension: basicSum,
       interest: inc.reduce((s, x) => s + x.interest, 0),
       dividend: inc.reduce((s, x) => s + x.foreignDiv + x.domesticDiv, 0),
       take: sumTake(plan.take), tax: ev.parts, taxTotal: ev.total,
       pensionMethod: ev.per.map(x => x.method), finOver: ev.finOver,
-      short: plan.short
+      short: Math.min(plan.short, need),            // 생활비 중 못 쓴 돈
+      unpaidTax: clamp0(plan.short - need)          // 돈이 바닥나 못 낸 세금·건보료
     };
     for (const pp of ppl) {
       const b = pp.b;
@@ -558,6 +578,11 @@ function simulate(p0, spendOverride, opt = {}) {
       b.domestic.bal *= 1 + b.domestic.rate - b.domestic.div;
       b.kretf.bal *= 1 + b.kretf.rate - b.kretf.div;
       b.pension.bal *= 1 + b.pension.rate;
+    }
+    // 남는 돈은 연말에 다시 투자한다: 해외주식이 있으면 해외주식에(원금도 늘어남), 없으면 현금으로
+    if (surplus > 0) {
+      const tgt = ppl.find(pp => pp.b.foreign.bal > 0);
+      if (tgt) { tgt.b.foreign.bal += surplus; tgt.b.foreign.basis += surplus; } else ppl[0].b.cash.bal += surplus;
     }
     row.bal = snapshot(ppl);
     // 계획 나이에 남은 돈을 한꺼번에 찾을 때 붙는 세금(비교를 공정하게 하려고 넣는다)

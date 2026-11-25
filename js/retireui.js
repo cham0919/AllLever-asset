@@ -186,9 +186,9 @@ function rtBalDraw(r, R){
 }
 // 매달 쓰는 돈 구성(현재 물가, 한 달): 국민연금·기초연금 → 연금저축·IRP → 모아 둔 돈 → 부족
 function rtMixAt(x){
-  const need = x.need / 12 / x.infl, nps = Math.min(need, (x.publicPension + x.basicPension) / 12 / x.infl);
+  const need = (x.need - (x.debtRepay || 0)) / 12 / x.infl, nps = Math.min(need, (x.publicPension + x.basicPension) / 12 / x.infl);
   const pen = Math.min(need - nps, (x.take.pensionIn + x.take.pensionOut) / 12 / x.infl);
-  const short = Math.min(need, x.short / 12 / x.infl);
+  const short = Math.min(need, Math.max(0, x.short - (x.debtRepay || 0)) / 12 / x.infl);
   return [nps, pen, Math.max(0, need - nps - pen - short), short];
 }
 function rtMixDraw(r, R){
@@ -376,7 +376,8 @@ function rtDetail(R){
       ${line('해외주식 양도세', '이익에서 250만원 빼고 22%', m(t.stock))}${line('ISA 세금', '', m(t.isa))}
       ${line('건강보험료', x.finOver ? '금융소득 1,000만원 넘어 소득에 포함 · 장기요양 포함' : '국민연금 절반 + 집 공시가격 · 장기요양 포함', m(t.health))}${line('집 보유세', '재산세·종부세', m(t.house))}
       <div class="rt-li sum"><span>합계</span><b class="num bad">${money(outSum)}</b></div></section>
-    <section class="card"><div class="rt-li"><b>생활비로 쓰는 돈</b><b class="num" style="color:var(--accent);font-size:20px">${money(m(x.need - x.short))}</b></div>
+    <section class="card"><div class="rt-li"><b>생활비로 쓰는 돈</b><b class="num" style="color:var(--accent);font-size:20px">${money(m(Math.max(0, x.need - x.short - (x.debtRepay || 0))))}</b></div>
+      ${x.debtRepay > 0 ? `<div class="rt-li"><span>남은 빚 갚기</span><b class="num">${money(m(x.debtRepay))}</b></div>` : ''}
       ${x.short > 0 ? `<div class="rt-li"><span>모자라는 돈</span><b class="num bad">${money(m(x.short))}</b></div>` : ''}</section>
     <section class="card"><h3>계산 가정 <button class="rt-link" id="rtDset">설정</button></h3>
       <div class="rt-li"><span>수익률</span><b>연 ${RT.assume.returnRate}%${RT.assume.perAccount ? ' (계좌별)' : ''}</b></div><div class="rt-li"><span>물가</span><b>연 ${RT.assume.inflation}%</b></div>

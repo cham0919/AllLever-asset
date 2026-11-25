@@ -200,7 +200,8 @@ test('24. 연금 일찍 꺼내기: 쓸 돈이 적어도 1,500만(한도 안)까�
 test('25. 배당 대신 팔아서 쓰기: 배당이 0이 된다', () => {
   const p = { birthYear: 1966, retireAge: 60, planAge: 61, spendMonthly: 1000000, inflation: 0, cashRate: 0,
     accounts: [{ kind: '해외주식', balance: 100000000, dividendYield: 0.04, rate: 0.05 }] };
-  near(E.simulate(p).rows[0].dividend, 4000000);
+  const y = E.simulate(p).rows[0];
+  near(y.dividend, (100000000 - y.take.foreign) * 0.04);   // 배당은 꺼내고 남은 잔액에서 나온다
   near(E.simulate(p, null, { noDividend: true }).rows[0].dividend, 0);
 });
 
@@ -245,4 +246,52 @@ test('30. ISA 다음 연금계좌: 저축 2,500만 → ISA 2,000만, 연금 500�
   const r = E.simulate({ birthYear: 1965, retireAge: 62, planAge: 63, spendMonthly: 0, inflation: 0, cashRate: 0, returnRate: 0, annualSaving: 25000000, salary: 80000000,
     accounts: [{ kind: '현금', balance: 10000000, rate: 0 }] }, null, { openIsa: true, fillPension: true });
   near(r.atRetire.bal.isa, 20000000); near(r.atRetire.bal.pension, 5000000); near(r.atRetire.bal.cash, 10000000 + 660000);
+});
+
+// ── 경우별 점검에서 찾아 고친 규칙들 ──
+const z = o => Object.assign({ birthYear: 1966, retireAge: 60, planAge: 61, inflation: 0, cashRate: 0, returnRate: 0 }, o);
+const HI_MIN = 20160 * 1.1314 * 12;   // 건보료 최저 273,709
+
+test('31. 55세 전에는 연금계좌를 해지해서만 꺼내고 16.5%를 낸다', () => {
+  // 50세, 연금저축 1억뿐, 생활비 월 100만 → D = (1,200만 + 273,709) ÷ (1 − 16.5%) = 14,698,753
+  const r = E.simulate(z({ birthYear: 1976, retireAge: 50, spendMonthly: 1000000, accounts: [{ kind: '연금저축', balance: 1e8, rate: 0 }] }));
+  const y = r.rows[0], D = (12e6 + HI_MIN) / 0.835;
+  near(y.take.pensionIn, 0); near(y.take.pensionOut, D, 2); near(y.tax.pensionAcct, D * 0.165, 2);
+});
+
+test('32. 연금 수령 한도를 넘는 돈은 연금외수령 16.5%', () => {
+  // 60세 1년차 한도 1,200만(5.5% = 66만). 생활비 2,000만 → D(1 − 0.165) = 2,000만 + 273,709 + 66만 − 1,200만 × 0.165
+  const r = E.simulate(z({ spendMonthly: 20e6 / 12, accounts: [{ kind: '연금저축', balance: 1e8, rate: 0 }] }));
+  const y = r.rows[0], D = (20e6 + HI_MIN + 660000 - 12e6 * 0.165) / 0.835;
+  near(y.take.pensionIn, 12e6); near(y.take.pensionOut, D - 12e6, 2); near(y.tax.pensionAcct, 660000 + (D - 12e6) * 0.165, 2);
+});
+
+test('33. ISA: 이익 200만원 넘는 부분만 9.9%', () => {
+  // 원금 절반 → 이익 = D/2. D = 12,273,709 + 0.099 × (D/2 − 200만) → D = 12,075,709 ÷ 0.9505
+  const r = E.simulate(z({ spendMonthly: 1e6, accounts: [{ kind: 'ISA', balance: 1e8, principal: 5e7, rate: 0 }] }));
+  const D = (12e6 + HI_MIN - 198000) / 0.9505;
+  near(r.rows[0].take.isa, D, 2); near(r.rows[0].tax.isa, 0.0495 * D - 198000, 2);
+});
+
+test('34. 국민연금 받는 나이: 출생 연도별', () => {
+  assert.equal(E.npsClaimAge(1960), 62); assert.equal(E.npsClaimAge(1965), 64); assert.equal(E.npsClaimAge(1970), 65);
+});
+
+test('35. 기초연금 소득역전 방지 감액(혼자): 선정기준액을 넘는 만큼만 깎음', () => {
+  // 금융자산 7.1억 → (7.1억 − 2,000만) × 4% ÷ 12 = 230만 = 소득인정액. 230만 + 34.97만 > 247만 → 247만 − 230만 = 17만
+  near(E.basicPension({ npsMonthly: 0, housePrice: 0, financial: 710000000 }), 170000);
+  // 차이가 기준연금액의 10%(34,970)보다 작으면 10% 지급: 소득인정액 246만
+  near(E.basicPension({ npsMonthly: 0, housePrice: 0, financial: 20000000 + 2460000 * 12 / 0.04 }), 34970);
+});
+
+test('36. 기초연금 소득역전 방지 감액(부부): 합계를 깎고 비율대로 나눔', () => {
+  // 소득인정액 380만, 둘 다 279,760 → 합 559,520. 395.2만 − 380만 = 15.2만 → 7.6만씩
+  const r = E.basicPensionCouple({ npsMonthly: [0, 0], eligible: [true, true], housePrice: 0, financial: 1160000000 });
+  near(r[0], 76000); near(r[1], 76000);
+});
+
+test('37. 은퇴 때 다 못 갚은 빚은 은퇴 후 해마다 갚는다(상환액 없으면 10년)', () => {
+  // 현금 1억으로 3억 중 1억 갚음 → 2억 남음 → 해마다 2,000만
+  const r = E.simulate(z({ spendMonthly: 0, debt: 3e8, accounts: [{ kind: '현금', balance: 1e8, rate: 0 }] }));
+  near(r.atRetire.debtLeft, 2e8); near(r.rows[0].debtRepay, 2e7); near(r.rows[0].living, 0);
 });

@@ -221,3 +221,28 @@ test('27. 빚: 해마다 상환액만큼 줄고, 은퇴할 때 남은 빚은 현
     debt: 50000000, annualRepay: 10000000, accounts: [{ kind: '현금', balance: 100000000, rate: 0 }] });
   near(r.atRetire.bal.cash, 70000000); near(r.atRetire.debtLeft, 0);
 });
+
+test('28. 연금계좌에 들어간 저축은 세액공제를 돌려받아 다시 넣는다', () => {
+  // 연금저축만 있음, 한 해 저축 1,000만 → 공제 한도 900만 × 13.2% = 118.8만. 연봉 5,000만이면 16.5% → 148.5만
+  const p = s => ({ birthYear: 1967, retireAge: 60, planAge: 61, spendMonthly: 0, inflation: 0, returnRate: 0, annualSaving: 10000000, salary: s,
+    accounts: [{ kind: '연금저축', balance: 10000000, rate: 0 }] });
+  // 돌려받은 세금은 연금계좌가 아닌 다른 곳(여기서는 현금)에 다시 넣는다
+  const a = E.simulate(p(80000000)).atRetire.bal, b = E.simulate(p(50000000)).atRetire.bal;
+  near(a.pension, 20000000); near(a.cash, 1188000); near(b.cash, 1485000);
+});
+
+test('29. ISA 먼저 채우고 3년마다 연금계좌로: 옮긴 돈 10%(300만 한도)만큼 추가 공제', () => {
+  // 현금만, 수익률 0, 한 해 저축 2,500만, 3년 일함 → ISA 해마다 2,000만, 현금 500만
+  // 3년째 ISA 6,000만(이익 0) → 연금계좌로. 추가 공제 min(600만, 300만) × 13.2% = 39.6만(현금으로)
+  const r = E.simulate({ birthYear: 1969, retireAge: 60, planAge: 61, spendMonthly: 0, inflation: 0, cashRate: 0, returnRate: 0, annualSaving: 25000000, salary: 80000000,
+    accounts: [{ kind: '현금', balance: 10000000, rate: 0 }] }, null, { openIsa: true });
+  near(r.atRetire.bal.pension, 60000000);
+  near(r.atRetire.bal.isa, 0);
+  near(r.atRetire.bal.cash, 10000000 + 15000000 + 396000);
+});
+
+test('30. ISA 다음 연금계좌: 저축 2,500만 → ISA 2,000만, 연금 500만(공제 66만)', () => {
+  const r = E.simulate({ birthYear: 1965, retireAge: 62, planAge: 63, spendMonthly: 0, inflation: 0, cashRate: 0, returnRate: 0, annualSaving: 25000000, salary: 80000000,
+    accounts: [{ kind: '현금', balance: 10000000, rate: 0 }] }, null, { openIsa: true, fillPension: true });
+  near(r.atRetire.bal.isa, 20000000); near(r.atRetire.bal.pension, 5000000); near(r.atRetire.bal.cash, 10000000 + 660000);
+});

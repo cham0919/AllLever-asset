@@ -26,7 +26,8 @@ const ASSUMPTIONS = [
   '세금 합계에는 계획 나이에 남은 돈을 한꺼번에 찾을 때의 세금도 넣어요',
   '부부는 같은 해에 은퇴하고, 생활비는 함께 써요',
   '쓰고 남는 돈은 해외주식에 다시 넣어요(해외주식이 없으면 현금)',
-  '빚은 가계부 상환액만큼 해마다 줄고, 은퇴할 때 남은 빚은 모아 둔 돈으로 갚아요'
+  '빚은 가계부 상환액만큼 해마다 줄고, 은퇴할 때 남은 빚은 모아 둔 돈으로 갚아요',
+  '연금저축·IRP에 넣은 돈은 일하는 동안 연봉에 따라 13.2% 또는 16.5%를 돌려받아 다시 넣어요(나만, 한 해 900만원까지)'
 ];
 
 // ── 공통 도구 ──────────────────────────────────────────────
@@ -423,7 +424,8 @@ function simulate(p0, spendOverride, opt = {}) {
   // 개선 4: 배당 대신 팔아서 쓰기 — 같은 총수익률의 배당 없는 상품으로 본다
   if (opt.noDividend) ppl.forEach(pp => { pp.b.foreign.div = 0; pp.b.kretf.div = 0; pp.b.domestic.div = 0; });
   const nowAge = p.baseYear - p.birthYear;
-  let debt = p.debt || 0;
+  let debt = p.debt || 0, isaYears = 0, refunds = 0;
+  const isaMoves = [];
   const rows = [];
   let depletedAge = null, atRetire = null;
   const wr = R('금융소득.원천징수') * (1 + LOCAL);
@@ -445,7 +447,30 @@ function simulate(p0, spendOverride, opt = {}) {
         b.pension.bal *= 1 + b.pension.rate;
         if (opt.harvest) b.foreign.basis += Math.min(harvestCap, clamp0(b.foreign.bal - b.foreign.basis));
       }
-      addSaving(ppl, p.annualSaving * Math.pow(1 + p.savingGrowth, t));
+      // 저축 넣기. 개선 방법: ISA를 먼저(한 해 2,000만) → 연금계좌(한 해 900만) → 나머지는 지금 자산 비율대로
+      const me = ppl[0].b, isaR = R('ISA'), cr = R('연금계좌.세액공제');
+      let rest = p.annualSaving * Math.pow(1 + p.savingGrowth, t), toPension = 0;
+      if (opt.openIsa && rest > 0) { const c = Math.min(rest, isaR.연납입한도); me.isa.bal += c; me.isa.basis += c; rest -= c; isaYears++; }
+      if (opt.fillPension && rest > 0) { const c = Math.min(rest, cr.한도_합산); me.pension.bal += c; rest -= c; toPension += c; }
+      const skip = [...(opt.openIsa ? ['isa'] : []), ...(opt.fillPension ? ['pension'] : [])];   // 한도까지 채운 계좌에는 더 넣지 않음
+      const keys0 = LIQ.filter(k => !skip.includes(k));
+      const tot0 = ppl.reduce((s, pp) => s + keys0.reduce((a, k) => a + pp.b[k].bal, 0), 0);
+      if (!skip.includes('pension')) toPension += tot0 > 0 ? rest * me.pension.bal / tot0 : 0;   // 비율대로 나눌 때 내 연금계좌에 들어가는 몫
+      addSaving(ppl, rest, skip);
+      // 연금계좌 세액공제(나만, 일하는 동안): 한 해 900만까지 × 13.2% (총급여 5,500만 이하 16.5%)
+      const crRate = (p.salary && p.salary <= cr.저소득_총급여_이하_근로만 ? cr.공제율_저소득 : cr.공제율) * (1 + LOCAL);
+      let refund = Math.min(toPension, cr.한도_합산) * crRate;
+      // ISA 3년 만기마다 연금계좌로 옮기기: ISA 세금(비과세 한도 넘는 이익 9.9%) 내고 옮김, 옮긴 돈의 10%(300만까지) 추가 공제
+      if (opt.openIsa && isaYears > 0 && isaYears % isaR.의무기간_년 === 0 && me.isa.bal > 0) {
+        const free = p.salary && p.salary <= isaR.서민형_총급여_이하 ? isaR.비과세_서민형 : isaR.비과세_일반;
+        const isaTax = clamp0(me.isa.bal - me.isa.basis - free) * isaR.초과분_세율 * (1 + LOCAL);
+        const moved = me.isa.bal - isaTax;
+        refund += Math.min(moved * cr.ISA전환_추가비율, cr.ISA전환_추가한도) * crRate;
+        me.pension.bal += moved; me.isa.bal = 0; me.isa.basis = 0;
+        isaMoves.push({ age, moved, isaTax });
+      }
+      if (refund > 0) addSaving(ppl, refund, [...new Set([...skip, 'pension'])]);   // 돌려받은 세금은 다시 투자(연금계좌 말고)
+      refunds += refund / infl;
       debt = clamp0(debt - p.annualRepay);   // 빚은 가계부 상환액만큼 해마다 준다
       rows.push({ age, year, phase: 'work', infl, housePrice, bal: snapshot(ppl) });
       continue;
@@ -548,7 +573,7 @@ function simulate(p0, spendOverride, opt = {}) {
     rows.push(row);
   }
   const lastAge = depletedAge === null ? p.endAge + 1 : depletedAge - 1;   // 101 = 100세 이상
-  return { params: p, rows, atRetire, lastAge, ok: lastAge >= p.planAge, notes };
+  return { params: p, rows, atRetire, lastAge, ok: lastAge >= p.planAge, notes, refunds, isaMoves };
 }
 
 function sumTake(takes) {
@@ -556,10 +581,11 @@ function sumTake(takes) {
   for (const tk of takes) for (const k in tk) o[k] = (o[k] || 0) + tk[k];
   return o;
 }
-function addSaving(ppl, amount) {
-  // 저축은 지금 자산 비율대로 나눠 넣는다(집 제외)
-  const tot = ppl.reduce((s, pp) => s + liquidOf(pp.b), 0);
-  for (const pp of ppl) for (const k of LIQ) {
+function addSaving(ppl, amount, skip = []) {
+  // 저축은 지금 자산 비율대로 나눠 넣는다(집 제외). skip: 이미 한도까지 채운 계좌 등 빼고 나눌 묶음
+  const keys = LIQ.filter(k => !skip.includes(k));
+  const tot = ppl.reduce((s, pp) => s + keys.reduce((a, k) => a + pp.b[k].bal, 0), 0);
+  for (const pp of ppl) for (const k of keys) {
     const share = tot > 0 ? pp.b[k].bal / tot : (k === 'cash' && pp === ppl[0] ? 1 : 0);
     const add = amount * share;
     pp.b[k].bal += add;
@@ -613,7 +639,9 @@ const IMPROVEMENTS = [
   { id: 'pensionEarly', title: '연금저축·IRP는 은퇴하면 바로, 한 해 1,500만원 안에서' },
   { id: 'harvest', title: '해외주식은 해마다 이익 250만원만큼 팔고 다시 사기' },
   { id: 'giftToSpouse', title: '해외주식 절반을 배우자 이름으로', couple: true },
-  { id: 'noDividend', title: '배당 대신 팔아서 쓰기', needFinOver: true }
+  { id: 'noDividend', title: '배당 대신 팔아서 쓰기', needFinOver: true },
+  { id: 'openIsa', title: 'ISA에 해마다 2,000만원까지 넣고 3년마다 연금계좌로 옮기기', title0: 'ISA를 만들어 해마다 2,000만원까지 넣고 3년마다 연금계좌로 옮기기', acc: 'isa', work: true },
+  { id: 'fillPension', title: '연금저축·IRP에 해마다 900만원까지 넣기', title0: '연금저축·IRP를 만들어 해마다 900만원까지 넣기', acc: 'pension', work: true }
 ];
 // 효과 = 같은 생활비를 쓸 때 세금·건보료가 줄어 생기는 돈(현재 물가 기준)
 // - 둘 다 계획 나이까지 버티면: 계획 나이에 세금을 다 내고 남는 돈의 차이
@@ -633,9 +661,15 @@ function effect(base, r) {
   const a = Math.min(base.lastAge, r.lastAge, plan);
   return taxUpTo(base, a) - taxUpTo(r, a);
 }
+// 계획 나이 전에 돈이 바닥나는 사람: 효과 = 매달 더 쓸 수 있는 돈 × 12 × 은퇴 기간(수익률은 같게 맞춰서)
 function improvements(p0) {
   const base = simulate(p0);
   const baseU = simulate(p0, null, { uniformRates: true });
+  const short = baseU.lastAge < baseU.params.planAge;
+  const years = baseU.params.planAge - baseU.params.retireAge + 1;
+  const baseMU = short ? sustainableMonthly(p0, { uniformRates: true }) : 0;
+  const eff = opt => short ? (sustainableMonthly(p0, Object.assign({ uniformRates: true }, opt)) - baseMU) * 12 * years
+    : effect(baseU, simulate(p0, null, Object.assign({ uniformRates: true }, opt)));
   const couple = base.params.persons.length === 2;
   const finOver = base.rows.some(x => x.finOver);
   const baseMonthly = sustainableMonthly(p0);
@@ -643,23 +677,36 @@ function improvements(p0) {
   for (const m of IMPROVEMENTS) {
     if (m.couple && !couple) continue;
     if (m.needFinOver && !finOver) continue;
+    // 은퇴 전 저축으로 넣는 방법: 아직 일하는 해가 있고 저축이 있을 때만
+    if (m.work && !(base.params.annualSaving > 0 && base.rows.some(x => x.phase === 'work'))) continue;
     const opt = { [m.id]: true };
     const r = simulate(p0, null, opt);
+    const fresh = m.acc ? !(base.rows[0] && base.rows[0].bal[m.acc] > 0) : false;   // 지금 그 계좌가 없으면 '만들어'
     list.push({
-      id: m.id, title: m.title,
-      saving: effect(baseU, simulate(p0, null, Object.assign({ uniformRates: true }, opt))),
+      id: m.id, title: fresh && m.title0 ? m.title0 : m.title, fresh,
+      saving: eff(opt),
       monthlyGain: sustainableMonthly(p0, opt) - baseMonthly,
       lastAge: r.lastAge, notes: r.notes
     });
   }
   // 효과가 있는 것만(1만원 넘게), 큰 순서. 매달 쓸 수 있는 돈이나 버티는 나이가 줄어드는 방법은 빼요
   const useful = list.filter(x => x.saving > 10000 && x.monthlyGain >= 0 && x.lastAge >= base.lastAge).sort((a, b) => b.saving - a.saving);
-  const allOpt = Object.fromEntries(useful.map(x => [x.id, true]));
+  // 함께 쓸 묶음: 효과가 큰 것부터 하나씩 더해 보고, 더해서 효과가 커질 때만 넣는다
+  // (예: 저축이 적으면 ISA를 먼저 채우느라 연금계좌 세액공제를 못 받아 둘을 같이 하면 오히려 줄어듦)
+  const allOpt = {};
+  let best = 0;
+  for (const x of useful) {
+    const tryOpt = Object.assign({}, allOpt, { [x.id]: true });
+    const v = Object.keys(allOpt).length ? eff(tryOpt) : x.saving;
+    if (v > best + 10000) { Object.assign(allOpt, { [x.id]: true }); best = v; x.inCombined = true; }
+    else { x.inCombined = false; x.notes = x.notes.concat('다른 방법과 같이 하면 효과가 줄어 함께 계산에서 뺐어요'); }
+  }
   const all = simulate(p0, null, allOpt);
   return {
     base: { tax: taxToPlan(base), monthly: baseMonthly, lastAge: base.lastAge },
     list: useful,
-    combined: { opt: allOpt, saving: effect(baseU, simulate(p0, null, Object.assign({ uniformRates: true }, allOpt))), tax: taxToPlan(all), monthly: sustainableMonthly(p0, allOpt), lastAge: all.lastAge }
+    measure: short ? 'monthly' : 'wealth',
+    combined: { opt: allOpt, saving: best, tax: taxToPlan(all), monthly: sustainableMonthly(p0, allOpt), lastAge: all.lastAge }
   };
 }
 

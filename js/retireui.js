@@ -63,7 +63,7 @@ function rtParams(retireAge){
     return o;
   });
   const p = {baseYear: rtNowYear(), birthYear: c.me.birthYear, retireAge: retireAge ?? c.me.retireAge, planAge: c.planAge, region: c.region,
-    spendMonthly: c.spend * 1e4, annualSaving: Math.max(0, c.saving || 0) * 1e4, debt, annualRepay: repay,
+    spendMonthly: c.spend * 1e4, salary: c.me.salary != null ? c.me.salary * 1e4 : undefined, annualSaving: Math.max(0, c.saving || 0) * 1e4, debt, annualRepay: repay,
     inflation: A.inflation / 100, returnRate: A.returnRate / 100, accounts, nps: rtNpsParam(c.me.nps)};
   if (A.perAccount && A.rates['현금'] != null) p.cashRate = A.rates['현금'] / 100;
   if (A.savingMode === 'direct') p.savingGrowth = A.savingGrowth / 100;
@@ -158,7 +158,7 @@ function viewRetire(){
   // 개선 비교는 무거워서 화면을 먼저 그린 뒤 계산해요
   setTimeout(() => { const el = $('#rtImpNote'); if (!el) return;
     const im = rtImprove(R), s = im.combined.saving;
-    el.textContent = im.list.length && s > 0 ? `최대 ${money(s)} 더 남아요` : '지금 계획이 좋아요'; el.classList.toggle('good', s > 0); }, 30);
+    el.textContent = im.list.length && s > 0 ? `최대 ${money(s)} ${im.measure === 'monthly' ? '더 쓸 수 있어요' : '더 남아요'}` : '지금 계획이 좋아요'; el.classList.toggle('good', s > 0); }, 30);
 }
 // 남은 자산(집 제외) 막대: 은퇴 나이부터 100세까지 5년마다. 누르면 그 나이 구성
 function rtBalDraw(r, R){
@@ -217,7 +217,7 @@ function rtPersonHtml(who){
   return `<section class="card rt-form">
     ${RT.couple ? `<h3>${me ? '나' : '배우자'}</h3>` : ''}
     ${rtIn(id('by'), P.birthYear, '년', {label: '태어난 해', ph: '1985'})}
-    ${me ? rtIn(id('ra'), P.retireAge, '세', {label: RT.couple ? '은퇴 나이 (함께 은퇴)' : '은퇴 나이'}) : ''}
+    ${me ? rtIn(id('ra'), P.retireAge, '세', {label: RT.couple ? '은퇴 나이 (함께 은퇴)' : '은퇴 나이'}) + rtIn(id('sal'), P.salary, '만원', {label: '세전 연봉', ph: '은퇴 전 소득'}) : ''}
     <button class="rt-exp ${open ? 'open' : ''}" data-who="${who}"><span>국민연금</span><em>${n.mode === 'auto' ? '자동 계산 <b class="rt-tag">추정</b>' : n.monthly != null ? `월 ${n.monthly}만원` : '입력하기'}</em><i>⌄</i></button>
     ${open ? `<div class="rt-sub">
       <div class="seg" id="${id('npsm')}"><button data-v="direct">직접 입력</button><button data-v="auto">자동 계산</button></div>
@@ -236,7 +236,7 @@ function rtBasicHtml(){
       ${rtIn('rt_house', RT.housePublic, '만원', {label: '집 가격 (공시가격)', ph: '없으면 비워 두세요'})}
       <div class="rt-in"><span>사는 곳</span></div>
       <div class="seg" id="rtRegion"><button data-v="대도시">대도시</button><button data-v="중소도시">중소도시</button><button data-v="농어촌">농어촌</button></div>
-      <p class="note">생활비는 현재 물가 기준이에요. 가계부 지출 평균으로 채워 두었어요. 집 가격은 건강보험료와 기초연금 계산에 써요.</p>
+      <p class="note">생활비는 현재 물가 기준이에요. 가계부 지출 평균으로 채워 두었어요. 집 가격은 건강보험료와 기초연금, 연봉은 연금저축·IRP 세액공제 계산에 써요.</p>
     </section>`;
 }
 function rtBasicBind(redraw){
@@ -247,6 +247,7 @@ function rtBasicBind(redraw){
     const P = RT[who], id = s => `#rt_${who}_${s}`;
     num(id('by'), v => P.birthYear = v && v >= 1930 && v <= rtNowYear() - 15 ? Math.round(v) : null);
     num(id('ra'), v => P.retireAge = v ? Math.min(80, Math.max(30, Math.round(v))) : 55);
+    num(id('sal'), v => P.salary = v != null ? Math.max(0, v) : null);
     { const el = $(id('nm')); if (el) el.onchange = () => { const v = rtNum(el.value); P.nps.monthly = v != null ? Math.max(0, v) : null; rtSave(); redraw(); }; }   // 위 줄 금액 표시도 바꿔요
     num(id('ny'), v => P.nps.years = v != null ? Math.min(45, Math.max(0, Math.round(v))) : 0);
     num(id('ni'), v => P.nps.income = v != null ? Math.max(0, v) : 0);
@@ -409,11 +410,11 @@ function rtTaxTypes(r){
 }
 function rtImprovePage(R){
   const im = rtImprove(R), base = Retire.simulate(rtParams(R)), better = Retire.simulate(rtParams(R), null, im.combined.opt);
-  const plan = RT.planAge, s = im.combined.saving, has = im.list.length > 0 && s > 0;
+  const plan = RT.planAge, s = im.combined.saving, has = im.list.length > 0 && s > 0, mon = im.measure === 'monthly';
   const tab = S.rtItab === 'better' && has ? 'better' : 'now';
   const nw = r => Retire.netWealthAt(r, plan), row3 = (n, a, b) => `<div class="rt-cmp"><span>${n}</span><span class="num">${a}</span><b class="num">${b}</b></div>`;
   openEd(`<h4>계획 개선하기</h4>
-    <section class="card"><div class="rt-tl">바꾸면 더 남는 돈 (${plan}세, 세금 낸 뒤)</div>
+    <section class="card"><div class="rt-tl">${mon ? `바꾸면 더 쓸 수 있는 돈 (${plan}세까지)` : `바꾸면 더 남는 돈 (${plan}세, 세금 낸 뒤)`}</div>
       <div class="rt-tv big num" style="color:var(--saving)">${has ? money(s) : '0원'}</div>
       ${has ? `<div class="rt-cmp head"><span></span><span>현재</span><b>개선</b></div>
         ${base.lastAge >= plan && better.lastAge >= plan ? row3(`${plan}세에 남는 돈`, money(nw(base)), money(nw(better))) : ''}
@@ -424,10 +425,10 @@ function rtImprovePage(R){
     ${has ? `<div class="seg rt-gap" id="rtItab"><button data-v="now">현재</button><button data-v="better">개선</button></div>` : ''}
     <section class="card"><h3>${tab === 'now' ? '지금은 이렇게 꺼내요' : '개선하면 이렇게 꺼내요'}</h3>${rtLanes(tab === 'now' ? base : better, R)}</section>
     ${tab === 'now' ? `<section class="card"><h3>세금이 많이 나오는 곳 <small>${plan}세까지</small></h3>${rtTaxTypes(base).slice(0, 4).map(x => `<div class="rt-li tall"><span>${x[0]}</span><b class="num">${money(x[1])}</b></div>`).join('')}</section>`
-      : `<section class="card"><h3>바꾸는 것 <small>더 남는 돈</small></h3>${im.list.map(x => `<div class="rt-li tall"><span>${esc(x.title)}${x.notes.length ? `<small>${esc(x.notes.join(' · '))}</small>` : ''}</span><b class="num good">+${money(x.saving)}</b></div>`).join('')}
-        <div class="rt-li sum"><span>모두 바꾸면</span><b class="num good">+${money(s)}</b></div></section>`}
+      : `<section class="card"><h3>바꾸는 것 <small>${mon ? '더 쓸 수 있는 돈' : '더 남는 돈'}</small></h3>${im.list.map(x => `<div class="rt-li tall ${x.inCombined === false ? 'rt-off' : ''}"><span>${esc(x.title)}${x.notes.length ? `<small>${esc(x.notes.join(' · '))}</small>` : ''}</span><b class="num good">+${money(x.saving)}</b></div>`).join('')}
+        <div class="rt-li sum"><span>함께 바꾸면</span><b class="num good">+${money(s)}</b></div></section>`}
     ${has ? '<button class="rt-report" id="rtRep"><span><b>개선 레포트 보기</b><small>무엇을, 언제, 어떻게 바꾸는지 차근차근 설명해요</small></span><i>›</i></button>' : ''}
-    <p class="note" style="margin:0 6px 12px">${Retire.BASE_YEAR}년 세법 기준 · 계산 결과일 뿐 추천이 아니에요. 효과는 계좌 수익률을 같게 맞추고 세금 차이만 비교했어요.</p>
+    <p class="note" style="margin:0 6px 12px">${Retire.BASE_YEAR}년 세법 기준 · 계산 결과일 뿐 추천이 아니에요. 효과는 계좌 수익률을 같게 맞추고 세금 차이만 비교했어요.${mon ? ` 지금 계획으로는 ${plan}세 전에 돈이 바닥나서, 매달 더 쓸 수 있는 돈 × ${plan - R + 1}년으로 비교했어요.` : ''}</p>
     ${has ? '<button class="btn" id="rtApply">개선 방법으로 계산하기</button>' : ''}`, {tall: true});
   if (has) seg('#rtItab', tab, v => { S.rtItab = v; const y = $('#ed').scrollTop; rtImprovePage(R); $('#ed').scrollTop = y; });
   if ($('#rtRep')) $('#rtRep').onclick = () => rtReport(R);
@@ -447,6 +448,16 @@ const RT_METHOD = {
     body: `<p>250만원까지 세금이 없는 혜택은 <b>사람마다 따로</b> 받아요. 옮길 때의 가격이 배우자가 산 가격이 되어, 그때까지 오른 이익에는 세금이 붙지 않아요.</p>
       <div class="rt-two"><div><small>지금 · 나만</small><b>250만원</b></div><div><small>바꾸면 · 둘이</small><b class="good">500만원</b></div></div>
       <div class="rt-warn"><b>옮기기 전에 꼭 확인하세요</b><br>· 배우자에게는 10년 동안 6억원까지 증여세 없이 줄 수 있어요.<br>· 받은 뒤 <b>1년 안에 팔면</b> 처음 산 가격으로 세금을 계산해서 효과가 없어요. 팔기 1년 전에 옮기세요.</div>`}),
+  openIsa: (R, x, rate) => ({color: 'var(--accent)', tag: 'ISA', head: `${x.fresh ? 'ISA를 만들어<br>' : 'ISA에<br>'}해마다 <b class="good">2,000만원</b>까지<br>넣으세요`,
+    body: `<p>ISA에서 번 이익은 <b>200만원까지 세금이 없고</b>(연봉 5,000만원 이하면 400만원), 넘는 이익도 9.9%만 내요. 일반 계좌에서는 15.4%예요.</p>
+      <div class="rt-two"><div><small>일반 계좌</small><b class="bad">15.4%</b></div><div><small>ISA</small><b class="good">0~9.9%</b></div></div>
+      <p>3년이 지나면 ISA 돈을 연금계좌로 옮기세요. 옮긴 돈의 10%(300만원까지)를 더 세액공제받아요. 저축은 ISA를 먼저 채우고, 남는 돈을 연금계좌에 넣어요.</p>
+      <div class="rt-warn"><b>알아 두세요</b><br>· ISA에는 해외주식을 직접 담을 수 없어요. 국내에 상장된 해외지수 ETF(예: 미국 나스닥100 ETF)로 담아요.<br>· 3년 동안 넣어 두어야 해요.<br>· 최근 3년 안에 금융소득 종합과세를 받았다면 가입할 수 없어요.</div>`}),
+  fillPension: (R, x, rate) => ({color: 'var(--saving)', tag: '연금저축 · IRP', head: `${x.fresh ? '연금저축·IRP를 만들어<br>' : '연금저축·IRP에<br>'}해마다 <b class="good">900만원</b>까지<br>넣으세요`,
+    body: `<p>연금저축·IRP에 넣은 돈은 연말정산 때 <b>${rate}%</b>를 돌려받아요${rate === '13.2' ? '(연봉 5,500만원 이하면 16.5%)' : ''}. 연금저축은 600만원까지, IRP를 더해 900만원까지예요.</p>
+      <div class="rt-two"><div><small>한 해 900만원 넣으면</small><b>돌려받는 돈</b></div><div><small>${rate}%</small><b class="good">${money(9e6 * rate / 100)}</b></div></div>
+      <p>돌려받은 돈도 다시 투자하고, 은퇴하면 연금으로 낮은 세율(3.3~5.5%)에 꺼내 써요.</p>
+      <div class="rt-warn"><b>알아 두세요</b><br>· 55세 전에 꺼내면 돌려받은 세금을 16.5%로 다시 내요.<br>· 세액공제는 일해서 버는 소득이 있을 때 받아요.</div>`}),
   noDividend: () => ({color: 'var(--fixed)', tag: '배당', head: '배당 대신<br>팔아서 쓰세요',
     body: `<p>이자와 배당이 한 해 <b>1,000만원</b>을 넘으면 전부 건강보험료 계산에 들어가요. 2,000만원을 넘으면 다른 소득과 합쳐 세금을 계산해요.</p>
       <p>주식을 팔아서 남긴 이익은 건강보험료에 들어가지 않아요. 배당이 적은 상품으로 갖고 있다가 필요한 만큼 팔아서 쓰는 방법이에요.</p>
@@ -454,15 +465,19 @@ const RT_METHOD = {
 };
 function rtReport(R){
   const im = rtImprove(R), p = rtParams(R), base = Retire.simulate(p), better = Retire.simulate(p, null, im.combined.opt), plan = RT.planAge;
+  const used = im.list.filter(x => x.inCombined !== false), mon = im.measure === 'monthly';
+  const crRate = RT.me.salary != null && RT.me.salary <= 5500 ? '16.5' : '13.2';
   const bands = []; for (let a = R; a <= plan; a += 5) bands.push(a);
   const band = (r, a) => r.rows.filter(x => x.phase === 'retire' && x.age >= a && x.age < a + 5).reduce((s, x) => s + x.taxTotal / x.infl, 0) / 5;
   const bNow = bands.map(a => band(base, a)), bBet = bands.map(a => band(better, a)), mx = Math.max(...bNow, ...bBet, 1);
   const hot = bNow.map(v => v >= Math.max(...bNow) * 0.85);
-  const ids = im.list.map(x => x.id), npsStart = base.params.npsStart;
+  const ids = used.map(x => x.id), npsStart = base.params.npsStart;
   const todo = [];
   if (ids.includes('harvest')) todo.push([`지금부터`, '해마다 연말에 해외주식 이익 250만원만큼 팔고 다시 사기', '증권사 앱에서 팔고 바로 다시 사면 돼요.']);
   if (ids.includes('giftToSpouse')) todo.push([`${R - 1}세까지`, '해외주식 절반을 배우자 이름으로 옮기기', '팔기 시작하기 1년 전까지 옮겨야 효과가 있어요.']);
   if (ids.includes('noDividend')) todo.push([`${R}세 전에`, '배당이 많은 상품을 배당이 적은 상품으로 바꾸기', '판 이익에 세금이 붙을 수 있으니 몇 해에 나눠 바꾸세요.']);
+  if (ids.includes('openIsa')) todo.push(['지금', im.list.find(x => x.id === 'openIsa').fresh ? '증권사 앱에서 ISA(중개형) 만들기' : 'ISA에 해마다 2,000만원까지 넣기', '저축은 ISA를 먼저 채우세요. 3년마다 만기 때 연금계좌로 옮기면 세액공제를 더 받아요.']);
+  if (ids.includes('fillPension')) todo.push(['지금', im.list.find(x => x.id === 'fillPension').fresh ? '연금저축·IRP 만들고 해마다 900만원 넣기' : '연금저축·IRP에 해마다 900만원까지 넣기', '연말정산 때 세액공제를 받아요. ISA를 채우고 남는 저축을 넣으세요.']);
   if (ids.includes('pensionEarly')) todo.push([`${Math.max(55, R)}세`, '연금저축·IRP 연금 받기 신청', '한 해 1,500만원, 한 달 125만원 이하로 정하세요. 가입한 금융회사에서 신청해요.']);
   todo.push([`${npsStart}세`, '국민연금 받기 시작', '지금 계획과 같아요.']);
   todo.sort((a, b) => (parseInt(a[0]) || 0) - (parseInt(b[0]) || 0));
@@ -470,8 +485,8 @@ function rtReport(R){
   openEd(`<h4>개선 레포트</h4><button id="edX" hidden>뒤로</button>
     <div class="rt-rep">
     <div class="rt-rhead"><small>${R}세 은퇴 · ${Retire.BASE_YEAR}년 세법 기준</small><b>은퇴 계획,<br>이렇게 개선할 수 있어요</b></div>
-    <section class="rt-rc center"><div class="rt-rt">${im.list.length}가지를 바꾸면<br><b class="good">${money(im.combined.saving)}</b>이<br>더 남아요</div>
-      <p class="sub">${plan}세에 세금을 다 내고 남는 돈 기준이에요</p>
+    <section class="rt-rc center"><div class="rt-rt">${used.length}가지를 바꾸면<br><b class="good">${money(im.combined.saving)}</b>${mon ? '을<br>더 쓸 수 있어요' : '이<br>더 남아요'}</div>
+      <p class="sub">${mon ? `${plan}세까지 매달 더 쓸 수 있는 돈을 합친 금액이에요` : `${plan}세에 세금을 다 내고 남는 돈 기준이에요`}</p>
       <div class="rt-pill"><span>세금·건보료</span><span><s>${money(im.base.tax)}</s> → <b class="good">${money(im.combined.tax)}</b></span></div>
       <div class="rt-pill"><span>매달 쓸 수 있는 돈</span><span><s>${money(im.base.monthly)}</s> → <b class="good">${money(im.combined.monthly)}</b></span></div>
       <div class="rt-pill"><span>돈이 버티는 나이</span><span><s>${rtAgeText(im.base.lastAge)}</s> → <b class="good">${rtAgeText(im.combined.lastAge)}</b></span></div></section>
@@ -481,8 +496,8 @@ function rtReport(R){
       <div class="rt-vbars">${bands.map((a, i) => `<div><span class="${hot[i] ? 'bad' : ''}">${Math.round(bNow[i] / 1e4).toLocaleString()}</span><i class="${hot[i] ? 'hot' : ''}" style="height:${bNow[i] / mx * 120}px"></i><em>${a}~</em></div>`).join('')}</div>
       <p class="sub" style="text-align:right;margin:10px 0 14px;font-size:13px">한 해 세금·건보료 (만원, 현재 물가)</p>
       ${taxT.slice(0, 2).map(t => `<div class="rt-pill red"><span><b>${t[0]}</b></span><span class="num">${money(t[1])}</span></div>`).join('')}</section>
-    <div class="rt-rsec"><small>2</small><b>이렇게 바꾸면 더 남아요</b></div>
-    ${im.list.map((x, i) => { const M = RT_METHOD[x.id](R); return `<section class="rt-rc"><div class="rt-mt"><span style="color:${M.color}">방법 ${i + 1} · ${M.tag}</span><b class="good">+${money(x.saving)}</b></div>
+    <div class="rt-rsec"><small>2</small><b>이렇게 바꾸면 ${mon ? '더 쓸 수 있어요' : '더 남아요'}</b></div>
+    ${used.map((x, i) => { const M = RT_METHOD[x.id](R, x, crRate); return `<section class="rt-rc"><div class="rt-mt"><span style="color:${M.color}">방법 ${i + 1} · ${M.tag}</span><b class="good">+${money(x.saving)}</b></div>
       <div class="rt-rt">${M.head}</div><div class="rt-body">${M.body}</div></section>`; }).join('')}
     ${!ids.includes('noDividend') ? `<section class="rt-rc"><div class="rt-mt"><span>줄이기 어려운 것</span></div><div class="rt-rt">건강보험료는<br>그대로예요</div>
       <div class="rt-body"><p>건강보험료는 국민연금과 집 가격으로 정해져요. 위 방법으로는 거의 바뀌지 않아요.</p></div></section>` : ''}

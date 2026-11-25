@@ -139,3 +139,78 @@ test('18. 기본 꺼내 쓰는 순서: 현금 → 해외주식, 연금은 마지
   // 판 돈의 절반이 이익 → (이익 − 250만) × 22%
   near(y.tax.stock, (y.take.foreign / 2 - 2500000) * 0.22, 1);
 });
+
+// ── 2단계: 부부, 국내상장 해외ETF, 개선 방법 ──
+
+test('19. 부부 기초연금: 둘 다 65세 이상, 소득·재산 없음 → 각각 20% 감액', () => {
+  // 349,700 × 0.8 = 279,760
+  const r = E.basicPensionCouple({ npsMonthly: [0, 0], eligible: [true, true], housePrice: 0, financial: 0 });
+  near(r[0], 279760); near(r[1], 279760);
+  near(E.basicPensionCouple({ npsMonthly: [0, 0], eligible: [true, false], housePrice: 0, financial: 0 })[0], 349700);
+});
+
+test('20. 국내상장 해외ETF: 팔아서 남긴 이익도 배당소득 15.4%', () => {
+  // 생활비 1,200만 + 건보료 최저 273,709 + 세금(꺼낸 돈의 절반이 이익 × 15.4%)
+  // 꺼낸 돈 D = 12,273,709 + 0.077 D → D = 13,297,626, 세금 = 0.077 D = 1,023,917
+  const r = E.simulate({ birthYear: 1966, retireAge: 60, planAge: 61, spendMonthly: 1000000, inflation: 0, cashRate: 0,
+    accounts: [{ kind: '국내상장 해외ETF', balance: 100000000, principal: 50000000, rate: 0 }] });
+  near(r.rows[0].tax.income, 1023917, 2);
+  near(r.rows[0].take.kretf, 13297626, 2);
+});
+
+const pair = {
+  birthYear: 1966, retireAge: 60, planAge: 61, spendMonthly: 750000, inflation: 0, cashRate: 0,
+  accounts: [{ kind: '해외주식', balance: 50000000, principal: 25000000, rate: 0, owner: '나' },
+    { kind: '해외주식', balance: 50000000, principal: 25000000, rate: 0, owner: '배우자' }]
+};
+test('21. 부부는 250만 공제를 사람마다 받는다', () => {
+  // 꺼낸 돈 약 927만 → 이익 약 463만. 혼자면 (463 − 250) × 22% > 0, 부부면 한 사람 232만이라 0원
+  const single = E.simulate(pair);
+  const couple = E.simulate(Object.assign({ spouse: { birthYear: 1966 } }, pair));
+  assert.ok(single.rows[0].tax.stock > 400000);
+  near(couple.rows[0].tax.stock, 0);
+});
+
+test('22. 배우자 명의로 옮기면 옮길 때 가격이 새 원금 → 양도세가 줄어든다', () => {
+  const base = Object.assign({ spouse: { birthYear: 1966 } }, pair, {
+    spendMonthly: 2000000,
+    accounts: [{ kind: '해외주식', balance: 100000000, principal: 20000000, rate: 0, owner: '나' }] });
+  const a = E.simulate(base), b = E.simulate(base, null, { giftToSpouse: true });
+  assert.ok(b.rows[0].tax.stock < a.rows[0].tax.stock);
+});
+
+test('23. 해마다 이익 250만원만큼 팔고 다시 사기: 원금이 해마다 250만 오른다', () => {
+  // 60·61·62세 세 번 → 원금 750만. 62세에 남은 해외주식의 세금:
+  //   그냥: (1억 − 250만) × 22% = 2,145만 / 실현: (1억 − 750만 − 250만) × 22% = 1,980만
+  const p = { birthYear: 1966, retireAge: 60, planAge: 62, spendMonthly: 0, inflation: 0, cashRate: 0,
+    accounts: [{ kind: '해외주식', balance: 100000000, principal: 0, rate: 0 }, { kind: '현금', balance: 10000000, rate: 0 }] };
+  const row = r => r.rows.find(x => x.age === 62);
+  near(row(E.simulate(p)).residualTax, 21450000, 1);
+  near(row(E.simulate(p, null, { harvest: true })).residualTax, 19800000, 1);
+});
+
+test('24. 연금 일찍 꺼내기: 쓸 돈이 적어도 1,500만(한도 안)까지 꺼낸다', () => {
+  // 한도: 1억 ÷ 10 × 1.2 = 1,200만 → 1,200만 꺼냄, 세금 1,200만 × 5.5% = 66만
+  const r = E.simulate({ birthYear: 1966, retireAge: 60, planAge: 61, spendMonthly: 500000, inflation: 0, cashRate: 0,
+    accounts: [{ kind: '연금저축', balance: 100000000, rate: 0 }, { kind: '현금', balance: 50000000, rate: 0 }] }, null, { pensionEarly: true });
+  near(r.rows[0].take.pensionIn, 12000000);
+  near(r.rows[0].tax.pensionAcct, 660000);
+});
+
+test('25. 배당 대신 팔아서 쓰기: 배당이 0이 된다', () => {
+  const p = { birthYear: 1966, retireAge: 60, planAge: 61, spendMonthly: 1000000, inflation: 0, cashRate: 0,
+    accounts: [{ kind: '해외주식', balance: 100000000, dividendYield: 0.04, rate: 0.05 }] };
+  near(E.simulate(p).rows[0].dividend, 4000000);
+  near(E.simulate(p, null, { noDividend: true }).rows[0].dividend, 0);
+});
+
+test('26. 세금 줄이기 목록: 혼자면 배우자 방법이 없고, 효과가 있는 것만 큰 순서로', () => {
+  const p = { birthYear: 1975, retireAge: 55, planAge: 95, spendMonthly: 3000000, annualSaving: 10000000,
+    accounts: [{ kind: '해외주식', balance: 2e8, principal: 1.2e8, dividendYield: 0.006 }, { kind: '연금저축', balance: 2e8 }, { kind: '현금', balance: 2e7 }],
+    nps: { mode: 'direct', monthly: 1100000 } };
+  const im = E.improvements(p);
+  assert.ok(!im.list.some(x => x.id === 'giftToSpouse'));
+  assert.ok(im.list.length > 0);
+  for (let i = 1; i < im.list.length; i++) assert.ok(im.list[i - 1].saving >= im.list[i].saving);
+  assert.ok(im.list.every(x => x.saving > 10000));
+});

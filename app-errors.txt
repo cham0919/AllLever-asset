@@ -1,0 +1,17 @@
+Timestamp               Ty Process[PID:TID]
+2026-11-25 06:38:48.507 E  App[8346:7a9a] [com.apple.extensionkit:default] Failed to resolve host network app id to config: bundleID: com.apple.WebKit.Networking instance ID: Optional([_EXExtensionInstanceIdentifier: 4F433696-36A7-4816-BB64-B8EE5D7004DA])
+2026-11-25 06:38:49.332 E  App[8346:7a84] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:performInputOperation:]  Can only perform input operation for an active session. sessionID = 8DB5B59D-5F0B-4991-9985-9867DFF753B6
+2026-11-25 06:38:49.377 E  App[8346:7a84] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:textSuggestionsChanged:]  Can only set suggestions for an active session. sessionID = 8DB5B59D-5F0B-4991-9985-9867DFF753B6
+2026-11-25 06:38:50.287 F  App[8346:7a84] [com.apple.WebKit:Process] GPU process (0x1131281e0) took 1.620408 seconds to launch
+2026-11-25 06:38:51.462 E  App[8346:7a9e] [com.apple.TextInputUI:CandidateGeneration] Result accumulator timeout: 0.250000, exceeded.
+2026-11-25 06:38:51.508 E  App[8346:7aa6] [com.apple.TextInputUI:CandidateGeneration] Result accumulator timeout: 0.250000, exceeded.
+2026-11-25 06:38:51.964 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request storage access quirks from WebPrivacy.
+2026-11-25 06:38:51.964 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request storage access user agent string quirks from WebPrivacy.
+2026-11-25 06:38:51.964 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request query parameters from WebPrivacy.
+2026-11-25 06:38:51.964 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request known fingerprinting scripts from WebPrivacy: Error Domain=WebPrivacyErrorDomain Code=1001 "List data not found" UserInfo={NSLocalizedDescription=List data not found}
+2026-11-25 06:38:52.317 E  App[8346:7abb] [com.apple.WebKit:ResourceLoadStatistics] WebContent[8353] Unable to filter tracking query parameters (missing data)
+2026-11-25 06:38:52.434 E  App[8346:7a9b] [com.apple.TextInputUI:CandidateGeneration] Attempted to update accumulator from source type: 0, after completion has already been called for token:[2F51E7C8]. This is an error and will be ignored.
+2026-11-25 06:38:57.988 E  App[8346:7abb] [com.apple.WebKit:ResourceLoadStatistics] WebContent[8353] Unable to hide query parameters from script (missing data)
+2026-11-25 06:38:58.054 E  App[8346:7a84] [com.apple.RemoteTextInput:RTILog] -[RTIInputSystemClient remoteTextInputSessionWithID:textSuggestionsChanged:]  Can only set suggestions for an active session. sessionID = 8DB5B59D-5F0B-4991-9985-9867DFF753B6
+2026-11-25 06:38:58.062 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request allowed query parameters from WebPrivacy.
+2026-11-25 06:38:58.645 E  App[8346:7a84] [com.apple.WebKit:ResourceLoadStatistics] Failed to request restricted opener domains from WebPrivacy

@@ -1,0 +1,25 @@
+2026-11-25 06:39:47.796 App[10399:36854] DiskCookieStorage changing policy from 2 to 0, cookie file: file:///Users/runner/Library/Developer/CoreSimulator/Devices/EED6FB0A-E273-43C6-B5DE-3DF739543042/data/Containers/Data/Application/4081E2E4-599E-4451-BB1F-0E2EFC455CE2/Library/Cookies/com.alllever.asset.binarycookies
+2026-11-25 06:39:48.261 App[10399:36854] KeyboardPlugin: resize mode - native
+⚡️  Loading app at capacitor://localhost...
+⚡️  To Native ->  App addListener 103521203
+⚡️  To Native ->  App getLaunchUrl 103521204
+⚡️  TO JS undefined
+⚡️  [log] - [alv] native plugins: CapacitorHttp,Console,WebView,CapacitorCookies,SystemBars,Filesystem,Haptics,LocalNotifications,Keyboard,Browser,App,Share,WebAuth,Biometric,SecureStore,AppSettings
+⚡️  To Native ->  SystemBars setStyle 103521205
+⚡️  TO JS undefined
+⚡️  To Native ->  Biometric check 103521206
+⚡️  To Native ->  Biometric setPrivacy 103521207
+⚡️  To Native ->  App addListener 103521208
+⚡️  To Native ->  App addListener 103521209
+⚡️  To Native ->  LocalNotifications addListener 103521210
+⚡️  To Native ->  Filesystem writeFile 103521211
+⚡️  WebView loaded
+⚡️  TO JS {"type":"faceID","available":true,"biometrics":false}
+⚡️  TO JS undefined
+⚡️  TO JS {"uri":"file:\/\/\/Users\/runner\/Library\/Developer\/CoreSimulator\/Devices\/EED6FB0A-E273-43C6-B5DE-3DF739543042\/data\/Containers\/Data\/Application\/4081E2E4-599E-4451-BB1F-0E2EFC455CE2\/Library\/moneymuscle-data.json"}
+⚡️  To Native ->  LocalNotifications checkPermissions 103521212
+⚡️  TO JS {"display":"prompt"}
+⚡️  To Native ->  LocalNotifications getPending 103521213
+num of pending notifications 0
+[]
+⚡️  TO JS {"notifications":[]}

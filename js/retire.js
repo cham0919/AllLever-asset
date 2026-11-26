@@ -644,11 +644,11 @@ function normalize(p) {
   };
   const me = npsOf(q.birthYear, q.nps, q.retireAge);
   q.npsMonthly = me.monthly; q.npsStart = me.start;
-  q.persons = [{ birthYear: q.birthYear, npsMonthly: me.monthly, npsStart: me.start, salary: q.salary }];
+  q.persons = [{ birthYear: q.birthYear, npsMonthly: me.monthly, npsStart: me.start, salary: q.salary, biz: q.bizIncome || 0 }];
   if (q.spouse && q.spouse.birthYear) {
     const spRetire = q.retireAge + (q.birthYear - q.spouse.birthYear);   // 같은 해에 은퇴한다고 본다
     const sp = npsOf(q.spouse.birthYear, q.spouse.nps, spRetire);
-    q.persons.push({ birthYear: q.spouse.birthYear, npsMonthly: sp.monthly, npsStart: sp.start, salary: q.spouse.salary });
+    q.persons.push({ birthYear: q.spouse.birthYear, npsMonthly: sp.monthly, npsStart: sp.start, salary: q.spouse.salary, biz: q.spouse.bizIncome || 0 });
   }
   return q;
 }
@@ -658,8 +658,10 @@ function simulate(p0, spendOverride, opt = {}) {
   const couple = p.persons.length === 2;
   const spend = spendOverride != null ? spendOverride : p.spendMonthly;
   const { bs, house, houses } = makePeople(p.accounts || [], p.returnRate, p.cashRate, couple);
-  const isaFree = sal => sal > 0 && sal <= R('ISA').서민형_총급여_이하 ? R('ISA').비과세_서민형 : R('ISA').비과세_일반;
-  const ppl = p.persons.map((x, i) => Object.assign({ b: bs[i], isaFreeLeft: isaFree(x.salary) }, x));
+  // 일하는 동안 소득 기준. 근로소득만 있으면 총급여, 사업소득이 있으면 종합소득금액(근로소득금액 + 사업소득금액)으로 판단(조특법 제91조의18, 소득세법 제59조의3)
+  const totIncome = x => wageIncomeAmount(x.salary || 0) + (x.biz || 0);
+  const isaFree = x => (x.biz > 0 ? totIncome(x) <= R('ISA').서민형_종합소득_이하 : x.salary > 0 && x.salary <= R('ISA').서민형_총급여_이하) ? R('ISA').비과세_서민형 : R('ISA').비과세_일반;
+  const ppl = p.persons.map((x, i) => Object.assign({ b: bs[i], isaFreeLeft: isaFree(x) }, x));
   // 세금 효과만 보려고 비교할 때는 현금 빼고 모든 계좌 수익률을 같은 평균으로 맞춘다
   if (opt.uniformRates) {
     let w = 0, t = 0;
@@ -719,23 +721,22 @@ function simulate(p0, spendOverride, opt = {}) {
       if (opt.openIsa && rest > 0) { const c = Math.min(rest, isaR.연납입한도); addMoney(me.isa, c); rest -= c; isaYears++; }
       // 연금계좌 채우기: 나 → 배우자(연봉이 있을 때) 순서로 한 사람 900만까지
       if (opt.fillPension) ppl.forEach((pp, i) => {
-        if (rest <= 0 || (i > 0 && !(pp.salary > 0))) return;
+        if (rest <= 0 || (i > 0 && !(pp.salary > 0 || pp.biz > 0))) return;
         const c = Math.min(rest, cr.한도_합산); addMoney(pp.b.pension, c); rest -= c; toPension[i] += c;
       });
       const skip = [...(opt.openIsa ? ['isa'] : []), ...(opt.fillPension ? ['pension'] : [])];   // 한도까지 채운 계좌에는 더 넣지 않음
       const keys0 = LIQ.filter(k => !skip.includes(k));
-      const tot0 = ppl.reduce((s, pp) => s + keys0.reduce((a, k) => a + pp.b[k].bal, 0), 0);
-      if (!skip.includes('pension')) ppl.forEach((pp, i) => { toPension[i] += tot0 > 0 ? rest * pp.b.pension.bal / tot0 : 0; });   // 비율대로 나눌 때 각자 연금계좌에 들어가는 몫
-      addSaving(ppl, rest, skip);
+      addSaving(ppl, rest, skip).forEach((v, i) => { toPension[i] += v; });   // 나눠 넣을 때 각자 연금계좌에 들어간 몫
       // 연금계좌 세액공제(일하는 동안, 사람마다): 한 해 900만까지 × 13.2% (총급여 5,500만 이하 16.5%). 연봉이 0이면 공제받을 세금이 없다
-      const crRate = sal => sal === 0 ? 0 : (sal && sal <= cr.저소득_총급여_이하_근로만 ? cr.공제율_저소득 : cr.공제율) * (1 + LOCAL);
-      let refund = ppl.reduce((s, pp, i) => s + Math.min(toPension[i], cr.한도_합산) * crRate(pp.salary), 0);
+      // 저소득 공제율: 근로소득만 있으면 총급여 5,500만 이하, 사업소득이 있으면 종합소득금액 4,500만 이하. 소득이 없으면 공제받을 세금이 없다
+      const crRate = x => !(x.salary > 0 || x.biz > 0) ? 0 : ((x.biz > 0 ? totIncome(x) <= cr.저소득_종합소득금액_이하 : x.salary <= cr.저소득_총급여_이하_근로만) ? cr.공제율_저소득 : cr.공제율) * (1 + LOCAL);
+      let refund = ppl.reduce((s, pp, i) => s + Math.min(toPension[i], cr.한도_합산) * crRate(pp), 0);
       // ISA 3년 만기마다 연금계좌로 옮기기: ISA 세금(비과세 한도 넘는 이익 9.9%) 내고 옮김, 옮긴 돈의 10%(300만까지) 추가 공제
       if (opt.openIsa && isaYears > 0 && isaYears % isaR.의무기간_년 === 0 && me.isa.bal > 0) {
-        const free = isaFree(p.salary);
+        const free = isaFree(ppl[0]);
         const isaTax = clamp0(me.isa.bal - me.isa.basis - free) * isaR.초과분_세율 * (1 + LOCAL);
         const moved = me.isa.bal - isaTax;
-        refund += Math.min(moved * cr.ISA전환_추가비율, cr.ISA전환_추가한도) * crRate(p.salary);
+        refund += Math.min(moved * cr.ISA전환_추가비율, cr.ISA전환_추가한도) * crRate(ppl[0]);
         me.pension.bal += moved; me.isa.bal = 0; me.isa.basis = 0;
         isaMoves.push({ age, moved, isaTax });
       }
@@ -917,9 +918,11 @@ function addSaving(ppl, amount, skip = []) {
     if (it > 0) w = c => c.k === 'cash' ? 0 : c.x.bal / it;
     else { const ct = cells.filter(c => c.k === 'cash').reduce((s, c) => s + c.x.bal, 0); w = c => c.k !== 'cash' ? 0 : ct > 0 ? c.x.bal / ct : (c.me ? 1 : 0); }
   }
-  for (const c of cells) addMoney(c.x, amount * w(c));
+  const toP = ppl.map(() => 0);
+  for (const c of cells) { const v = amount * w(c); addMoney(c.x, v); if (c.k === 'pension') toP[ppl.findIndex(pp => pp.b.pension === c.x)] += v; }
   // 몫을 정한 계좌가 한도로 빠져(skip) 아무 데도 못 넣으면 현금으로
   if (sw === 0 && !cells.length) addMoney(ppl[0].b.cash, amount);
+  return toP;
 }
 function snapshot(ppl) {
   const o = { cash: 0, isa: 0, foreign: 0, domestic: 0, kretf: 0, pension: 0 };

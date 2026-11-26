@@ -421,3 +421,14 @@ test('54. 연금 계좌 안 퇴직금 세금 모름: 근속 = 퇴직금 ÷ (연�
   assert.ok(Math.abs(tax(mk(6e7)) - tax(mk(0, 20))) < 1, '연봉으로 추정 = 20년');
   assert.ok(Math.abs(tax(mk(0)) - tax(mk(0, 10))) < 1, '연봉 없으면 10년');
 });
+test('55. 사업자: 세액공제율은 종합소득금액 4,500만, 서민형 ISA는 3,800만 기준', () => {
+  const Y = new Date().getFullYear();
+  const run = (o) => E.simulate(Object.assign({ birthYear: Y - 40, retireAge: 42, planAge: 60, monthlyNeed: 1e6, inflation: 0, annualSaving: 9e6, nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: '연금저축', balance: 1e7, savingShare: 1 }] }, o));
+  const ref = r => r.rows.filter(x => x.phase === 'work').reduce((s, x) => s + (x.refund || 0), 0);
+  const lo = ref(run({ bizIncome: 4e7 })), hi = ref(run({ bizIncome: 5e7 })), sal = ref(run({ salary: 5e7 })), none = ref(run({}));
+  assert.ok(Math.abs(lo / 2 - 9e6 * 0.165) < 2, `순수입 4,000만 → 16.5% ${lo}`);
+  assert.ok(Math.abs(hi / 2 - 9e6 * 0.132) < 2, `순수입 5,000만 → 13.2% ${hi}`);
+  assert.ok(Math.abs(sal / 2 - 9e6 * 0.165) < 2, `연봉 5,000만 → 16.5% ${sal}`);
+  assert.equal(none, 0, '소득 없으면 0');
+});

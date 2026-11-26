@@ -177,6 +177,7 @@ const SPECIAL = {
   '저축 몫 지정(ISA 40%·연금 30%·해외 30%)': B(40, { annualSaving: 4e7, salary: 7e7, accounts: [{ kind: 'ISA', balance: 3e7, savingShare: 0.4 }, { kind: '연금저축', balance: 2e7, savingShare: 0.3 }, { kind: '해외주식', balance: 1e8, principal: 8e7, savingShare: 0.3 }, { kind: '현금', balance: 2e8 }] }),
   '월세 큼(연 3,600만, 경비 1,200만)': B(62, { accounts: [...B(0, {}).accounts, { kind: '집', balance: 9e8, publicPrice: 6e8 }, { kind: '집', balance: 1e9, publicPrice: 7e8, use: 'rent', rent: 3e6, deposit: 1e8, expense: 1.2e7 }] }),
   '연금 계좌 안 퇴직금(세금 모름, 연봉으로 근속 추정)': B(50, { salary: 8e7, accounts: [{ kind: 'IRP', balance: 3e8, severance: 2e8 }, { kind: '현금', balance: 5e7 }] }),
+  '지금 사업자(순수입 5,000만)·배우자 월급': B(45, { annualSaving: 3e7, bizIncome: 5e7, spouse: { birthYear: Y - 43, salary: 4e7, nps: { mode: 'direct', monthly: 5e5 } }, accounts: [...B(0, {}).accounts, { kind: '연금저축', balance: 2e7, savingShare: 0.5 }, { kind: 'IRP', balance: 1e7, owner: '배우자', savingShare: 0.2 }] }),
   '공동명의 예금 몫 70%': B(55, { accounts: [{ kind: '현금', balance: 9e8, owner: '공동명의', share: 0.7 }], spouse: { birthYear: Y - 55, nps: { mode: 'direct', monthly: 3e5 } } })
 };
 // 새 입력의 방향 규칙: 늘리면 쓸 수 있는 돈이 줄면 안 되는 것

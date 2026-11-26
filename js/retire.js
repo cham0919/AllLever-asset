@@ -375,6 +375,7 @@ function makePeople(accounts, defRate, cashRate, couple) {
       if (!sh) return;
       const x = bs[i][k], bal = a.balance * sh;
       x.bal += bal;
+      if (a.savingShare > 0) x.saveW = (x.saveW || 0) + a.savingShare * sh;   // 매년 저축 중 이 계좌에 넣는 몫
       if ('basis' in x) x.basis += (a.principal != null ? a.principal : a.balance) * sh;
       if (k === 'cash') { if (a.rate != null) { cashW[i].rv += a.rate * bal; cashW[i].rb += bal; } return; }
       // 연금 계좌 안 돈 나누기(사람마다): 세액공제 안 받은 돈, 이연퇴직소득과 그 세금
@@ -894,13 +895,22 @@ function sumTake(takes) {
   return o;
 }
 function addSaving(ppl, amount, skip = []) {
-  // 저축은 지금 자산 비율대로 나눠 넣는다(집 제외). skip: 이미 한도까지 채운 계좌 등 빼고 나눌 묶음
+  // 매년 저축을 어느 계좌에 넣나: 계좌에 savingShare(몫)를 정했으면 그 몫대로.
+  // 정하지 않았으면("모르겠어요") 현금을 뺀 투자 계좌의 잔액 비율대로, 투자 계좌가 없으면 현금으로. skip: 이미 한도까지 채운 계좌 등
   const keys = LIQ.filter(k => !skip.includes(k));
-  const tot = ppl.reduce((s, pp) => s + keys.reduce((a, k) => a + pp.b[k].bal, 0), 0);
-  for (const pp of ppl) for (const k of keys) {
-    const share = tot > 0 ? pp.b[k].bal / tot : (k === 'cash' && pp === ppl[0] ? 1 : 0);
-    addMoney(pp.b[k], amount * share);
+  const cells = [];
+  for (const pp of ppl) for (const k of keys) cells.push({ x: pp.b[k], k, me: pp === ppl[0] });
+  const sw = cells.reduce((s, c) => s + (c.x.saveW || 0), 0);
+  let w;
+  if (sw > 0) w = c => (c.x.saveW || 0) / sw;
+  else {
+    const inv = cells.filter(c => c.k !== 'cash'), it = inv.reduce((s, c) => s + c.x.bal, 0);
+    if (it > 0) w = c => c.k === 'cash' ? 0 : c.x.bal / it;
+    else { const ct = cells.filter(c => c.k === 'cash').reduce((s, c) => s + c.x.bal, 0); w = c => c.k !== 'cash' ? 0 : ct > 0 ? c.x.bal / ct : (c.me ? 1 : 0); }
   }
+  for (const c of cells) addMoney(c.x, amount * w(c));
+  // 몫을 정한 계좌가 한도로 빠져(skip) 아무 데도 못 넣으면 현금으로
+  if (sw === 0 && !cells.length) addMoney(ppl[0].b.cash, amount);
 }
 function snapshot(ppl) {
   const o = { cash: 0, isa: 0, foreign: 0, domestic: 0, kretf: 0, pension: 0 };

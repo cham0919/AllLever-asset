@@ -394,3 +394,13 @@ test('51. 새로 넣는 돈 비중(newHoldings) — 없으면 지금 비중 그�
   const q2 = JSON.parse(JSON.stringify(base)); q2.accounts[0].newHoldings = [{ w: 1, rate: 0.03, div: 0 }];
   assert.ok(Math.abs(E.simulate(q2).atRetire.bal.foreign - fa) < 1, '지금과 같은 비중이면 결과도 같아야 함');
 });
+test('52. 매년 저축을 어디에 넣나(savingShare) — 모르면 현금 빼고 투자 계좌 비율대로', () => {
+  const Y = new Date().getFullYear();
+  const base = { birthYear: Y - 40, retireAge: 45, planAge: 60, monthlyNeed: 1e6, inflation: 0, annualSaving: 1e8, nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: '해외주식', balance: 1e8, principal: 1e8, rate: 0 }, { kind: '현금', balance: 9e8, rate: 0 }] };
+  const a = E.simulate(base).atRetire.bal;
+  assert.ok(Math.abs(a.cash - 9e8) < 1 && Math.abs(a.foreign - 6e8) < 1, `모르면 현금에 안 넣음 ${a.cash} ${a.foreign}`);
+  const q = JSON.parse(JSON.stringify(base)); q.accounts[0].savingShare = 0.25; q.accounts[1].savingShare = 0.75;
+  const b = E.simulate(q).atRetire.bal;
+  assert.ok(Math.abs(b.cash - (9e8 + 3.75e8)) < 1 && Math.abs(b.foreign - (1e8 + 1.25e8)) < 1, `몫대로 ${b.cash} ${b.foreign}`);
+});

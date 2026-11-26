@@ -180,7 +180,7 @@ function rtStages(r, R){
   const merged = [];
   st.forEach((s, i) => { if (s.ys.length < 2 && st[i + 1]) { st[i + 1].a0 = s.a0; st[i + 1].ys = s.ys.concat(st[i + 1].ys); } else merged.push(s); });
   st = merged;
-  const balAt = a => { if (a === R && r.atRetire) return rtGroups(r.atRetire.bal, r.atRetire.infl); const x = rows.find(z => z.age === a - 1); return x ? rtGroups(x.bal, x.infl) : [0, 0, 0]; };
+  const balAt = a => { if (a === R && r.atRetire) return rtGroups(r.atRetire.bal, r.atRetire.infl); const x = rows.find(z => z.age === a - 1); return x ? rtGroups(x.bal, x.inflEnd || x.infl) : [0, 0, 0]; };
   return st.map((s, i) => {
     const n = s.ys.length, avg = f => s.ys.reduce((t, y) => t + f(y), 0) / n, a1 = s.ys.at(-1).a;
     const src = Object.fromEntries(Object.keys(RT_SRC).map(k => [k, avg(y => y.src[k])]));
@@ -199,7 +199,7 @@ function rtBalDraw(r, R){
   const tk = new Set([nowAge, R]); for (let a = Math.ceil((nowAge + 1) / 5) * 5; a <= 100; a += 5) tk.add(a);
   const ticks = [...tk].filter(a => a >= nowAge && a <= 100).sort((a, b) => a - b);
   const at = a => a === nowAge ? null : a === R && r.atRetire ? r.atRetire : rows.find(x => x.age === a - 1);
-  const grp = a => { if (a === nowAge) return startG; const x = at(a); return x ? rtGroups(x.bal, x.infl) : [0, 0, 0]; };
+  const grp = a => { if (a === nowAge) return startG; const x = at(a); return x ? rtGroups(x.bal, x.inflEnd || x.infl) : [0, 0, 0]; };
   const val = a => grp(a).reduce((s, v) => s + v, 0);
   const max = Math.max(...ticks.map(val), 1);
   const sel = S.rtBar != null && ticks.includes(S.rtBar) ? S.rtBar : (ticks.includes(R) ? R : ticks[0]);
@@ -507,7 +507,7 @@ function rtPlanReport(R){
   // 1. 모으기
   const work = r.rows.filter(x => x.phase === 'work');
   let put = start; const grow = [{put, bal: start}];
-  work.forEach(x => { put += (x.saved + x.refund) / x.infl; grow.push({put, bal: rtLiq(x.bal) / x.infl}); });
+  work.forEach(x => { put += (x.saved + x.refund) / x.infl; grow.push({put, bal: rtLiq(x.bal) / (x.inflEnd || x.infl)}); });
   const savedReal = work.reduce((x, y) => x + y.saved / y.infl, 0), gmax = Math.max(...grow.map(g => g.bal), 1);
   // 2. 시기별 돈의 흐름(스크롤로 움직임): 막대 높이 비율은 레포트 전체에서 같게
   const gr = k => k === 2 ? 0 : (p.returnRate - p.inflation);   // ISA·현금은 거의 안 불어나게 그림

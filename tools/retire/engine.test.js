@@ -297,3 +297,75 @@ test('37. 은퇴 때 다 못 갚은 빚은 은퇴 후 해마다 갚는다(상환
   const r = E.simulate(z({ spendMonthly: 0, debt: 3e8, accounts: [{ kind: '현금', balance: 1e8, rate: 0 }] }));
   near(r.atRetire.debtLeft, 2e8); near(r.rows[0].debtRepay, 2e7); near(r.rows[0].living, 0);
 });
+
+// ── 11/26 보강: 퇴직금·연금 계좌 돈 나누기·국민연금 시기·근로·월세·집 여러 채·피부양자·줄별 수익률 ──
+test('38. 퇴직소득세: 퇴직금 1억, 근속 20년', () => {
+  // 근속연수공제 1,500만 + (20−10)×250만 = 4,000만 → (1억 − 4,000만) × 12 ÷ 20 = 환산급여 3,600만
+  // 환산급여공제 800만 + (3,600만 − 800만) × 60% = 2,480만 → 과표 1,120만 × 6% = 67.2만 → ÷ 12 × 20 = 112만
+  near(E.retireIncomeTax(100000000, 20), 1120000);
+});
+test('39. 연금 계좌 돈 나누기 순서: 세액공제 안 받은 돈 → 퇴직금 → 나머지', () => {
+  const sp = E.pensionSplit({ nd: 100, ret: 200 }, 250, 100);
+  assert.deepEqual(sp, { in: { nd: 100, ret: 150, rest: 0 }, out: { nd: 0, ret: 50, rest: 50 } });
+});
+test('40. 퇴직금을 연금으로 받을 때 세금: 10년차까지 70%, 11년차부터 60%, 연금 밖은 100%', () => {
+  // 이연퇴직소득 1억·세금 500만 중 1,000만을 꺼냄 → 50만 × 70% × 1.1 = 38.5만
+  const pb = { ret: 1e8, retTax: 5e6 };
+  near(E.retireDrawTax(pb, { in: { ret: 1e7 }, out: { ret: 0 } }, 5), 385000);
+  near(E.retireDrawTax(pb, { in: { ret: 1e7 }, out: { ret: 0 } }, 12), 330000);
+  near(E.retireDrawTax(pb, { in: { ret: 0 }, out: { ret: 1e7 } }, 5), 550000);
+});
+test('41. 국민연금 직접 입력 금액도 2년 일찍 받으면 12% 줄어든다', () => {
+  // 1985년생 정해진 나이 65세 → 63세: × 0.88
+  const r = E.simulate({ birthYear: 1985, retireAge: 55, spendMonthly: 0, nps: { mode: 'direct', monthly: 1000000, startAge: 63 }, accounts: [] });
+  near(r.params.npsMonthly, 880000);
+});
+test('42. 집이 두 채면 재산세 과표 비율 60%, 1주택 특례세율 없음', () => {
+  near(E.housePropertyBase(5e8, false), 3e8);
+  near(E.housePropertyBase(5e8, true), 5e8 * 0.44);
+  assert.ok(E.propertyTax(5e8, false) > E.propertyTax(5e8, true));
+});
+test('43. 월세 1,200만(집 두 채, 다른 소득 없음): 분리과세 61.6만보다 종합과세 22만이 적다', () => {
+  // 분리: (1,200만 × 50% − 200만) × 14% × 1.1 = 61.6만
+  // 종합: 소득금액 600만 − 기본공제 150만 = 450만 × 6% = 27만 − 표준세액공제 7만 = 20만 × 1.1 = 22만
+  // personTax는 내부 함수라 집 두 채 시뮬레이션의 첫해로 확인
+  const res = E.simulate({ birthYear: 1960, retireAge: 66, spendMonthly: 0, planAge: 70, endAge: 66, baseYear: 2026, nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: '집', balance: 5e8, publicPrice: 3e8, use: 'live' }, { kind: '집', balance: 3e8, publicPrice: 2e8, use: 'rent', rent: 1e6 }] });
+  near(res.rows[0].tax.rent, 220000, 2);
+  near(res.rows[0].rent, 12e6);
+});
+test('44. 근로소득세: 총급여 3,000만(62세, 다른 소득 없음)', () => {
+  // 근로소득공제 750만 + 1,500만 × 15% = 975만 → 근로소득금액 2,025만 − 150만 = 1,875만
+  // 산출 84만 + 475만 × 15% = 155.25만, 근로세액공제 71.5만 + 25.25만 × 30% = 79.075만 → 한도 74만
+  // 155.25 − 13(표준) − 74 = 68.25만 × 1.1 = 75.075만
+  near(E.wageIncomeAmount(3e7), 20250000);
+  near(E.comprehensiveTax({ wage: 3e7, other: E.wageIncomeAmount(3e7), age: 62 }).total, 750750);
+});
+test('45. 피부양자: 국민연금 1,800만·재산 기준 안 → 건보료 0, 2,100만이면 지역가입자', () => {
+  const base = { ppl: [{}], work: [{ wage: 0, biz: 0 }], H: { propBase: [3e8], rent: [null] }, ages: [66], year: 2040, infl: 1, p: { dependent: true } };
+  assert.equal(E.healthYear(Object.assign({}, base, { inc: [{ publicPension: 18e6 }], per: [{ fin: 0, rentAmt: 0 }] })).health, 0);
+  assert.ok(E.healthYear(Object.assign({}, base, { inc: [{ publicPension: 21e6 }], per: [{ fin: 0, rentAmt: 0 }] })).health > 0);
+});
+test('46. 부부가 자녀의 피부양자가 되려면 둘 다 소득 요건: 배우자가 2,500만이면 둘 다 지역가입자', () => {
+  const r = E.healthYear({ ppl: [{}, {}], work: [{ wage: 0, biz: 0 }, { wage: 0, biz: 0 }], H: { propBase: [1e8, 1e8], rent: [null, null] }, ages: [66, 64], year: 2040, infl: 1, p: { dependent: true },
+    inc: [{ publicPension: 15e6 }, { publicPension: 25e6 }], per: [{ fin: 0 }, { fin: 0 }] });
+  assert.deepEqual(r.status, ['지역', '지역']);
+  assert.ok(r.health > 0);
+});
+test('47. 한 계좌 안 줄별 수익률: QLD 반(10%) + 커버드콜 반(6%, 배당 12%) → 1년 뒤 비중이 바뀐다', () => {
+  // 은퇴 후(배당은 꺼냄): 1.10과 0.94 → 합 1.02. QLD 비중 0.55 ÷ 1.02 = 0.5392
+  const x = { bal: 100, rate: 0, div: 0, lots: [{ r: 0.10, d: 0, s: 0.5 }, { r: 0.06, d: 0.12, s: 0.5 }] };
+  E.growLots(x, l => 1 + l.r - l.d);
+  near(x.bal, 102, 1e-9);
+  near(x.lots[0].s, 0.55 / 1.02, 1e-9);
+  near(x.div, 0.47 / 1.02 * 0.12, 1e-9);
+});
+test('48. 은퇴할 때 퇴직금 → IRP(이연퇴직소득)로 들어가고, 연봉이 0이면 연금계좌 세액공제가 없다', () => {
+  const p = { birthYear: 1971, retireAge: 60, spendMonthly: 0, baseYear: 2026, salary: 0, annualSaving: 1e7, inflation: 0, returnRate: 0, cashRate: 0,
+    severance: { amount: 1e8, years: 20 }, nps: { mode: 'direct', monthly: 0 }, accounts: [{ kind: 'IRP', balance: 1e7 }] };
+  const r = E.simulate(p);
+  assert.equal(r.refunds, 0);
+  // 수익률 0: IRP 1,000만 + 5년 저축 5,000만(계좌가 IRP뿐이라 모두 IRP로) + 퇴직금 1억 = 1억 6,000만
+  near(r.atRetire.bal.pension, 1.6e8);
+  assert.ok(r.notes.some(n => n.includes('퇴직금')));
+});

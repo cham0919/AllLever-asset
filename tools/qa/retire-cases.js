@@ -50,7 +50,7 @@ function make(h, tm, pf, nps, sp) {
 const zero = p => {
   const q = JSON.parse(JSON.stringify(p));
   Object.assign(q, { inflation: 0, returnRate: 0, cashRate: 0, savingGrowth: 0, houseGrowth: 0 });
-  q.accounts.forEach(a => { a.rate = 0; });
+  q.accounts.forEach(a => { a.rate = 0; (a.holdings || []).forEach(h => { h.rate = 0; }); });
   return q;
 };
 const liquidSum = b => Object.values(b).reduce((s, v) => s + v, 0);
@@ -69,12 +69,12 @@ function ledger(p) {
       debt = Math.max(0, debt - (p.annualRepay || 0));
     } else {
       if (x === r.rows.find(y => y.phase === 'retire')) {
-        const start = liquidSum(r.atRetire.bal), paid = debt - r.atRetire.debtLeft;
-        if (Math.abs(prev - paid - start) > tol(prev)) bad.push(`은퇴 때 빚 갚기 장부 차이 ${Math.round(prev - paid - start).toLocaleString()}원`);
+        const start = liquidSum(r.atRetire.bal), paid = debt - r.atRetire.debtLeft, sev = r.atRetire.severance || 0;
+        if (Math.abs(prev - paid + sev - start) > tol(prev)) bad.push(`은퇴 때 빚 갚기·퇴직금 장부 차이 ${Math.round(prev - paid + sev - start).toLocaleString()}원`);
         prev = start;
       }
-      // 배당·이자는 자산 안에서 나오는 돈이라 밖에서 들어오는 돈이 아님. 밖에서 들어오는 돈 = 국민연금 + 기초연금
-      const want = prev + x.publicPension + x.basicPension - (x.need - x.short) - (x.taxTotal - x.unpaidTax);
+      // 배당·이자는 자산 안에서 나오는 돈이라 밖에서 들어오는 돈이 아님. 밖에서 들어오는 돈 = 국민연금 + 기초연금 + 월세 + 은퇴 후 번 돈
+      const want = prev + x.publicPension + x.basicPension + (x.rent || 0) + (x.work || 0) - (x.need - x.short) - (x.taxTotal - x.unpaidTax);
       if (Math.abs(now - want) > tol(want)) bad.push(`${x.age}세(은퇴) 장부 차이 ${Math.round(now - want).toLocaleString()}원`);
     }
     prev = now;
@@ -151,8 +151,37 @@ const SPECIAL = {
   '원금 모름(해외주식)': B(50, { accounts: [{ kind: '해외주식', balance: 5e8 }, { kind: '현금', balance: 5e7 }] }),
   '혼자인데 공동 명의 표시': B(50, { accounts: [{ kind: '해외주식', balance: 5e8, owner: '공동' }, { kind: '현금', balance: 5e7, owner: '배우자' }] }),
   'ISA만 큼': B(50, { accounts: [{ kind: 'ISA', balance: 3e8, principal: 1e8 }] }),
-  '국내상장 해외ETF만 큼(배당 2%)': B(55, { accounts: [{ kind: '국내상장 해외ETF', balance: 1e9, principal: 4e8, dividendYield: 0.02 }] })
+  '국내상장 해외ETF만 큼(배당 2%)': B(55, { accounts: [{ kind: '국내상장 해외ETF', balance: 1e9, principal: 4e8, dividendYield: 0.02 }] }),
+  // ── 11/26 보강 ──
+  '집 두 채(한 채 월세 100만)': B(58, { accounts: [...B(0, {}).accounts, { kind: '집', balance: 8e8, publicPrice: 5e8 }, { kind: '집', balance: 4e8, publicPrice: 2.5e8, use: 'rent', rent: 1e6, deposit: 5e7 }] }),
+  '집 세 채·보증금 6억(간주임대료)': B(62, { accounts: [...B(0, {}).accounts, { kind: '집', balance: 9e8, publicPrice: 6e8 }, { kind: '집', balance: 5e8, publicPrice: 3e8, use: 'rent', rent: 5e5, deposit: 3e8 }, { kind: '집', balance: 5e8, publicPrice: 3e8, use: 'rent', rent: 5e5, deposit: 3e8, registered: true }] }),
+  '1주택을 월세 줌(12억 이하 비과세)': B(60, { accounts: [...B(0, {}).accounts, { kind: '집', balance: 8e8, publicPrice: 5e8, use: 'rent', rent: 2e6, deposit: 1e8 }] }),
+  '부부 공동명의 1주택 고가(특례 비교)': B(66, { retireAge: 66, accounts: [...B(0, {}).accounts, { kind: '집', balance: 3e9, publicPrice: 2.2e9, owner: '공동명의', share: 0.5, since: 2005 }], spouse: { birthYear: Y - 64, nps: { mode: 'direct', monthly: 5e5 } } }),
+  '부부 각자 집 한 채씩': B(60, { accounts: [...B(0, {}).accounts, { kind: '집', balance: 1.5e9, publicPrice: 1.1e9 }, { kind: '집', balance: 1.2e9, publicPrice: 9e8, owner: '배우자', use: 'rent', rent: 1.5e6, deposit: 2e8 }], spouse: { birthYear: Y - 58, nps: { mode: 'direct', monthly: 4e5 } } }),
+  '은퇴 후 근로(월 250만, 65세까지)': B(58, { retireAge: 60, workAfter: [{ who: 0, monthly: 2.5e6, untilAge: 65, kind: 'wage' }] }),
+  '은퇴 후 사업소득(월 400만, 70세까지)': B(58, { retireAge: 60, workAfter: [{ who: 0, monthly: 4e6, untilAge: 70, kind: 'business' }] }),
+  '피부양자(직장 다니는 자녀, 혼자)': B(62, { retireAge: 62, dependent: true, nps: { mode: 'direct', monthly: 9e5 } }),
+  '피부양자(부부, 한 사람 소득 큼)': B(66, { retireAge: 66, dependent: true, nps: { mode: 'direct', monthly: 9e5 }, spouse: { birthYear: Y - 66, nps: { mode: 'direct', monthly: 1.9e6 } } }),
+  '배우자가 직장 → 나는 피부양자': B(62, { retireAge: 62, spouse: { birthYear: Y - 58, nps: { mode: 'direct', monthly: 0 } }, workAfter: [{ who: 1, monthly: 4e6, untilAge: 63, kind: 'wage' }] }),
+  '퇴직금 받기(1억, 20년)': B(50, { salary: 6e7, severance: { amount: 1e8, years: 20 } }),
+  '부부 퇴직금 둘 다': B(50, { salary: 6e7, severance: { amount: 1e8, years: 25 }, spouse: { birthYear: Y - 48, salary: 4e7, severance: { amount: 6e7, years: 15 }, nps: { mode: 'direct', monthly: 6e5 } } }),
+  '연금 계좌 안 퇴직금·세액공제 안 받은 돈': B(56, { accounts: [{ kind: 'IRP', balance: 3e8, severance: 2e8, severanceTax: 8e6, nonDeductible: 3e7 }, { kind: '현금', balance: 5e7 }] }),
+  '연금 계좌 안 퇴직금(세금 모름)': B(56, { accounts: [{ kind: 'IRP', balance: 3e8, severance: 2e8 }, { kind: '현금', balance: 5e7 }] }),
+  '55세 전 연금 해지(퇴직금 섞임)': B(50, { retireAge: 50, accounts: [{ kind: 'IRP', balance: 4e8, severance: 2e8, severanceTax: 6e6, nonDeductible: 5e7 }] }),
+  '줄별 수익률(QLD 반·커버드콜 반)': B(55, { accounts: [{ kind: '해외주식', balance: 6e8, principal: 4e8, holdings: [{ w: 0.5, rate: 0.10, div: 0 }, { w: 0.5, rate: 0.06, div: 0.12 }] }, { kind: '현금', balance: 5e7 }] }),
+  '배당률 > 수익률(커버드콜만)': B(60, { accounts: [{ kind: '해외주식', balance: 8e8, principal: 8e8, holdings: [{ w: 1, rate: 0.05, div: 0.12 }] }] }),
+  '국민연금 직접 입력 63세 조기': B(55, { nps: { mode: 'direct', monthly: 1.2e6, startAge: 63 } }),
+  '부부 연봉(배우자 0)·연금 채우기': B(45, { salary: 7e7, annualSaving: 3e7, spouse: { birthYear: Y - 45, salary: 0, nps: { mode: 'direct', monthly: 3e5 } }, accounts: [...B(0, {}).accounts, { kind: 'IRP', balance: 3e7, owner: '배우자' }] }),
+  '공동명의 예금 몫 70%': B(55, { accounts: [{ kind: '현금', balance: 9e8, owner: '공동명의', share: 0.7 }], spouse: { birthYear: Y - 55, nps: { mode: 'direct', monthly: 3e5 } } })
 };
+// 새 입력의 방향 규칙: 늘리면 쓸 수 있는 돈이 줄면 안 되는 것
+const MORE = [
+  ['집 두 채(한 채 월세 100만)', q => { q.accounts.find(a => a.use === 'rent').rent += 5e5; }, '월세를 올렸는데 쓸 수 있는 돈이 줄어듦'],
+  ['은퇴 후 근로(월 250만, 65세까지)', q => { q.workAfter[0].monthly += 1e6; }, '은퇴 후 버는 돈을 늘렸는데 쓸 수 있는 돈이 줄어듦'],
+  ['피부양자(직장 다니는 자녀, 혼자)', q => { q.dependent = false; }, '피부양자를 끄면 쓸 수 있는 돈이 늘어남', true],
+  ['퇴직금 받기(1억, 20년)', q => { q.severance.amount += 5e7; }, '퇴직금을 늘렸는데 쓸 수 있는 돈이 줄어듦'],
+  ['연금 계좌 안 퇴직금·세액공제 안 받은 돈', q => { q.accounts[0].nonDeductible += 5e7; }, '세액공제 안 받은 돈(세금 없음)을 늘렸는데 쓸 수 있는 돈이 줄어듦']
+];
 
 // ───── 실행 ─────
 const t0 = Date.now(), fails = new Map();
@@ -172,6 +201,11 @@ for (const [name, p] of Object.entries(SPECIAL)) {
   n++;
   const add = (kind, msgs) => msgs.forEach(m => { const k = kind + ': ' + m.replace(/[\d,.-]+원/g, '…원').replace(/^\d+세/, 'N세'); if (!fails.has(k)) fails.set(k, []); fails.get(k).push('경계 · ' + name); });
   try { add('장부', ledger(zero(p))); nImp++; add('규칙', rules(p, true)); } catch (e) { add('오류', [e.stack.split('\n').slice(0, 2).join(' ')]); }
+}
+for (const [name, f, msg, reverse] of MORE) {
+  const p = SPECIAL[name], q = JSON.parse(JSON.stringify(p)); f(q);
+  const a = M(p), b = M(q);
+  if (reverse ? b > a + 1000 : b < a - 1000) { const k = '방향: ' + msg; if (!fails.has(k)) fails.set(k, []); fails.get(k).push(`경계 · ${name} (${a} → ${b})`); }
 }
 const sec = ((Date.now() - t0) / 1000).toFixed(1);
 if (fails.size) {

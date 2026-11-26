@@ -339,6 +339,13 @@ function growLots(x, f) {
   syncLots(x);
 }
 // 두 줄 묶음 합치기(가중치 = 금액)
+// 묶음에 새 돈 넣기: newLots(새로 살 비중)가 있으면 그 비중으로 사고, 없으면 지금 비중대로(줄 비중 그대로)
+function addMoney(x, amt, basis = true) {
+  if (!(amt > 0)) return;
+  if (x.newLots && x.newLots.length && x.lots) { x.lots = x.lots.length && x.bal > 0 ? mergeLots(x.lots, x.bal, x.newLots, amt) : x.newLots.map(l => ({ ...l })); x.bal += amt; syncLots(x); }
+  else x.bal += amt;
+  if (basis && 'basis' in x) x.basis += amt;
+}
 function mergeLots(a, wa, b, wb) {
   const out = [];
   const add = (l, w) => { const o = out.find(z => z.r === l.r && z.d === l.d); if (o) o.v += l.s * w; else out.push({ r: l.r, d: l.d, v: l.s * w }); };
@@ -351,6 +358,7 @@ function makePeople(accounts, defRate, cashRate, couple) {
   const house = { price: 0, publicPrice: 0 };
   const houses = [];
   const lotsV = bs.map(() => ({}));   // 사람·묶음별 줄 금액 {k: [{r, d, v}]}
+  const newV = bs.map(() => ({}));    // 새로 넣는 돈을 살 비중(계좌에 newHoldings가 있을 때만). 없으면 지금 비중대로 산다
   const cashW = bs.map(() => ({ v: 0, rv: 0, rb: 0 }));
   for (const a of accounts) {
     const k = KIND[a.kind];
@@ -379,12 +387,25 @@ function makePeople(accounts, defRate, cashRate, couple) {
         const r = h.rate != null ? h.rate : defRate, d = ('div' in x) ? (h.div || 0) : 0, v = bal * (h.w || 0) / wsum;
         const o = arr.find(z => z.r === r && z.d === d); if (o) o.v += v; else arr.push({ r, d, v });
       }
+      // 새로 넣는 돈의 비중: 계좌의 newHoldings, 없으면 그 계좌의 지금 비중. 계좌 잔액(0이면 1원)으로 가중
+      if (Array.isArray(a.newHoldings) && a.newHoldings.length) {
+        const nw = a.newHoldings.reduce((q, h) => q + (h.w || 0), 0) || 1, wt = Math.max(bal, 1);
+        const na = newV[i][k] || (newV[i][k] = { arr: [], any: true });
+        for (const h of a.newHoldings) { const r = h.rate != null ? h.rate : defRate, d = ('div' in x) ? (h.div || 0) : 0, v = wt * (h.w || 0) / nw;
+          const o = na.arr.find(z => z.r === r && z.d === d); if (o) o.v += v; else na.arr.push({ r, d, v }); }
+      } else {
+        const na = newV[i][k] || (newV[i][k] = { arr: [], any: false }), wt = Math.max(bal, 1);
+        for (const h of hs) { const r = h.rate != null ? h.rate : defRate, d = ('div' in x) ? (h.div || 0) : 0, v = wt * (h.w || 0) / wsum;
+          const o = na.arr.find(z => z.r === r && z.d === d); if (o) o.v += v; else na.arr.push({ r, d, v }); }
+      }
     });
   }
   bs.forEach((b, i) => {
     for (const k of LOT_KINDS) {
       const arr = lotsV[i][k] || [], tot = arr.reduce((s, l) => s + l.v, 0);
       b[k].lots = tot > 0 ? arr.filter(l => l.v > 0).map(l => ({ r: l.r, d: l.d, s: l.v / tot })) : [];
+      const nv = newV[i][k];
+      if (nv && nv.any) { const nt = nv.arr.reduce((s, l) => s + l.v, 0); b[k].newLots = nv.arr.filter(l => l.v > 0).map(l => ({ r: l.r, d: l.d, s: l.v / nt })); }
       syncLots(b[k]);
     }
     // 현금: 이자율을 넣은 계좌는 그 값, 안 넣은 계좌는 기본값으로 잔액 가중 평균
@@ -555,7 +576,7 @@ function healthYear({ ppl, inc, per, work, H, ages, year, p, infl }) {
       const other = inc[i].publicPension * 0.5 + (per[i].fin > ev.금융소득_미반영_이하 ? per[i].fin : 0) + work[i].biz + (per[i].rentAmt || 0);
       const extra = R('건보.직장_보수외소득').기준;
       if (other > extra) health += Math.min((other - extra) / 12 * rate, lim.보수외소득_및_지역_상한 * infl) * (1 + ltc) * 12;
-      social += work[i].wage * R('고용보험.요율.근로자');
+      if (!work[i].after65) social += work[i].wage * R('고용보험.요율.근로자');
       if (ages[i] < 60) social += Math.min(work[i].wage / 12, R('국민연금.기준소득월액').상한 * infl) * 12 * npsRate('국민연금.요율.근로자');
     } else if (work[i].biz > 0 && ages[i] < 60) {
       social += Math.min(work[i].biz / 12, R('국민연금.기준소득월액').상한 * infl) * 12 * npsRate('국민연금.요율.지역임의');
@@ -638,7 +659,7 @@ function simulate(p0, spendOverride, opt = {}) {
     let w = 0, t = 0;
     for (const pp of ppl) for (const k of LIQ) if (k !== 'cash') { w += pp.b[k].bal; t += pp.b[k].bal * pp.b[k].rate; }
     const avg = w > 0 ? t / w : p.returnRate;
-    for (const pp of ppl) for (const k of LIQ) if (k !== 'cash') { pp.b[k].rate = avg; (pp.b[k].lots || []).forEach(l => { l.r = avg; }); }
+    for (const pp of ppl) for (const k of LIQ) if (k !== 'cash') { pp.b[k].rate = avg; (pp.b[k].lots || []).forEach(l => { l.r = avg; }); (pp.b[k].newLots || []).forEach(l => { l.r = avg; }); }
   }
   const harvestCap = R('주식.기본공제');
   const notes = [];
@@ -657,7 +678,7 @@ function simulate(p0, spendOverride, opt = {}) {
     }
   }
   // 개선 4: 배당 대신 팔아서 쓰기 — 같은 총수익률의 배당 없는 상품으로 본다
-  if (opt.noDividend) ppl.forEach(pp => { for (const k of ['foreign', 'kretf', 'domestic']) { (pp.b[k].lots || []).forEach(l => { l.d = 0; }); pp.b[k].div = 0; } });
+  if (opt.noDividend) ppl.forEach(pp => { for (const k of ['foreign', 'kretf', 'domestic']) { (pp.b[k].lots || []).forEach(l => { l.d = 0; }); (pp.b[k].newLots || []).forEach(l => { l.d = 0; }); pp.b[k].div = 0; } });
   const nowAge = p.baseYear - p.birthYear;
   let debt = p.debt || 0, isaYears = 0, refunds = 0, debtYearly = 0;
   const isaMoves = [];
@@ -689,11 +710,11 @@ function simulate(p0, spendOverride, opt = {}) {
       const me = ppl[0].b, isaR = R('ISA'), cr = R('연금계좌.세액공제');
       let rest = p.annualSaving * Math.pow(1 + p.savingGrowth, t);
       const toPension = ppl.map(() => 0);
-      if (opt.openIsa && rest > 0) { const c = Math.min(rest, isaR.연납입한도); me.isa.bal += c; me.isa.basis += c; rest -= c; isaYears++; }
+      if (opt.openIsa && rest > 0) { const c = Math.min(rest, isaR.연납입한도); addMoney(me.isa, c); rest -= c; isaYears++; }
       // 연금계좌 채우기: 나 → 배우자(연봉이 있을 때) 순서로 한 사람 900만까지
       if (opt.fillPension) ppl.forEach((pp, i) => {
         if (rest <= 0 || (i > 0 && !(pp.salary > 0))) return;
-        const c = Math.min(rest, cr.한도_합산); pp.b.pension.bal += c; rest -= c; toPension[i] += c;
+        const c = Math.min(rest, cr.한도_합산); addMoney(pp.b.pension, c); rest -= c; toPension[i] += c;
       });
       const skip = [...(opt.openIsa ? ['isa'] : []), ...(opt.fillPension ? ['pension'] : [])];   // 한도까지 채운 계좌에는 더 넣지 않음
       const keys0 = LIQ.filter(k => !skip.includes(k));
@@ -749,20 +770,21 @@ function simulate(p0, spendOverride, opt = {}) {
     const need = living + debtRepay;   // 생활비 + 남은 빚 갚기
     // 배당·이자는 연초에 꺼내고 남은 잔액에서 나온다(꺼낸 몫에는 배당이 없음) → 꺼낼 돈과 함께 맞춘다
     // 은퇴 후 버는 돈(그해 돈): 사람마다 근로(총급여)·사업(소득금액)
-    const work = ppl.map(() => ({ wage: 0, biz: 0 }));
+    // 고용보험: 65세 이후에 새로 고용된 사람은 실업급여 보험료를 내지 않는다(보험료징수법 제13조 제3항). 은퇴 후 일은 은퇴한 해에 시작한다고 본다
+    const work = ppl.map(() => ({ wage: 0, biz: 0, after65: false }));
     for (const w of (p.workAfter || [])) {
       const i = Math.min(w.who || 0, ppl.length - 1);
       if (ages[i] > (w.untilAge || 0)) continue;
       const amt = (w.monthly || 0) * 12 * infl;
-      if (w.kind === 'business') work[i].biz += amt; else work[i].wage += amt;
+      if (w.kind === 'business') work[i].biz += amt; else { work[i].wage += amt; work[i].after65 = ages[i] - (age - p.retireAge) >= 65; }
     }
     const earnM = work.map(w => (wageIncomeAmount(w.wage) + w.biz) / 12);   // 월 소득금액
-    // 국민연금: 받는 나이부터. 소득이 A값보다 많으면 받기 시작한 뒤 5년 동안 깎인다(감액은 연금의 절반까지)
+    // 국민연금: 받는 나이부터. 60세 이상 65세 미만인 동안 소득이 A값보다 200만원 이상 많으면 깎인다(제63조의2, 2025-12-16 개정. 감액은 연금의 절반까지)
     const pubs = ppl.map((pp, i) => {
       if (ages[i] < pp.npsStart) return 0;
       let m = pp.npsMonthly * infl;
       const over = earnM[i] - R('국민연금.A값')['2026'] * infl;
-      if (over > 0 && ages[i] < pp.npsStart + 5) m -= Math.min(m / 2, progressive(over, R('국민연금.소득활동감액').구간));
+      if (over > 0 && ages[i] >= 60 && ages[i] < 65) m -= Math.min(m / 2, progressive(over, R('국민연금.소득활동감액').구간));
       return m * 12;
     });
     const incomeOf = takes => ppl.map((pp, i) => {
@@ -877,9 +899,7 @@ function addSaving(ppl, amount, skip = []) {
   const tot = ppl.reduce((s, pp) => s + keys.reduce((a, k) => a + pp.b[k].bal, 0), 0);
   for (const pp of ppl) for (const k of keys) {
     const share = tot > 0 ? pp.b[k].bal / tot : (k === 'cash' && pp === ppl[0] ? 1 : 0);
-    const add = amount * share;
-    pp.b[k].bal += add;
-    if ('basis' in pp.b[k]) pp.b[k].basis += add;
+    addMoney(pp.b[k], amount * share);
   }
 }
 function snapshot(ppl) {

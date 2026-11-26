@@ -369,3 +369,28 @@ test('48. 은퇴할 때 퇴직금 → IRP(이연퇴직소득)로 들어가고, �
   near(r.atRetire.bal.pension, 1.6e8);
   assert.ok(r.notes.some(n => n.includes('퇴직금')));
 });
+
+// ── 11/26 오후: 원문 대조 보정·새 돈 비중 ──
+test('49. 국민연금 소득활동 감액은 60~64세에만(제63조의2)', () => {
+  const Y = new Date().getFullYear();
+  const q = a => E.simulate({ birthYear: Y - 59, retireAge: 59, planAge: 80, monthlyNeed: 2e6, inflation: 0, nps: { mode: 'direct', monthly: 1.5e6, startAge: 60 }, workAfter: [{ who: 0, monthly: 9e6, untilAge: 70, kind: 'wage' }], accounts: [{ kind: '현금', balance: 5e8 }] });
+  const r = q(), at = a => r.rows.find(x => x.age === a);
+  assert.ok(at(62).publicPension < at(66).publicPension - 1, '62세는 깎이고 66세는 안 깎여야 함');
+  assert.ok(Math.abs(at(62).publicPension - at(66).publicPension / 2) < 1, '감액은 연금의 절반까지');
+});
+test('50. 65세 넘어 새로 고용되면 고용보험 없음', () => {
+  const Y = new Date().getFullYear();
+  const s = ra => E.simulate({ birthYear: Y - ra, retireAge: ra, planAge: 80, monthlyNeed: 2e6, inflation: 0, nps: { mode: 'direct', monthly: 0 }, workAfter: [{ who: 0, monthly: 2e6, untilAge: 79, kind: 'wage' }], accounts: [{ kind: '현금', balance: 5e8 }] }).rows.find(x => x.age === ra + 1).tax.social;
+  assert.ok(s(66) < s(63) , `66세 시작 ${s(66)} < 63세 시작 ${s(63)}`);
+});
+test('51. 새로 넣는 돈 비중(newHoldings) — 없으면 지금 비중 그대로', () => {
+  const Y = new Date().getFullYear();
+  const base = { birthYear: Y - 40, retireAge: 50, planAge: 60, monthlyNeed: 1e6, inflation: 0, annualSaving: 1e8, nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: '해외주식', balance: 1e8, principal: 1e8, holdings: [{ w: 1, rate: 0.03, div: 0 }] }] };
+  const a = E.simulate(base), q = JSON.parse(JSON.stringify(base)); q.accounts[0].newHoldings = [{ w: 1, rate: 0.12, div: 0 }];
+  const b = E.simulate(q);
+  const fa = a.atRetire.bal.foreign, fb = b.atRetire.bal.foreign;
+  assert.ok(fb > fa * 1.2, `새 돈을 12%로 사면 은퇴 때 더 커야 함 ${fa} → ${fb}`);
+  const q2 = JSON.parse(JSON.stringify(base)); q2.accounts[0].newHoldings = [{ w: 1, rate: 0.03, div: 0 }];
+  assert.ok(Math.abs(E.simulate(q2).atRetire.bal.foreign - fa) < 1, '지금과 같은 비중이면 결과도 같아야 함');
+});

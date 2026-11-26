@@ -50,7 +50,7 @@ function make(h, tm, pf, nps, sp) {
 const zero = p => {
   const q = JSON.parse(JSON.stringify(p));
   Object.assign(q, { inflation: 0, returnRate: 0, cashRate: 0, savingGrowth: 0, houseGrowth: 0 });
-  q.accounts.forEach(a => { a.rate = 0; (a.holdings || []).forEach(h => { h.rate = 0; }); });
+  q.accounts.forEach(a => { a.rate = 0; (a.holdings || []).forEach(h => { h.rate = 0; }); (a.newHoldings || []).forEach(h => { h.rate = 0; }); });
   return q;
 };
 const liquidSum = b => Object.values(b).reduce((s, v) => s + v, 0);
@@ -172,6 +172,8 @@ const SPECIAL = {
   '배당률 > 수익률(커버드콜만)': B(60, { accounts: [{ kind: '해외주식', balance: 8e8, principal: 8e8, holdings: [{ w: 1, rate: 0.05, div: 0.12 }] }] }),
   '국민연금 직접 입력 63세 조기': B(55, { nps: { mode: 'direct', monthly: 1.2e6, startAge: 63 } }),
   '부부 연봉(배우자 0)·연금 채우기': B(45, { salary: 7e7, annualSaving: 3e7, spouse: { birthYear: Y - 45, salary: 0, nps: { mode: 'direct', monthly: 3e5 } }, accounts: [...B(0, {}).accounts, { kind: 'IRP', balance: 3e7, owner: '배우자' }] }),
+  '새 돈은 다른 비중으로(커버드콜 → QLD)': B(40, { annualSaving: 3e7, accounts: [{ kind: '해외주식', balance: 2e8, principal: 2e8, holdings: [{ w: 1, rate: 0.05, div: 0.12 }], newHoldings: [{ w: 1, rate: 0.10, div: 0 }] }, { kind: '현금', balance: 3e7 }] }),
+  '은퇴 후 근로 66세 시작(고용보험 없음)': B(64, { retireAge: 66, workAfter: [{ who: 0, monthly: 2e6, untilAge: 70, kind: 'wage' }] }),
   '공동명의 예금 몫 70%': B(55, { accounts: [{ kind: '현금', balance: 9e8, owner: '공동명의', share: 0.7 }], spouse: { birthYear: Y - 55, nps: { mode: 'direct', monthly: 3e5 } } })
 };
 // 새 입력의 방향 규칙: 늘리면 쓸 수 있는 돈이 줄면 안 되는 것

@@ -366,7 +366,7 @@ function makePeople(accounts, defRate, cashRate, couple) {
     if (k === 'house') {
       const pub = a.publicPrice || a.balance * 0.7;
       house.price += a.balance; house.publicPrice += pub;
-      houses.push({ price: a.balance, publicPrice: pub, owner: a.owner || '나', share: a.share, use: a.use || 'live', rent: a.rent || 0, deposit: a.deposit || 0, since: a.since, registered: !!a.registered });
+      houses.push({ price: a.balance, publicPrice: pub, owner: a.owner || '나', share: a.share, use: a.use || 'live', rent: a.rent || 0, deposit: a.deposit || 0, since: a.since, registered: !!a.registered, expense: a.expense != null ? a.expense : null });
       continue;
     }
     const mine = a.owner === '공동' || a.owner === '공동명의' ? (a.share != null ? a.share : 0.5) : 1;
@@ -488,13 +488,13 @@ function personTax({ age, publicPension, interest, domesticDiv, foreignDiv, take
   let rentTax = 0, rentAmt = 0;
   if (rent && rent.gross > 0) {
     const tr = R('주택임대.과세');
-    rentAmt = rent.gross * (1 - rent.expRate);
-    const withRent = comprehensiveTax(Object.assign({ other: other + rentAmt }, cArgs)).total - ct.total;
+    const sepAmt = rent.gross * (1 - rent.expRate), compAmt = rent.compAmt != null ? rent.compAmt : sepAmt;
+    const withRent = comprehensiveTax(Object.assign({ other: other + compAmt }, cArgs)).total - ct.total;
     if (rent.gross <= tr.분리과세_수입_이하) {
       const otherAmt = clamp0(publicPension - pensionDeduction(publicPension)) + other;
-      const sep = clamp0(rentAmt - (otherAmt <= 2e7 ? rent.add : 0)) * tr.분리과세_세율 * (1 + LOCAL);
-      rentTax = Math.min(sep, withRent);
-    } else rentTax = withRent;
+      const sep = clamp0(sepAmt - (otherAmt <= 2e7 ? rent.add : 0)) * tr.분리과세_세율 * (1 + LOCAL);
+      rentTax = Math.min(sep, withRent); rentAmt = sep <= withRent ? sepAmt : compAmt;
+    } else { rentTax = withRent; rentAmt = compAmt; }
   }
   const retT = pb ? retireDrawTax(pb, sp, pb.yearNo + 1) : 0;
   const isaTaxable = clamp0(gain.isa - isaFreeLeft);
@@ -516,13 +516,16 @@ function houseYear(houses, { t, year, infl, ages, couple, p }) {
   const n = couple ? 2 : 1, g = Math.pow(1 + p.houseGrowth, t);
   const one = houses.length === 1;   // 세대가 가진 집이 한 채
   const out = { publicTotal: 0, propTax: 0, jongbu: 0, deposits: 0, rentCash: 0, rentAmtTotal: 0, propBase: Array(n).fill(0), rent: Array(n).fill(null) };
-  const own = Array.from({ length: n }, () => ({ pub: 0, cnt: 0, dep: 0, gross: 0, expW: 0, regAll: true }));
+  const own = Array.from({ length: n }, () => ({ pub: 0, cnt: 0, dep: 0, gross: 0, expW: 0, compExp: 0, regAll: true }));
   const tr = R('주택임대.과세'), dr = R('주택임대.간주임대료');
   for (const h of houses) {
     const pub = h.publicPrice * g;
     const sh = n === 1 ? [1] : h.owner === '배우자' ? [0, 1] : (h.owner === '공동명의' || h.owner === '공동') ? [h.share != null ? h.share : 0.5, 1 - (h.share != null ? h.share : 0.5)] : [1, 0];
     out.publicTotal += pub;
-    out.propTax += propertyTax(pub, one);
+    const pt = propertyTax(pub, one);
+    out.propTax += pt;
+    // 종합과세할 때의 경비: 입력한 1년 경비(지금 돈), 모르면 그 집 재산세만(보수적으로 세금을 많이 잡음)
+    const compExpY = h.expense != null && h.expense !== undefined ? h.expense * infl : pt;
     const base = housePropertyBase(pub, one);
     const rentY = h.use === 'rent' ? (h.rent || 0) * 12 * infl : 0, dep = h.use === 'rent' ? (h.deposit || 0) * infl : 0;
     out.rentCash += rentY; out.deposits += dep;
@@ -532,7 +535,7 @@ function houseYear(houses, { t, year, infl, ages, couple, p }) {
       if (!(x > 0)) return;
       out.propBase[i] += base * x;
       own[i].pub += pub * x; own[i].cnt += 1; own[i].dep += dep * x;
-      if (!free && rentY > 0) { own[i].gross += rentY * x; own[i].expW += rentY * x * (h.registered ? tr.필요경비율_등록 : tr.필요경비율); if (!h.registered) own[i].regAll = false; }
+      if (!free && rentY > 0) { own[i].gross += rentY * x; own[i].expW += rentY * x * (h.registered ? tr.필요경비율_등록 : tr.필요경비율); own[i].compExp += compExpY * x; if (!h.registered) own[i].regAll = false; }
     });
   }
   // 종부세: 사람마다. 1주택 단독명의는 12억 공제·고령·장기보유 공제. 부부 공동명의 1주택은 각자 9억 공제와 '1주택자 특례'(한 사람이 12억 공제) 중 적은 쪽
@@ -553,8 +556,10 @@ function houseYear(houses, { t, year, infl, ages, couple, p }) {
     if ((o.cnt >= 3 && o.dep > dr.보증금_공제) || (o.cnt === 2 && o.dep > dr['2주택_보증금_기준'])) gross += clamp0(o.dep - dr.보증금_공제) * dr.반영비율 * dr.정기예금이자율;
     if (gross > 0) {
       const expRate = o.gross > 0 ? o.expW / o.gross : tr.필요경비율;
-      out.rent[i] = { gross, expRate, add: o.regAll ? tr.추가공제_등록 : tr.추가공제 };
-      out.rentAmtTotal += gross * (1 - expRate);
+      // 분리과세(수입 2,000만 이하)는 법정 경비율 50%(등록 60%), 종합과세는 실제 경비(compExp)
+      const compAmt = clamp0(gross - o.compExp);
+      out.rent[i] = { gross, expRate, compAmt, add: o.regAll ? tr.추가공제_등록 : tr.추가공제 };
+      out.rentAmtTotal += gross <= tr.분리과세_수입_이하 ? gross * (1 - expRate) : compAmt;
     }
   });
   return out;
@@ -761,7 +766,11 @@ function simulate(p0, spendOverride, opt = {}) {
           notes.push(`${i ? '배우자' : '나'} 퇴직금 ${Math.round(amt / MAN).toLocaleString()}만원(그해 돈)을 IRP로 받아요. 퇴직소득세 ${Math.round(tax * (1 + LOCAL) / MAN).toLocaleString()}만원은 꺼낼 때 30~50% 줄여서 내요`);
         }
         // 이미 IRP에 있는 퇴직금인데 이연퇴직소득세를 모르면: 근속 연수(없으면 10년)로 추정
-        if (pb.retTaxUnknown > 0) { pb.retTax += retireIncomeTax(pb.retTaxUnknown, (i === 0 ? p.severanceYearsInIrp : (p.spouse || {}).severanceYearsInIrp) || 10); pb.retTaxUnknown = 0; notes.push('연금 계좌 안 퇴직금의 이연퇴직소득세를 근속 연수로 추정했어요'); }
+        if (pb.retTaxUnknown > 0) {
+          // 근속 연수 추정: 직접 넣은 값 → 연봉이 있으면 퇴직금 ÷ (연봉 ÷ 12) → 10년
+          const yIn = i === 0 ? p.severanceYearsInIrp : (p.spouse || {}).severanceYearsInIrp, sal = pp.salary || 0;
+          const yrs = yIn || (sal > 0 ? Math.min(40, Math.max(1, Math.round(pb.retTaxUnknown / (sal / 12)))) : 10);
+          pb.retTax += retireIncomeTax(pb.retTaxUnknown, yrs); pb.retTaxUnknown = 0; notes.push('연금 계좌 안 퇴직금의 이연퇴직소득세를 근속 연수로 추정했어요'); }
       });
       atRetire = { age, infl, housePrice, bal: snapshot(ppl), debtLeft: debt, severance: sevIn };
       debtYearly = debt > 0 ? Math.max(p.annualRepay || 0, debt / 10) : 0;   // 다 못 갚은 빚은 은퇴 후에도 갚는다(상환액이 없으면 10년)

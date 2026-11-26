@@ -325,12 +325,12 @@ test('42. 집이 두 채면 재산세 과표 비율 60%, 1주택 특례세율 �
   near(E.housePropertyBase(5e8, true), 5e8 * 0.44);
   assert.ok(E.propertyTax(5e8, false) > E.propertyTax(5e8, true));
 });
-test('43. 월세 1,200만(집 두 채, 다른 소득 없음): 분리과세 61.6만보다 종합과세 22만이 적다', () => {
+test('43. 월세 1,200만(집 두 채, 다른 소득 없음, 1년 경비 600만): 분리과세 61.6만보다 종합과세 22만이 적다', () => {
   // 분리: (1,200만 × 50% − 200만) × 14% × 1.1 = 61.6만
   // 종합: 소득금액 600만 − 기본공제 150만 = 450만 × 6% = 27만 − 표준세액공제 7만 = 20만 × 1.1 = 22만
   // personTax는 내부 함수라 집 두 채 시뮬레이션의 첫해로 확인
   const res = E.simulate({ birthYear: 1960, retireAge: 66, spendMonthly: 0, planAge: 70, endAge: 66, baseYear: 2026, nps: { mode: 'direct', monthly: 0 },
-    accounts: [{ kind: '집', balance: 5e8, publicPrice: 3e8, use: 'live' }, { kind: '집', balance: 3e8, publicPrice: 2e8, use: 'rent', rent: 1e6 }] });
+    accounts: [{ kind: '집', balance: 5e8, publicPrice: 3e8, use: 'live' }, { kind: '집', balance: 3e8, publicPrice: 2e8, use: 'rent', rent: 1e6, expense: 6e6 }] });
   near(res.rows[0].tax.rent, 220000, 2);
   near(res.rows[0].rent, 12e6);
 });
@@ -403,4 +403,21 @@ test('52. 매년 저축을 어디에 넣나(savingShare) — 모르면 현금 �
   const q = JSON.parse(JSON.stringify(base)); q.accounts[0].savingShare = 0.25; q.accounts[1].savingShare = 0.75;
   const b = E.simulate(q).atRetire.bal;
   assert.ok(Math.abs(b.cash - (9e8 + 3.75e8)) < 1 && Math.abs(b.foreign - (1e8 + 1.25e8)) < 1, `몫대로 ${b.cash} ${b.foreign}`);
+});
+test('53. 월세 2,000만 초과 종합과세: 경비를 모르면 재산세만 경비(세금 더 많음), 넣으면 그만큼 줄어듦', () => {
+  const Y = new Date().getFullYear();
+  const mk = exp => E.simulate({ birthYear: Y - 65, retireAge: 65, planAge: 80, monthlyNeed: 2e6, inflation: 0, nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: '현금', balance: 5e8 }, { kind: '집', balance: 8e8, publicPrice: 5e8 }, { kind: '집', balance: 8e8, publicPrice: 5e8, use: 'rent', rent: 3e6, deposit: 1e8, ...(exp != null ? { expense: exp } : {}) }] })
+    .rows.find(x => x.age === 66).tax.rent;
+  const unk = mk(null), big = mk(1.5e7), small = mk(3e6);
+  assert.ok(unk > small && small > big && big > 0, `모름 ${unk} > 경비 300만 ${small} > 경비 1,500만 ${big}`);
+});
+test('54. 연금 계좌 안 퇴직금 세금 모름: 근속 = 퇴직금 ÷ (연봉 ÷ 12)', () => {
+  const Y = new Date().getFullYear();
+  const mk = (sal, yrs) => E.simulate({ birthYear: Y - 55, retireAge: 56, planAge: 80, monthlyNeed: 2e6, inflation: 0, salary: sal, ...(yrs ? { severanceYearsInIrp: yrs } : {}), nps: { mode: 'direct', monthly: 0 },
+    accounts: [{ kind: 'IRP', balance: 2e8, severance: 1e8 }, { kind: '현금', balance: 1e8 }] });
+  const tax = r => r.rows.filter(x => x.phase === 'retire').reduce((s, x) => s + x.taxTotal, 0);
+  // 연봉 6,000만 → 월 500만 → 1억 ÷ 500만 = 20년, 직접 20년 넣은 것과 같아야 함
+  assert.ok(Math.abs(tax(mk(6e7)) - tax(mk(0, 20))) < 1, '연봉으로 추정 = 20년');
+  assert.ok(Math.abs(tax(mk(0)) - tax(mk(0, 10))) < 1, '연봉 없으면 10년');
 });
